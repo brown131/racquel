@@ -39,14 +39,14 @@ left join information_schema.table_constraints AS cons
    and cons.table_schema = fkey.table_schema
 where cols.table_name = ?" tbl-nm)]
            [flds (foldr (lambda (f l) (cons (list (string->symbol (vector-ref f 0)) #f) l)) '() schema)]
-           [col-nms (foldr (lambda (f l) (cons (list (vector-ref f 0) #f) l)) '() schema)]
+           [col-nms (foldr (lambda (f l) (cons (vector-ref f 0) l)) '() schema)]
            [col-types (foldr (lambda (f l) (cons (vector-ref f 1) l)) '() schema)]
            [key (vector-ref (findf (lambda (f) (string=? (vector-ref f 2) "PRIMARY KEY")) schema) 0)])
   (eval `(class data-object%
          ,(append '(field) flds)
          (super-new [table-name ,tbl-nm]
-                    [column-names ,col-nms]
-                    [column-types ,col-types]
+                    [column-names ',col-nms]
+                    [column-types ',col-types]
                     [primary-key ,key]
                     )
          (inspect #f))
@@ -54,7 +54,18 @@ where cols.table_name = ?" tbl-nm)]
 ))
 
    (define phrase-type% (data-class con "phrasetype"))
-                                                            
+   (define pt (new phrase-type%))
+                
+   (class data-object% 
+          (field (id #f) 
+                 (name #f) 
+                 (description #f)) 
+          (super-new 
+           (table-name "phrasetype")
+           (column-names '("id" "name" "description")) 
+           (column-types '("int" "varchar" "varchar")) 
+           (primary-key "id")) (inspect #f))
+   
 # Load a data object from the database.
 (define make-data-object (connection primary-key) #t)                            
 
