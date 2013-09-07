@@ -71,20 +71,20 @@ where cols.table_name = ?" tbl-nm)]
    
 ;;; Load a data object from the database.
 (define make-data-object 
-  (lambda (connection class% pkey)
+  (lambda (com class% pkey)
     (let* ([obj (new class%)]
            [sql (string-append "select " (string-join (get-field column-names obj) ", ")
                                " from " (get-field table-name obj)
-                               " where " (get-field primary-key obj) "=?")]
-           [obj-data (query-row connection sql pkey)]
-         )
+                               " where " (get-field primary-key obj) "=" 
+                               (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))]
+           [obj-data (query-row con sql pkey)])
       (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) (get-field column-names obj) (vector->list obj-data))
-      ;(foldr (lambda (f d) (list d)) (vector->list obj-data) (get-field column-names obj))
       obj
     )
   ))
 
  (define obj (make-data-object con phrase-type% 1))
+ 
  
 # Load a data object from the database.
 (define select-data-object (connection query-string) #t)                            
