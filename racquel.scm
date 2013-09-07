@@ -82,16 +82,39 @@ where cols.table_name = ?" tbl-nm)]
       obj
     )
   ))
-
- (define obj (make-data-object con phrase-type% 1))
- 
- 
+  
 # Load a data object from the database.
-(define select-data-object (connection query-string) #t)                            
+(define select-data-object                           
+  (lambda (com class% where-clause &rest)
+    (let* ([obj (new class%)]
+           [sql (string-append "select " (string-join (get-field column-names obj) ", ")
+                               " from " (get-field table-name obj) " "
+                               where-clause)]
+           [obj-data (query-row con sql &rest)])
+      (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) (get-field column-names obj) (vector->list obj-data))
+      obj
+    )
+  ))
 
 # Select data-objects from the database
-(define select-data-objects (connection query-string) #t)                            
-                               
+(define select-data-objects                          
+  (lambda (com class% where-clause &rest)
+    (let* ([sql (string-append "select " (string-join (get-field column-names obj) ", ")
+                               " from " (get-field table-name obj) " "
+                               where-clause)]
+           [obj-data (query-rows con sql &rest)]
+           [objs (make-list (length obj-data) (new class%))])
+      (map (lambda (r o) (map (lambda (f d) (dynamic-set-field! (string->symbol f) o d)) 
+                                (get-field column-names obj) (vector->list r)))
+           obj-data objs)
+      objs
+    )
+  ))                           
+
+(select-data-objects con phrase-type% "where id>?" 1)
+
+(select-data-object con phrase-type% "where name=?" "Verb Phrase")
+
 (define con (mysql-connect #:server "localhost" #:port 3306 #:database "babelbuilder" #:user "root" #:password "wurzel"))
 (define phrase-type% (data-class con "phrasetype"))
 (disconnect con)                             
