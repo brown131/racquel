@@ -5,15 +5,15 @@
 ;;;; Data Object
 (define data-object% 
   (class object%
-         (init-field table-name 
-                     column-names 
+         (init-field table-name
+                     column-names
                      column-types
                      [primary-key (first column-names)]
-                     [external-name table-name])
-         (field [class-name 
-                 ;; Inspect the derived class to get its name.
-                 (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
-                               (class-info (let-values ([(cls x) (object-info this)]) cls))]) cls-nm)])
+                     [external-name table-name]
+                     [class-name
+                      ;; Inspect the derived class to get its name.
+                      (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?)
+                                    (class-info (let-values ([(cls x) (object-info this)]) cls))]) cls-nm)])
          (define/public (save) (#t))
          (define/public (insert) (#t))
          (define/public (update) (#t))
@@ -23,7 +23,7 @@
   )
 )
 
-# Creates a class using database schema information.
+;;; Creates a class using database schema information.
 (define data-class 
   (lambda (con tbl-nm) 
     (let* ([schema (query-rows con "select cols.column_name, cols.data_type, cons.constraint_type
@@ -41,13 +41,16 @@ where cols.table_name = ?" tbl-nm)]
            [flds (foldr (lambda (f l) (cons (list (string->symbol (vector-ref f 0)) #f) l)) '() schema)]
            [col-nms (foldr (lambda (f l) (cons (vector-ref f 0) l)) '() schema)]
            [col-types (foldr (lambda (f l) (cons (vector-ref f 1) l)) '() schema)]
-           [key (vector-ref (findf (lambda (f) (string=? (vector-ref f 2) "PRIMARY KEY")) schema) 0)])
+           [key (vector-ref (findf (lambda (f) (string=? (vector-ref f 2) "PRIMARY KEY")) schema) 0)]
+           [cls-nm (string-append tbl-nm "%")]
+           )
   (eval `(class data-object%
          ,(append '(field) flds)
          (super-new [table-name ,tbl-nm]
                     [column-names ',col-nms]
                     [column-types ',col-types]
                     [primary-key ,key]
+                    [class-name ,cls-nm]
                     )
          (inspect #f))
     ))
@@ -66,9 +69,23 @@ where cols.table_name = ?" tbl-nm)]
            (column-types '("int" "varchar" "varchar")) 
            (primary-key "id")) (inspect #f))
    
-# Load a data object from the database.
-(define make-data-object (connection primary-key) #t)                            
+;;; Load a data object from the database.
+(define make-data-object 
+  (lambda (connection class% pkey)
+    (let* ([obj (new class%)]
+           [sql (string-append "select " (string-join (get-field column-names obj) ", ")
+                               " from " (get-field table-name obj)
+                               " where " (get-field primary-key obj) "=?")]
+           [obj-data (query-row connection sql pkey)]
+         )
+      (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) (get-field column-names obj) (vector->list obj-data))
+      ;(foldr (lambda (f d) (list d)) (vector->list obj-data) (get-field column-names obj))
+      obj
+    )
+  ))
 
+ (define obj (make-data-object con phrase-type% 1))
+ 
 # Load a data object from the database.
 (define select-data-object (connection query-string) #t)                            
 
