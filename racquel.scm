@@ -37,6 +37,7 @@ where cols.table_name = '" tbl-nm "'")]
   
 ;;; Insert SQL.
 (define (insert-sql con obj)
+  ;; TODO: Exclude auto-increment key field from columns/values.
   (let ([values (foldr (lambda (f l) (cons (dynamic-get-field (string->symbol f) obj) l)) 
                        '() (get-field column-names obj))])
     (string-append "insert " (get-field table-name obj)
@@ -44,13 +45,14 @@ where cols.table_name = '" tbl-nm "'")]
                  " values (" (string-join values ", ") ")")))
 
 ;;; Update SQL.
-; TODO
+; TODO: Exclude primary key column(s)/value(s) from set fields.
 (define (update-sql con obj)
-  (let ([values (foldr (lambda (f l) (cons (dynamic-get-field (string->symbol f) obj) l)) 
+  (let ([values (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
                        '() (get-field column-names obj))])
     (string-append "update " (get-field table-name obj)
-                 " set " (string-join (get-field column-names obj) ", ") ")"
-                 " values (" (string-join values ", ") ")")))
+                 " set " (string-join values ", ")
+                 " where " (get-field primary-key obj) "=" (sql-placeholder con))
+    ))
 
 ;;; Delete SQL.
 (define (delete-sql con obj)
@@ -75,7 +77,9 @@ where cols.table_name = '" tbl-nm "'")]
                                    (query-exec con sql)
                                    (set-field! new? this #f)))
          (define/public (update) (query-exec con (update-sql con this)
-                                             (dynamic-get-field (string->symbol (get-field primary-key this) this))))                                           
+                                             ;; TODO: Remove from list
+                                             (dynamic-get-field column-names this))
+                                             (dynamic-get-field (string->symbol (get-field primary-key this) this))))
          (define/public (delete) (query-exec con (delete-sql con this) 
                                              (dynamic-get-field (string->symbol (get-field primary-key this) this))))
          (super-new)
@@ -99,44 +103,40 @@ where cols.table_name = '" tbl-nm "'")]
                     [external-name ,ext-nm])
          (inspect #f))
         )))
-   
-;;; Load a data object from the database by primary key.
-(define (make-data-object con class% pkey)
-    (let* ([obj (new class%)]
-           [sql (string-append "select " (string-join (get-field column-names obj) ", ")
-                               " from " (get-field table-name obj)
-                               " where " (get-field primary-key obj) "=" (sql-placeholder con))]
-           [obj-data (query-row con sql pkey)])
-      (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) (get-field column-names obj) (vector->list obj-data))
-      (set-field! new? obj #f)
-      obj
-    ))
+
+;;; Sets the data in a data object.
+(define (set-data-object! con obj row)
+  ((map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) 
+        (get-field column-names obj) (vector->list row))
+   (set-field! new? obj #f)
+   ))
 
 ;;; Select a data object from the database.
 (define (select-data-object con class% where-clause &rest)
-    (let* ([obj (new class%)]
-           [sql (string-append "select " (string-join (get-field column-names obj) ", ")
-                               " from " (get-field table-name obj) " t "
-                               where-clause)]
-           [obj-data (query-row con sql &rest)])
-      (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) (get-field column-names obj) (vector->list obj-data))
-      (set-field! new? obj #f)
+    (let ([obj (new class%)]
+          [sql (string-append "select " (string-join (get-field column-names obj) ", ")
+                              " from " (get-field table-name obj) " t "
+                              where-clause)])
+      (set-data-object! con obj (query-row con sql &rest))
       obj
+    ))
+
+;;; Load a data object from the database by primary key.
+(define (make-data-object con class% pkey)
+  (let ([where-clause (string-append " where " (get-field primary-key obj) "=" (sql-placeholder con))])
+    (select-data-object con where-clause pkey)
     ))
 
 ;;; Select data-objects from the database
 (define (select-data-objects con class% where-clause &rest)
-    (let* ([sql (string-append "select " (string-join (get-field column-names obj) ", ")
-                               " from " (get-field table-name obj) " t "
-                               where-clause)]
-           [obj-data (query-rows con sql &rest)]
-           [objs (make-list (length obj-data) (new class%))])
-      (map (lambda (r o) (map (lambda (f d) (dynamic-set-field! (string->symbol f) o d)) 
-                                (get-field column-names obj) (vector->list r)))
-           obj-data objs)
-      (map (lambda (o) (set-field! new? o #f)) objs)             
-      objs
-    ))                         
+  (let* ([sql (string-append "select " (string-join (get-field column-names obj) ", ")
+                             " from " (get-field table-name obj) " t "
+                             where-clause)]
+         [rows (query-rows con sql &rest)]
+         [objs (make-list (length rows) (new class%))])
+    (map (lambda (o r) (set-data-object! con o r)) objs rows)
+    objs
+    ))
 
 ;;;; TESTS
    (define phrase-type% (data-class con "phrasetype"))
