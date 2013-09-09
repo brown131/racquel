@@ -79,7 +79,7 @@ where cols.table_name = '" tbl-nm "'")]
          (define/public (update) (query-exec con (update-sql con this)
                                              ;; TODO: Remove from list
                                              (dynamic-get-field column-names this))
-                                             (dynamic-get-field (string->symbol (get-field primary-key this) this))))
+                                             (dynamic-get-field (string->symbol (get-field primary-key this) this)))
          (define/public (delete) (query-exec con (delete-sql con this) 
                                              (dynamic-get-field (string->symbol (get-field primary-key this) this))))
          (super-new)
@@ -139,9 +139,7 @@ where cols.table_name = '" tbl-nm "'")]
     ))
 
 ;;;; TESTS
-   (define phrase-type% (data-class con "phrasetype"))
-   (define pt (new phrase-type%))
-                
+                 
    (class data-object% 
           (field (id #f) 
                  (name #f) 
@@ -157,7 +155,10 @@ where cols.table_name = '" tbl-nm "'")]
    (select-data-object con phrase-type% "where name=?" "Verb Phrase")
 
    (define con (mysql-connect #:server "localhost" #:port 3306 #:database "babelbuilder" #:user "root" #:password "wurzel"))
+   
    (define phrase-type% (data-class con "phrasetype"))
+   (define pt (new phrase-type%))
+   
    (disconnect con)
 
    (define affix-type%
