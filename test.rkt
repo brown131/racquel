@@ -1,7 +1,7 @@
 #lang racket
 
 (require test-engine/racket-tests)
-
+(require racquel)
 
 ;;;; TESTS
 
@@ -14,7 +14,7 @@
    (column-names '("id" "name" "description")) 
    (column-types '("int" "varchar" "varchar")) 
    (primary-key "id")) (inspect #f))
-
+#|
 (select-data-objects con phrase-type% "where id>?" 1)
 
 (select-data-object con phrase-type% "where name=?" "Verb Phrase")
@@ -44,4 +44,4 @@
 
 (set-field! name obj "crow")
 (get-field name obj)
-
+|#

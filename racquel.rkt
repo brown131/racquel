@@ -5,7 +5,7 @@
 (require db)
  
 (provide data-object% data-class make-data-object select-data-object select-data-objects)
-
+  
 ;;; SQL placeholder by database system.
 (define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
 
@@ -46,7 +46,7 @@ where cols.table_name = '" tbl-nm "'")]
                  " values (" (string-join (make-list (length col-nms) "?") ", ") ")")))
 
 ;;; Update SQL.
-; TODO: Exclude primary key column(s)/value(s) from set fields.
+;;; TODO: Exclude primary key column(s)/value(s) from set fields.
 (define (update-sql con obj)
   (let ([values (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
                        '() (get-field column-names obj))])
@@ -142,4 +142,3 @@ where cols.table_name = '" tbl-nm "'")]
     ))
 
 ) ; module
-
