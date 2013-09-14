@@ -4,6 +4,10 @@
  
 (provide data-object% data-class make-data-object select-data-object select-data-objects)
 
+;;; Define namespace anchor.
+(define-namespace-anchor a)
+(define ns (namespace-anchor->namespace a))
+
 ;;; SQL placeholder by database system.
 (define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
 
@@ -52,23 +56,19 @@ left join information_schema.table_constraints as cons
 where cols.table_name='" tbl-nm "'
 order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
         ))
-  
+
+;;; Primary key fields
+(define (primary-key-fields obj)
+  (let ([pkey (get-field primary-key obj)]) (if (list? pkey) pkey (list pkey))))
+    
 ;;; Columns without the primary key.
 (define (savable-fields con obj)
-  (let* ([pkey (get-field primary-key obj)]
-         [pkey-parts (if (list? pkey) pkey (list pkey))])
-    (foldr (lambda (f l) (if (member f pkey-parts) l (cons f l))) '() (get-field column-names obj))
-    )
-  )
+  (foldr (lambda (f l) (if (member f (primary-key-fields obj)) l (cons f l))) '() (get-field column-names obj)))
          
 ;;; SQL where-clause for the primary key.
 (define (primary-key-where-clause con obj)
-  (let* ([pkey (get-field primary-key obj)]
-         [pkey-parts (if (list? pkey) pkey (list pkey))])
-     (string-append " where " (string-join (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
-                       '() pkey-parts) " and "))
-    )
-  )
+  (string-append " where " (string-join (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
+                       '() (primary-key-fields obj)) " and ")))
 
 ;;; Insert SQL.
 (define (insert-sql con obj)
@@ -88,7 +88,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 
 ;;; Delete SQL.
 (define (delete-sql con obj)
-  (string-append "delete " (get-field table-name obj)
+  (string-append "delete from " (get-field table-name obj)
                  (primary-key-where-clause con obj)))
 
 ;;; Select SQL.
@@ -110,17 +110,26 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                       (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?)
                                     (class-info (let-values ([(cls x) (object-info this)]) cls))]) cls-nm)])
          (define/public (save con) (if new? (insert con) (update con)))
-         (define/public (insert con) (let ([sql (insert-sql con this)])
-                                   (query-exec con sql)
-                                   (set-field! new? this #f)))
-         (define/public (update con) (apply query-exec (append (list con) (dynamic-get-field column-names this) 
-                                                               (list (dynamic-get-field (string->symbol (get-field primary-key this) this))))))
-         (define/public (delete con) ((query-exec con (delete-sql con this) 
-                                             (dynamic-get-field (string->symbol (get-field primary-key this) this)))
-                                      (set-field! deleted? this #t)))
+         (define/public (insert con) 
+           (let ([sql (insert-sql con this)]
+                 [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con this))])
+             (apply query-exec con sql flds)
+             (set-field! new? this #f)))
+         (define/public (update con) 
+           (let ([sql (update-sql con this)]
+                 [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con this))]
+                 [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields this))])
+             (apply query-exec con sql flds pkey)
+             (set-field! new? this #f)))
+         (define/public (delete con) 
+           (let ([sql (delete-sql con this)]
+                 [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields this))])
+             (apply query-exec con sql pkey)
+             (set-field! deleted? this #t)))
          (super-new)
          (inspect #f)
-  ))
+    )
+  )
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields con schema)
@@ -144,8 +153,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                              [primary-key ,key]
                              [external-name ,ext-nm])
                   (inspect #f))])
-           ,(string->symbol tbl-nm)))
-        ))
+           ,(string->symbol tbl-nm)) ns)
+      ))
 
 ;;; Sets the data in a data object.
 (define (set-data-object! con obj row)
