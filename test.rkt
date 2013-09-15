@@ -55,13 +55,18 @@
    (set-field! name obj "test")
    (check-eq? (get-field name obj) "test")
    (set-field! description obj "this is a test")
+   
    (send obj insert con)
-   (set-field! id obj (query-value con "select last_insert_id()"))
    (check-not-eq? (get-field id obj) #f)
+   
+   (set-field! name obj "test2")
+   (check-eq? (get-field name obj) "test2")
+   (send obj update con)
+   (check-equal? (query-value con "select name from simple where id=?" (get-field id obj)) "test2")  
+   
    (send obj delete con)
-     
-   )
-)
+   (check-eq? (query-value con "select count(*) from simple where id=?" (get-field id obj)) 0)  
+   ))
 
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)

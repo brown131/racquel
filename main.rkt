@@ -15,7 +15,7 @@
 (define (schema-sql con tbl-nm)
   (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
          (string-append "select cols.column_name, cons.constraint_type, fkey.ordinal_position, 
-   case when cols.extra='auto_increment' then 1 end
+   case when cols.extra='auto_increment' then 1 end autoincrement
 from information_schema.columns AS cols
 left join information_schema.key_column_usage as fkey
    on fkey.column_name=cols.column_name
@@ -57,6 +57,13 @@ where cols.table_name='" tbl-nm "'
 order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
         ))
 
+;;; Set auto-increment id.
+(define (set-auto-increment-id! con obj)
+  (when (get-field auto-increment-key obj)
+    (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
+           (dynamic-set-field! (string->symbol (get-field auto-increment-key obj)) obj (query-value con "select last_insert_id()"))]
+          )))
+
 ;;; Primary key fields
 (define (primary-key-fields obj)
   (let ([pkey (get-field primary-key obj)]) (if (list? pkey) pkey (list pkey))))
@@ -94,14 +101,16 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Select SQL.
 (define (select-sql con obj where-clause)
   (string-append "select " (string-join (get-field column-names obj) ", ")
-                               " from " (get-field table-name obj) " t "
-                               where-clause))
-;;;; Data Object class.
+                 " from " (get-field table-name obj) " t "
+                 where-clause))
+
+;;; Data Object class.
 (define data-object% 
   (class object%
          (init-field table-name
                      column-names
                      [primary-key (list (first column-names))]
+                     [auto-increment-key #f]
                      [external-name table-name]
                      [new? #t]
                      [deleted? #f]
@@ -114,12 +123,13 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
            (let ([sql (insert-sql con this)]
                  [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con this))])
              (apply query-exec con sql flds)
+             (set-auto-increment-id! con this)
              (set-field! new? this #f)))
          (define/public (update con) 
            (let ([sql (update-sql con this)]
                  [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con this))]
                  [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields this))])
-             (apply query-exec con sql flds pkey)
+             (apply query-exec con sql (append flds pkey))
              (set-field! new? this #f)))
          (define/public (delete con) 
            (let ([sql (delete-sql con this)]
@@ -144,6 +154,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
            [col-nms (foldr (lambda (f l) (if (member (vector-ref f 0) l) l (cons (vector-ref f 0) l))) '() schema)]
            [flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
            [key (find-primary-key-fields con schema)]
+           [auto-key (vector-ref (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema) 0)]
            [ext-nm tbl-nm])
       (eval `(let ([,(string->symbol tbl-nm)
                 (class data-object%
@@ -151,6 +162,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                   (super-new [table-name ,tbl-nm]
                              [column-names ',col-nms]
                              [primary-key ,key]
+                             [auto-increment-key ,auto-key]
                              [external-name ,ext-nm])
                   (inspect #f))])
            ,(string->symbol tbl-nm)) ns)
