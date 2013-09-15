@@ -5,8 +5,8 @@
 (provide data-object% data-class make-data-object select-data-object select-data-objects)
 
 ;;; Define namespace anchor.
-(define-namespace-anchor a)
-(define ns (namespace-anchor->namespace a))
+(define-namespace-anchor anchr)
+(define ns (namespace-anchor->namespace anchr))
 
 ;;; SQL placeholder by database system.
 (define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
