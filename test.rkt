@@ -15,15 +15,7 @@
 (define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "root" #:password "wurzel"))
 
 ;;; Test object class
-(define test-object% (class data-object% 
-          (field (id #f) 
-                 (name #f) 
-                 (description #f)) 
-          (super-new (table-name "test")
-                     (column-names '("id" "name" "description")) 
-                     (primary-key "id"))
-          (inspect #f))
-  )
+(define test-object% (data-class  "test"  '("id" "name" "description") #:primary-key "id"))
 
 ;;;; TESTS
 
@@ -55,7 +47,7 @@
 )
 
 (define-test-suite test-make-data-object
- (let* ([simple% (data-class con "simple")]
+ (let* ([simple% (gen-data-class con "simple")]
         [obj (new simple%)]
         [id #f])
    (test-case "simple object created?" (check-not-eq? obj #f))

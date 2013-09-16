@@ -2,7 +2,7 @@
       
 (require db)
  
-(provide data-object% data-class make-data-object select-data-object select-data-objects)
+(provide data-object% gen-data-class data-class make-data-object select-data-object select-data-objects)
 
 ;;; Define namespace anchor.
 (define-namespace-anchor anchr)
@@ -105,19 +105,21 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                  where-clause))
 
 ;;; Data Object class.
+(define-local-member-name table-name column-names primary-key auto-increment-key external-name new? deleted? class-name)
 (define data-object% 
   (class object%
          (init-field table-name
                      column-names
                      [primary-key (list (first column-names))]
                      [auto-increment-key #f]
-                     [external-name table-name]
-                     [new? #t]
-                     [deleted? #f]
-                     [class-name
+                     [external-name table-name])              
+         (field [new? #t]  
+                [deleted? #f]
+                [class-name
                       ;; Inspect the derived class to get its name.
                       (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?)
                                     (class-info (let-values ([(cls x) (object-info this)]) cls))]) cls-nm)])
+
          (define/public (save con) (if new? (insert con) (update con)))
          (define/public (insert con) 
            (let ([sql (insert-sql con this)]
@@ -148,8 +150,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
-;;; Creates a class using database schema information.
-(define (data-class con tbl-nm) 
+;;; Generates a class using database schema information.
+(define (gen-data-class con tbl-nm) 
     (let* ([schema (query-rows con (schema-sql con tbl-nm))]
            [col-nms (foldr (lambda (f l) (if (member (vector-ref f 0) l) l (cons (vector-ref f 0) l))) '() schema)]
            [flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
@@ -165,6 +167,23 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                              [auto-increment-key ,auto-key]
                              [external-name ,ext-nm])
                   (inspect #f))])
+           ,(string->symbol tbl-nm)) ns)
+      ))
+
+(define (data-class tbl-nm col-nms #:primary-key [key (list (first col-nms))]
+                     #:auto-increment-key [auto-key #f]
+                     #:external-name [ext-nm tbl-nm]) 
+  (let* ( [flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)])
+   (eval `(let ([,(string->symbol tbl-nm)
+                (class data-object%
+                  ,(append '(field) flds)
+                  (super-new [table-name ,tbl-nm]
+                             [column-names ',col-nms]
+                             [primary-key ,key]
+                             [auto-increment-key ,auto-key]
+                             [external-name ,ext-nm])
+                  (inspect #f))])
+           ,rest
            ,(string->symbol tbl-nm)) ns)
       ))
 
