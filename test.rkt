@@ -24,7 +24,7 @@
    (test-case "test object created?" (check-not-eq? test-object% #f))
    
    (test-case "data object metadata set?" 
-              (let-values ([(tbl-nm col-nms key auto-key ext-nm nw? del? cls-nm) (get-data-object-info obj)])
+              (let-values ([(tbl-nm col-nms key auto-key ext-nm nw? del? cls-nm) (data-object-info obj)])
                 (check-eq? tbl-nm "test")
                 (check-equal? col-nms '("id" "name" "description"))
                 (check-eq? key "id")

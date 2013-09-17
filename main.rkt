@@ -2,7 +2,7 @@
       
 (require db)
  
-(provide data-object% data-class gen-data-class get-data-object-info make-data-object select-data-object select-data-objects)
+(provide data-object% data-object-info gen-data-class data-class make-data-object select-data-object select-data-objects)
 
 ;;; Define namespace anchor.
 (define-namespace-anchor anchr)
@@ -30,7 +30,7 @@ where cols.table_name='" tbl-nm "'
 order by cons.constraint_type desc, fkey.ordinal_position, cols.column_name")]
         [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlite3) (string-append "pragma table_info(" tbl-nm ");")]
         [(eq? (dbsystem-name (connection-dbsystem con)) 'oracle)
-         (string-append "select cols.column_name,y
+         (string-append "select cols.column_name,
    case when cons.constraint_type='P' then 'PRIMARY KEY' end constraint_type, cc.position, null
 from all_tab_cols cols
 join all_cons_columns cc
@@ -142,6 +142,18 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (inspect #f)
     ))
 
+;;; Return info about a data object.
+(define (data-object-info obj)
+  (values (get-field table-name obj)
+          (get-field column-names obj)
+          (get-field primary-key obj)
+          (get-field auto-increment-key obj)
+          (get-field external-name obj)
+          (get-field new? obj)
+          (get-field deleted? obj)
+          (get-field class-name obj)
+  ))
+
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields con schema)
   (let ([pkey (map (lambda (v) (vector-ref v 0)) 
@@ -150,6 +162,25 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
 ;;; Creates a data class.
+#|
+(define-syntax (data-class stx)
+  (syntax-case stx ()
+    [(data-class tbl-nm col-nms a ...) 
+     (let* ([flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
+            [key (list (car #'col-nms))]
+            [auto-key #f]
+            [ext-nm #'tbl-nm])
+       #'(class data-object%
+           (fields flds)
+           (super-new [table-name tbl-nm]
+                      [column-names 'col-nms]
+                      [primary-key key]
+                      [auto-increment-key auto-key]
+                      [external-name,ext-nm])
+           (inspect #f)
+           a ...))]
+    ))
+|#
 (define (data-class tbl-nm col-nms #:primary-key [key (list (first col-nms))]
                      #:auto-increment-key [auto-key #f]
                      #:external-name [ext-nm tbl-nm]
@@ -193,17 +224,6 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
              ,(string->symbol (string-append tbl-nm "%"))) ns)
     ))
 
-;;; Get data object info.
-(define (get-data-object-info obj)
-  (values (get-field table-name obj)
-          (get-field column-names obj)
-          (get-field primary-key obj)
-          (get-field auto-increment-key obj)
-          (get-field external-name obj)
-          (get-field new? obj)
-          (get-field deleted? obj)
-          (get-field class-name obj)))
-
 ;;; Sets the data in a data object.
 (define (set-data-object! con obj row)
   (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) 
@@ -225,9 +245,9 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     ))
 
 ;;; Select data-objects from the database
-(define (select-data-objects con class% where-clause &rest)
+(define (select-data-objects con class% where-clause pkey)
   (let* ([obj (new class%)]
-         [rows (query-rows con (select-sql con obj where-clause) &rest)]
+         [rows (query-rows con (select-sql con obj where-clause) pkey)]
          [objs (make-list (length rows) (new class%))])
     (map (lambda (o r) (set-data-object! con o r)) objs rows)
     objs
