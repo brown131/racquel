@@ -17,6 +17,7 @@ Requirements:
    * Supports Oracle (ODBC).
    * Supports DB/2 (ODBC).
    * Supports Mixed case, Camel case, or a separator ("_") in table and column names when generating.
+   * Supports prefixing of names.
    * Can select one or more objects using where-cause s-expression.
    * Generates data classes using schema info.
    * Can create object using primary key.

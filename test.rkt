@@ -15,7 +15,7 @@
 (define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "root" #:password "wurzel"))
 
 ;;; Test object class
-(define test-object% (data-class  "test"  '("id" "name" "description") #:primary-key "id"))
+(define test-object% (data-class "test" '("id" "name" "description") #:primary-key "id"))
 
 ;;;; TESTS
 
@@ -23,10 +23,16 @@
  (let* ([obj (new test-object%)])
    (test-case "test object created?" (check-not-eq? test-object% #f))
    
-   (test-case "super fields set?" 
-              (check-eq? (get-field table-name obj) "test")
-              (check-equal? (get-field column-names obj) '("id" "name" "description"))
-              (check-eq? (get-field primary-key obj) "id"))
+   (test-case "data object metadata set?" 
+              (let-values ([(tbl-nm col-nms key auto-key ext-nm nw? del? cls-nm) (get-data-object-info obj)])
+                (check-eq? tbl-nm "test")
+                (check-equal? col-nms '("id" "name" "description"))
+                (check-eq? key "id")
+                (check-eq? auto-key #f)
+                (check-eq? ext-nm "test")
+                (check-eq? nw? #t)
+                (check-eq? del? #f)
+                (check-eq? cls-nm 'test%)))
    
    (test-case "fields set?" 
               (set-field! id obj 1)
@@ -51,19 +57,16 @@
         [obj (new simple%)]
         [id #f])
    (test-case "simple object created?" (check-not-eq? obj #f))
-   
   
    (test-case "fields set?"
               (set-field! name obj "test")
               (set-field! description obj "this is a test")
               (check-eq? (get-field name obj) "test"))
    
-   
    (test-case "object inserted?" 
               (send obj insert con)
-              (check-not-eq? (get-field id obj) #f))
-   
-   
+              (check-not-eq? (get-field id obj) #f)) 
+                 
    (test-case "object changed?" 
               (set-field! name obj "test2")
               (check-eq? (get-field name obj) "test2"))
@@ -72,6 +75,9 @@
               (send obj update con)
               (check-equal? (query-value con "select name from simple where id=?" (get-field id obj)) "test2"))  
    
+   (test-case "object loaded?"
+              (let ([s (make-data-object con simple% (get-field id obj))])
+                (check-equal? (get-field name s) "test2")))
    
    (test-case "object deleted?" 
               (send obj delete con)
