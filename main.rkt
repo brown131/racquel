@@ -161,30 +161,32 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
-;;; Creates a data class.
-#|
-(define-syntax (data-class stx)
-  (syntax-case stx ()
-    [(data-class tbl-nm col-nms a ...) 
-     (let* ([flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
-            [key (list (car #'col-nms))]
-            [auto-key #f]
-            [ext-nm #'tbl-nm])
-       #'(class data-object%
-           (fields flds)
-           (super-new [table-name tbl-nm]
-                      [column-names 'col-nms]
-                      [primary-key key]
-                      [auto-increment-key auto-key]
-                      [external-name,ext-nm])
-           (inspect #f)
-           a ...))]
-    ))
+#| Model:
+(data-class data-object% #:table-name "TST_Person" #:external-name "Person"
+            #:table-casing 'camel-case #:table-prefix "tst_" #:column-casing 'underscore
+            (field (id #f "id") 
+                   (name #f "name")
+                   (description #f "description")
+                   (address-id #f "address_id")
+                   (date #f))
+            (primary-key id #:auto-increment #t)
+            (join (vehicle% #:foreign-key id #:join-key vehicle%-id)
+                  (address address% #:foreign-key address-id #:join-key id))
+            (super-new)
+            (inspect #f))
 |#
-(define (data-class tbl-nm col-nms #:primary-key [key (list (first col-nms))]
-                     #:auto-increment-key [auto-key #f]
-                     #:external-name [ext-nm tbl-nm]
-                     . rest) 
+;;; Creates a data class.
+(define-syntax (data-class stx)
+  (syntax-parse stx ()
+    [(data-class tbl-nm col-nms (~optional (~seq #:keywords primary-key:identifier) #:defaults ([(key 1) '()])))
+                 #'(define-data-class tbl-nm col-nms #:primary-key key (quote a ...))]
+    ;[(data-class tbl-nm col-nms a ...) #'(define-data-class tbl-nm col-nms (quote a ...))]
+    ))
+
+(define (define-data-class tbl-nm col-nms #:primary-key [key (list (first col-nms))]
+                    #:auto-increment-key [auto-key #f]
+                    #:external-name [ext-nm tbl-nm]
+                    . rest) 
   (let* ([flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
          [data-cls (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
                                  (class data-object%
