@@ -162,16 +162,21 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
 #| Model:
-(data-class data-object% #:table-name "TST_Person" #:external-name "Person"
-            #:table-casing 'camel-case #:table-prefix "tst_" #:column-casing 'underscore
-            (field (id #f "id") 
-                   (name #f "name")
-                   (description #f "description")
-                   (address-id #f "address_id")
-                   (date #f))
+(data-class data-object% 
+            (table-name "TST_Person") 
+            (external-name "Person")
+            (table-name-casing 'camel-case)
+            (table-name-prefix "tst_")
+            (column-name-casing 'underscores)
+            (columns (id #f "id") 
+                     (name #f "name")
+                     (description #f "description")
+                     (address-id #f "address_id"))
             (primary-key id #:auto-increment #t)
-            (join (vehicle% #:foreign-key id #:join-key vehicle%-id)
-                  (address address% #:foreign-key address-id #:join-key id))
+            (join (vehicles vehicle% id person-id)
+                  (address address% address-id id))
+            (fields (data #f))
+            ...
             (super-new)
             (inspect #f))
 |#
