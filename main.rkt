@@ -161,8 +161,6 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                  where-clause))
 
 ;;; Data Object class.
-(define-local-member-name table-name column-names primary-key auto-increment-key external-name 
-  new? deleted? class-name)
 (define data-object% 
   (class object%
     (define/public (save con) (if (get-object-metadata new? this) (insert con) (update con)))
@@ -215,7 +213,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 |#
 ;;; Creates a data class.
 (require syntax/parse (for-syntax syntax/parse))
-
+#|
 (define-syntax (data-class2 stx)
   (define-syntax-class tbl-name 
     #:description "table name" 
@@ -226,7 +224,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     ))
 
 (data-class2 (table-name "test"))
-
+|#
 (define (data-class tbl-nm col-nms #:primary-key [key (list (first col-nms))]
                     #:auto-increment-key [auto-key #f]
                     #:external-name [ext-nm tbl-nm]
