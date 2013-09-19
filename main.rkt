@@ -233,13 +233,13 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                     . rest) 
   (let* ([flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
          [cls (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
-                                 (class data-object%
-                                   ,(append '(field) flds)
-                                   (super-new)
-                                   (inspect #f)
-                                   ,(unless (eq? rest null) (apply values rest))
-                                   )])
-                            ,(string->symbol (string-append tbl-nm "%"))) ns)])
+                            (class data-object%
+                              ,(append '(field) flds)
+                              (super-new)
+                              (inspect #f)
+                              ,(unless (eq? rest null) (apply values rest))
+                              )])
+                       ,(string->symbol (string-append tbl-nm "%"))) ns)])
     (hash-set! *data-class-metadata* cls ((new data-class-metadata% 
                                                [table-name tbl-nm] 
                                                [column-names col-nms]
@@ -259,19 +259,25 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
          [flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
          [key (find-primary-key-fields con schema)]
          [auto-key (vector-ref (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema) 0)]
-         [ext-nm tbl-nm])
-    (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
-                  (class data-object%
-                    ,(append '(field) flds)
-                    (super-new [table-name ,tbl-nm]
-                               [column-names ',col-nms]
-                               [primary-key ,key]
-                               [auto-increment-key ,auto-key]
-                               [external-name ,ext-nm])
-                    (inspect #f)
-                    ,(unless (eq? rest null) (apply values rest))
-                    )])
-             ,(string->symbol (string-append tbl-nm "%"))) ns)
+         [ext-nm tbl-nm]
+         [cls (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
+                            (class data-object%
+                              ,(append '(field) flds)
+                              (super-new)
+                              (inspect #f)
+                              ,(unless (eq? rest null) (apply values rest))
+                              )])
+             ,(string->symbol (string-append tbl-nm "%"))) ns)])
+    (hash-set! *data-class-metadata* cls ((new data-class-metadata% 
+                                               [table-name tbl-nm] 
+                                               [column-names col-nms]
+                                               [primary-key key]
+                                               [auto-increment-key auto-key] 
+                                               [external-name ext-nm]
+                                               [new? #t]
+                                               [deleted? #f]
+                                               [class-name (string->symbol (string-append tbl-nm "%"))])))
+    cls
     ))
 
 ;;; Sets the data in a data object.
