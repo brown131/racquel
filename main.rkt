@@ -197,25 +197,37 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
             (primary-key id #:auto-increment #t)
             (join (vehicles vehicle% id person-id)
                   (address address% address-id id))
+
             (fields (data #f))
             ...
             (super-new)
             (inspect #f))
 |#
 ;;; Creates a data class.
-(require syntax/parse (for-syntax syntax/parse))
-#|
+
 (define-syntax (data-class2 stx)
-  (define-syntax-class tbl-name 
+  (define-syntax-class table-name
     #:description "table name" 
-    #:literals (table-name)
-    (pattern (table-name tbl-nm:str) #:with expr #'(list tbl-nm)))
+    (pattern (table-name tbl-nm:str) #:with expr #'(list 'table-name tbl-nm)))
+  (define-syntax-class external-name
+    #:description "external name" 
+    (pattern (external-name ext-nm:str) #:with expr #'(list 'external-name ext-nm)))
+  (define-syntax-class column-def
+    #:description "column definition" 
+    (pattern (id:id val:expr nm:str) #:with expr #'(list id val nm)))
+  (define-syntax-class columns
+    #:description "columns" 
+    (pattern (column (col-def:column-def)) #:with expr #'(list column col-def)))
+    
   (syntax-parse stx
-    [(data-class tbl-nm:tbl-name) #'(list tbl-nm.expr)]
+    [(data-class tbl-nm:table-name) #'(list tbl-nm.expr)]
+    [(data-class tbl-nm:table-name ext-nm:external-name) #'(list tbl-nm.expr ext-nm.expr)]
+    [(data-class tbl-nm:table-name cols:columns) #'(list tbl-nm.expr cols.expr)]
     ))
 
-(data-class2 (table-name "test"))
-|#
+(data-class2 (external-name "Test") (table-name "test"))
+;(data-class2 (table-name "test") (columns (anme #f "id")))
+
 (define (data-class tbl-nm col-nms #:primary-key [pkey (list (first col-nms))]
                     #:auto-increment-key [auto-key #f]
                     #:external-name [ext-nm tbl-nm]
