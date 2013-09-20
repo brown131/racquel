@@ -1,9 +1,9 @@
 #lang racket
-      
-(require db)
-(require syntax/parse (for-syntax syntax/parse))
+  
+(require db (for-syntax syntax/parse "stxclass.rkt") "keywords.rkt")
  
-(provide data-object% data-class-info gen-data-class data-class make-data-object select-data-object select-data-objects)
+(provide data-object% data-class-info gen-data-class data-class make-data-object select-data-object select-data-objects
+         data-class2 (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
 (define-namespace-anchor anchr)
@@ -206,27 +206,9 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Creates a data class.
 
 (define-syntax (data-class2 stx)
-  (define-syntax-class table-name
-    #:description "table name" 
-    (pattern (table-name tbl-nm:str) #:with expr #'(list 'table-name tbl-nm)))
-  (define-syntax-class external-name
-    #:description "external name" 
-    (pattern (external-name ext-nm:str) #:with expr #'(list 'external-name ext-nm)))
-  (define-syntax-class column-def
-    #:description "column definition" 
-    (pattern (id:id val:expr nm:str) #:with expr #'(list id val nm)))
-  (define-syntax-class columns
-    #:description "columns" 
-    (pattern (column (col-def:column-def)) #:with expr #'(list column col-def)))
-    
-  (syntax-parse stx
-    [(data-class tbl-nm:table-name) #'(list tbl-nm.expr)]
-    [(data-class tbl-nm:table-name ext-nm:external-name) #'(list tbl-nm.expr ext-nm.expr)]
-    [(data-class tbl-nm:table-name cols:columns) #'(list tbl-nm.expr cols.expr)]
+  (syntax-parse stx 
+    [(dataclass2 elem:data-class-element ...) #'(list 'elem.expr ...)]
     ))
-
-(data-class2 (external-name "Test") (table-name "test"))
-;(data-class2 (table-name "test") (columns (anme #f "id")))
 
 (define (data-class tbl-nm col-nms #:primary-key [pkey (list (first col-nms))]
                     #:auto-increment-key [auto-key #f]

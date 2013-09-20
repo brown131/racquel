@@ -2,6 +2,9 @@
 
 (require rackunit rackunit/text-ui db racquel)
 
+;(data-class2 (table-name "test") (column (name #f "id")))
+;(data-class2 (table-name "test") (external-name "Test"))
+
 (require/expose racquel (data-class-metadata%
                          savable-fields 
                          primary-key-where-clause 
