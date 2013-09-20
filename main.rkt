@@ -61,8 +61,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Define data class metadata struct.
 (define data-class-metadata% 
   (class object% 
-    (init-field table-name column-names primary-key auto-increment-key external-name
-                new? deleted? class-name)
+    (init-field table-name column-names primary-key auto-increment-key external-name class-name)
     (super-new)
     (inspect #f)))
 
@@ -102,16 +101,9 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (let-values ([(cls x) (object-info obj)]) (dynamic-set-class-metadata! id cls val)))
  
 ;;; Return info about a data class.
-(define (data-class-info cls)
-  (values (get-class-metadata table-name (hash-ref *data-class-metadata* cls))
-          (get-class-metadata column-names (hash-ref *data-class-metadata* cls))
-          (get-class-metadata primary-key (hash-ref *data-class-metadata* cls))
-          (get-class-metadata auto-increment-key (hash-ref *data-class-metadata* cls))
-          (get-class-metadata external-name (hash-ref *data-class-metadata* cls))
-          (get-class-metadata new? (hash-ref *data-class-metadata* cls))
-          (get-class-metadata deleted? (hash-ref *data-class-metadata* cls))
-          (get-class-metadata class-name (hash-ref *data-class-metadata* cls))
-  ))
+(define-syntax-rule (data-class-info cls)
+  (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info data-class-metadata%)])
+    (apply values (map (lambda (f) (dynamic-get-class-metadata f cls)) fld-nms))))
         
 ;;; Set auto-increment id.
 (define (set-auto-increment-id! con obj)
@@ -161,24 +153,26 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                  where-clause))
 
 ;;; Data Object class.
+(define-local-member-name new? deleted?)
 (define data-object% 
   (class object%
-    (define/public (save con) (if (get-object-metadata new? this) (insert con) (update con)))
+    (field [new? #t] [deleted? #f])
+    (define/public (save con) (if (get-field new? this) (insert con) (update con)))
     (define/public (insert con) 
       (let ([sql (insert-sql con this)]
-            [flds (map (lambda (f) (dynamic-get-object-metadata (string->symbol f) this)) (savable-fields con this))])
+            [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con this))])
         (apply query-exec con sql flds)
         (set-auto-increment-id! con this)
         (set-field! new? this #f)))
     (define/public (update con) 
       (let ([sql (update-sql con this)]
-            [flds (map (lambda (f) (dynamic-get-object-metadata (string->symbol f) this)) (savable-fields con this))]
-            [pkey (map (lambda (f) (dynamic-get-object-metadata (string->symbol f) this)) (primary-key-fields this))])
+            [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con this))]
+            [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields this))])
         (apply query-exec con sql (append flds pkey))
         (set-field! new? this #f)))
     (define/public (delete con) 
       (let ([sql (delete-sql con this)]
-            [pkey (map (lambda (f) (dynamic-get-object-metadata (string->symbol f) this)) (primary-key-fields this))])
+            [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields this))])
         (apply query-exec con sql pkey)
         (set-field! deleted? this #t)))
     (super-new)
@@ -196,9 +190,6 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 (data-class data-object% 
             (table-name "TST_Person") 
             (external-name "Person")
-            (table-name-casing 'camel-case)
-            (table-name-prefix "tst_")
-            (column-name-casing 'underscores)
             (columns (id #f "id") 
                      (name #f "name")
                      (description #f "description")
@@ -225,7 +216,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 
 (data-class2 (table-name "test"))
 |#
-(define (data-class tbl-nm col-nms #:primary-key [key (list (first col-nms))]
+(define (data-class tbl-nm col-nms #:primary-key [pkey (list (first col-nms))]
                     #:auto-increment-key [auto-key #f]
                     #:external-name [ext-nm tbl-nm]
                     . rest) 
@@ -238,15 +229,13 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                               ,(unless (eq? rest null) (apply values rest))
                               )])
                        ,(string->symbol (string-append tbl-nm "%"))) ns)])
-    (hash-set! *data-class-metadata* cls ((new data-class-metadata% 
+    (hash-set! *data-class-metadata* cls (new data-class-metadata% 
                                                [table-name tbl-nm] 
                                                [column-names col-nms]
-                                               [primary-key key]
+                                               [primary-key pkey]
                                                [auto-increment-key auto-key] 
                                                [external-name ext-nm]
-                                               [new? #t]
-                                               [deleted? #f]
-                                               [class-name (string->symbol (string-append tbl-nm "%"))])))
+                                               [class-name (string->symbol (string-append tbl-nm "%"))]))
     cls
     ))
 
@@ -255,7 +244,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (let* ([schema (query-rows con (schema-sql con tbl-nm))]
          [col-nms (foldr (lambda (f l) (if (member (vector-ref f 0) l) l (cons (vector-ref f 0) l))) null schema)]
          [flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
-         [key (find-primary-key-fields con schema)]
+         [pkey (find-primary-key-fields con schema)]
          [auto-key (vector-ref (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema) 0)]
          [ext-nm tbl-nm]
          [cls (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
@@ -266,43 +255,41 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                               ,(unless (eq? rest null) (apply values rest))
                               )])
              ,(string->symbol (string-append tbl-nm "%"))) ns)])
-    (hash-set! *data-class-metadata* cls ((new data-class-metadata% 
+    (hash-set! *data-class-metadata* cls (new data-class-metadata% 
                                                [table-name tbl-nm] 
                                                [column-names col-nms]
-                                               [primary-key key]
+                                               [primary-key pkey]
                                                [auto-increment-key auto-key] 
                                                [external-name ext-nm]
-                                               [new? #t]
-                                               [deleted? #f]
-                                               [class-name (string->symbol (string-append tbl-nm "%"))])))
+                                               [class-name (string->symbol (string-append tbl-nm "%"))]))
     cls
     ))
 
 ;;; Sets the data in a data object.
 (define (set-data-object! con obj row)
   (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) 
-        (get-field column-names obj) (vector->list row))
+        (get-object-metadata column-names obj) (vector->list row))
    (set-field! new? obj #f))
 
 ;;; Select a data object from the database.
-(define (select-data-object con cls% where-clause &rest)
-  (let* ([obj (new cls%)])
-    (set-data-object! con obj (query-row con (select-sql con obj where-clause) &rest))
+(define-syntax-rule (select-data-object con cls where-clause rest)
+  (let* ([obj (new cls)])
+    (set-data-object! con obj (query-row con (select-sql con obj where-clause) rest))
     obj
     ))
 
 ;;; Load a data object from the database by primary key.
-(define (make-data-object con cls% pkey)
-  (let* ([obj (new cls%)])
+(define-syntax-rule (make-data-object con cls pkey)
+  (let* ([obj (new cls)])
     (set-data-object! con obj (query-row con (select-sql con obj (primary-key-where-clause con obj)) pkey))
     obj
     ))
 
 ;;; Select data-objects from the database
-(define (select-data-objects con class% where-clause pkey)
-  (let* ([obj (new class%)]
-         [rows (query-rows con (select-sql con obj where-clause) pkey)]
-         [objs (make-list (length rows) (new class%))])
+(define-syntax-rule (select-data-objects con cls where-clause rest)
+  (let* ([obj (new cls)]
+         [rows (query-rows con (select-sql con obj where-clause) rest)]
+         [objs (make-list (length rows) (new cls))])
     (map (lambda (o r) (set-data-object! con o r)) objs rows)
     objs
     ))

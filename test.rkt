@@ -2,7 +2,8 @@
 
 (require rackunit rackunit/text-ui db racquel)
 
-(require/expose racquel (savable-fields 
+(require/expose racquel (data-class-metadata%
+                         savable-fields 
                          primary-key-where-clause 
                          insert-sql 
                          update-sql 
@@ -12,7 +13,7 @@
 ;;;; SETUP
  
 ;;; Test database connection
-(define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "root" #:password "wurzel"))
+(define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test"))
 
 ;;; Test object class
 (define test-object% (data-class "test" '("id" "name" "description") #:primary-key "id"))
@@ -24,14 +25,12 @@
    (test-case "test object created?" (check-not-eq? test-object% #f))
    
    (test-case "data object metadata set?" 
-              (let-values ([(tbl-nm col-nms key auto-key ext-nm nw? del? cls-nm) (data-class-info test-object%)])
+              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info test-object%)])
                 (check-eq? tbl-nm "test")
                 (check-equal? col-nms '("id" "name" "description"))
-                (check-eq? key "id")
+                (check-eq? pkey "id")
                 (check-eq? auto-key #f)
                 (check-eq? ext-nm "test")
-                (check-eq? nw? #t)
-                (check-eq? del? #f)
                 (check-eq? cls-nm 'test%)))
    
    (test-case "fields set?" 
@@ -54,18 +53,18 @@
 
 (define-test-suite test-make-data-object
  (let* ([simple% (gen-data-class con "simple")]
-        [obj (new simple%)]
-        [id #f])
+        [obj (new simple%)])
    (test-case "simple object created?" (check-not-eq? obj #f))
   
    (test-case "fields set?"
               (set-field! name obj "test")
               (set-field! description obj "this is a test")
-              (check-eq? (get-field name obj) "test"))
+              (check-eq? (get-field name obj) "test")
+              (check-eq? (get-field description obj) "this is a test"))
    
    (test-case "object inserted?" 
               (send obj insert con)
-              (check-not-eq? (get-field id obj) #f)) 
+              (check-not-eq? (get-field id obj) #f))
                  
    (test-case "object changed?" 
               (set-field! name obj "test2")
