@@ -1,40 +1,56 @@
 #lang racket
-
+;;;; Racquel - An ORM for Racket
+;;;;
+;;;; test - Tests the project
+;;;;
+;;;; Copyright (c) Scott Brown 2013
 (require rackunit rackunit/text-ui db racquel)
 
-;(data-class2 (table-name "test") (column (name #f "id")))
-;(data-class2 (table-name "test") (external-name "Test"))
-
-(require/expose racquel (data-class-metadata%
-                         savable-fields 
+(require/expose racquel (savable-fields 
                          primary-key-where-clause 
                          insert-sql 
                          update-sql 
                          delete-sql 
                          select-sql))
 
+(require/expose "metadata.rkt" (data-class-metadata% *data-class-metadata*))
+  
 ;;;; SETUP
  
 ;;; Test database connection
 (define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test"))
 
-;;; Test object class
-(define test-object% (data-class "test" '("id" "name" "description") #:primary-key "id"))
-
 ;;;; TESTS
-
+#|
+(data-class data-object%
+            (table-name "test")
+            (column [id #f "id"] [name #f "name"] [description #f "description"])
+            (primary-key "id")
+            (inspect #f)
+            (super-new)
+            )
+|#
 (define-test-suite test-define-data-object
- (let* ([obj (new test-object%)])
-   (test-case "test object created?" (check-not-eq? test-object% #f))
+ (let* ([test-class% (data-class data-object%
+                                 (table-name "test")
+                                 (column [id #f "id"] [name #f "name"] [description #f "description"])
+                                 (primary-key "id")
+                                 (inspect #f)
+                                 (super-new)
+                                 )]
+        [obj (new test-class%)])
+   (test-case "test class created?" (check-not-eq? test-class% #f))
+   (test-case "test object created?" (check-not-eq? obj #f))
    
    (test-case "data object metadata set?" 
-              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info test-object%)])
+              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
                 (check-equal? col-nms '("id" "name" "description"))
                 (check-eq? pkey "id")
                 (check-eq? auto-key #f)
                 (check-eq? ext-nm "test")
-                (check-eq? cls-nm 'test%)))
+                (check-eq? cls-nm 'test-class%)
+                ))
    
    (test-case "fields set?" 
               (set-field! id obj 1)
@@ -86,7 +102,31 @@
               (check-eq? (query-value con "select count(*) from simple where id=?" (get-field id obj)) 0)) 
    ))
 
+#|
+(define ds (data-class data-object% 
+             (table-name "test") 
+             (external-name "Test") 
+             (column (name #f "name") (color #f "color"))
+             (field (x 1) (y 2))
+             (super-new)
+             (inspect #f)))
+ds
+|#
+
+(define-test-suite test-data-class
+ (let* ([cls (data-class data-object% 
+             (table-name "test") 
+             (external-name "Test") 
+             (column (name #f "name") (color #f "color"))
+             (field (x 1) (y 2))
+             (super-new)
+             (inspect #f))])
+   (test-true "data class parsed?" (class? cls))
+  ; cls
+))
+
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
-
+(run-tests test-data-class 'verbose)
+  
 (disconnect con)

@@ -1,9 +1,14 @@
 #lang racket
-  
-(require db (for-syntax syntax/parse "stxclass.rkt") "keywords.rkt")
+;;;; Racquel - An ORM for Racket
+;;;;
+;;;; main - Main module for the project
+;;;;
+;;;; Copyright (c) Scott Brown 2013
+
+(require db "keywords.rkt" "metadata.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
-(provide data-object% data-class-info gen-data-class data-class make-data-object select-data-object select-data-objects
-         data-class2 (all-from-out "keywords.rkt"))
+(provide data-object% data-class-info gen-data-class data-class make-data-object
+         select-data-object select-data-objects (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
 (define-namespace-anchor anchr)
@@ -57,53 +62,6 @@ left join information_schema.table_constraints as cons
 where cols.table_name='" tbl-nm "'
 order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
         ))
-
-;;; Define data class metadata struct.
-(define data-class-metadata% 
-  (class object% 
-    (init-field table-name column-names primary-key auto-increment-key external-name class-name)
-    (super-new)
-    (inspect #f)))
-
-;;; Define a global table holding data class metadata.
-(define *data-class-metadata* (make-hash))
-
-;;; Get a data class metadata field.
-(define-syntax-rule (get-class-metadata id cls)
-  (get-field id (hash-ref *data-class-metadata* cls)))
-
-;;; Set a data class metadata field.
-(define-syntax-rule (set-class-metadata! id cls val)
-  (set-field! id (hash-ref *data-class-metadata* cls) val))
-
-;;; Get a data class metadata field for an object.
-(define-syntax-rule (get-object-metadata id obj)
-  (let-values ([(cls x) (object-info obj)]) (get-class-metadata id cls)))
-
-;;; Get a data class metadata field for an object.
-(define-syntax-rule (set-object-metadata! id obj val)
-  (let-values ([(cls x) (object-info obj)]) (set-class-metadata! id cls val)))
-
-;;; Dynamically get a data class metadata field.
-(define-syntax-rule (dynamic-get-class-metadata id cls)
-  (dynamic-get-field id (hash-ref *data-class-metadata* cls)))
-
-;;; Dynamically set a data class metadata field.
-(define-syntax-rule (dynamic-set-class-metadata! id cls val)
-  (dynamic-set-field! id (hash-ref *data-class-metadata* cls) val))
-
-;;; Dynamically get a data class metadata field for an object.
-(define-syntax-rule (dynamic-get-object-metadata id obj)
-  (let-values ([(cls x) (object-info obj)]) (dynamic-get-class-metadata id cls)))
-
-;;; Dynamically set a data class metadata field for an object.
-(define-syntax-rule (dynamic-set-object-metadata! id obj val)
-  (let-values ([(cls x) (object-info obj)]) (dynamic-set-class-metadata! id cls val)))
- 
-;;; Return info about a data class.
-(define-syntax-rule (data-class-info cls)
-  (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info data-class-metadata%)])
-    (apply values (map (lambda (f) (dynamic-get-class-metadata f cls)) fld-nms))))
         
 ;;; Set auto-increment id.
 (define (set-auto-increment-id! con obj)
@@ -190,47 +148,30 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 (data-class data-object% 
             (table-name "TST_Person") 
             (external-name "Person")
-            (columns (id #f "id") 
-                     (name #f "name")
-                     (description #f "description")
-                     (address-id #f "address_id"))
+            (init-column (id "id"))
+            (column (name #f "name")
+                    (description #f "description")
+                    (address-id #f "address_id"))
             (primary-key id #:auto-increment #t)
             (join (vehicles vehicle% id person-id)
                   (address address% address-id id))
-
-            (fields (data #f))
-            ...
+            (field (data #f))
             (super-new)
             (inspect #f))
 |#
+
 ;;; Creates a data class.
-
-(define-syntax (data-class2 stx)
+(define-syntax (data-class stx)
   (syntax-parse stx 
-    [(dataclass2 elem:data-class-element ...) #'(list 'elem.expr ...)]
-    ))
-
-(define (data-class tbl-nm col-nms #:primary-key [pkey (list (first col-nms))]
-                    #:auto-increment-key [auto-key #f]
-                    #:external-name [ext-nm tbl-nm]
-                    . rest) 
-  (let* ([flds (map (lambda (f) (list (string->symbol f) #f)) col-nms)]
-         [cls (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
-                            (class data-object%
-                              ,(append '(field) flds)
-                              (super-new)
-                              (inspect #f)
-                              ,(unless (eq? rest null) (apply values rest))
-                              )])
-                       ,(string->symbol (string-append tbl-nm "%"))) ns)])
-    (hash-set! *data-class-metadata* cls (new data-class-metadata% 
-                                               [table-name tbl-nm] 
-                                               [column-names col-nms]
-                                               [primary-key pkey]
-                                               [auto-increment-key auto-key] 
-                                               [external-name ext-nm]
-                                               [class-name (string->symbol (string-append tbl-nm "%"))]))
-    cls
+    [(data-class base-cls:id elem:data-class-element ...) 
+     #'(let* ([m (new data-class-metadata%)])
+         (class base-cls elem.expr ...
+           (let ([cls (let-values ([(c x) (object-info this)]) c)])
+             (unless (hash-has-key? *data-class-metadata* cls)
+               (unless (get-field external-name m) (set-field! external-name m (get-field table-name m)))
+               (set-field! class-name m (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
+                                                      (class-info cls)]) cls-nm))
+               (hash-set! *data-class-metadata* cls m)))))]
     ))
 
 ;;; Generates a class using database schema information.
