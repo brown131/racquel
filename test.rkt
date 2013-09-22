@@ -11,7 +11,8 @@
                          insert-sql 
                          update-sql 
                          delete-sql 
-                         select-sql))
+                         select-sql
+                         object-class))
 
 (require/expose "metadata.rkt" (data-class-metadata% *data-class-metadata*))
   
@@ -40,6 +41,7 @@
                                  )]
         [obj (new test-class%)])
    (test-case "test class created?" (check-not-eq? test-class% #f))
+   (test-true "test class is a data class?" (data-class? test-class%))
    (test-case "test object created?" (check-not-eq? obj #f))
    
    (test-case "data object metadata set?" 
@@ -52,6 +54,8 @@
                 (check-eq? cls-nm 'test-class%)
                 ))
    
+   (test-case "object class correct?" (check-equal? (object-class obj) test-class%))
+   
    (test-case "fields set?" 
               (set-field! id obj 1)
               (set-field! name obj "Test")
@@ -60,24 +64,48 @@
               (check-eq? (get-field name obj) "Test")
               (check-eq? (get-field description obj) "This is a test"))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con obj) '("name" "description")))
-   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con obj) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con obj) "insert test (name, description) values (?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con obj) "update test set name=?, description=? where id=?"))
-   (test-case "delete sql correct?" (check-equal? (delete-sql con obj) "delete from test where id=?"))
+   (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '("id" "name" "description")))
+   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con test-class%) " where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con test-class%) "insert test (id, name, description) values (?, ?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con test-class%) "update test set id=?, name=?, description=? where id=?"))
+   (test-case "delete sql correct?" (check-equal? (delete-sql con test-class%) "delete from test where id=?"))
    (test-case "select sql correct?" 
-              (check-equal? (select-sql con obj "where id=?") "select id, name, description from test t where id=?"))
+              (check-equal? (select-sql con test-class% "where id=?") "select id, name, description from test t where id=?"))
    )
 )
 
 (define-test-suite test-make-data-object
  (let* ([simple% (gen-data-class con "simple")]
         [obj (new simple%)])
+   (test-case "simple class created?" (check-not-eq? simple% #f))
+   (test-true "simple class is a data class?" (data-class? simple%))
    (test-case "simple object created?" (check-not-eq? obj #f))
+   
+   (test-case "simple class metadata set?" 
+              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info simple%)])
+                (check-eq? tbl-nm "simple")
+                (check-equal? col-nms '("name" "description" "id"))
+                (check-eq? pkey "id")
+                (check-eq? auto-key #f)
+                (check-eq? ext-nm "simple")
+                (check-eq? cls-nm 'simple%)
+                ))
+   
+   (test-case "object class correct?" (check-equal? (object-class obj) simple%))
+   
+   (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '("name" "description" "id")))
+   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con simple%) " where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (name, description, id) values (?, ?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set name=?, description=?, id=? where id=?"))
+   (test-case "delete sql correct?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
+   (test-case "select sql correct?" 
+              (check-equal? (select-sql con simple% "where id=?") "select name, description, id from simple t where id=?"))
   
    (test-case "fields set?"
+              (set-field! id obj 23)
               (set-field! name obj "test")
               (set-field! description obj "this is a test")
+              (check-eq? (get-field id obj) 23)
               (check-eq? (get-field name obj) "test")
               (check-eq? (get-field description obj) "this is a test"))
    
