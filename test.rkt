@@ -146,6 +146,7 @@ ds
              (table-name "test") 
              (external-name "Test") 
              (column (name #f "name") (color #f "color"))
+             (primary-key "name" #:autoincrement #t)
              (field (x 1) (y 2))
              (super-new)
              (inspect #f))])

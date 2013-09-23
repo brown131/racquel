@@ -22,6 +22,6 @@
   (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm))
   (pattern (external-name ext-nm:str) #:with expr #'(set-field! external-name m ext-nm))
   (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...))
-  (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey))
+  (pattern (primary-key pkey:expr (~optional (~seq #:autoincrement flag:expr))) #:with expr #'(set-field! primary-key m pkey))
   (pattern (x:expr ...) #:with expr #'(x ...))
   )
