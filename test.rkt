@@ -8,6 +8,8 @@
 
 (require/expose racquel (savable-fields 
                          primary-key-where-clause 
+                         schema-sql ;
+                         find-primary-key-fields ;
                          insert-sql 
                          update-sql 
                          delete-sql 
@@ -130,6 +132,60 @@
               (check-eq? (query-value con "select count(*) from simple where id=?" (get-field id obj)) 0)) 
    ))
 
+(define-test-suite test-autoincrement-data-object
+ (let* ([auto% (gen-data-class con "auto")]
+        [obj (new auto%)])
+   (test-case "auto class created?" (check-not-eq? auto% #f))
+   (test-true "auto class is a data class?" (data-class? auto%))
+   (test-case "auto object created?" (check-not-eq? obj #f))
+   
+   (test-case "auto class metadata set?" 
+              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info auto%)])
+                (check-eq? tbl-nm "auto")
+                (check-equal? col-nms '("name" "description" "id"))
+                (check-eq? pkey "id")
+                (check-eq? auto-key "id")
+                (check-eq? ext-nm "auto")
+                (check-eq? cls-nm 'auto%)
+                ))
+   
+   (test-case "object class correct?" (check-equal? (object-class obj) auto%))
+   
+   (test-case "savable field correct?" (check-equal? (savable-fields con auto%) '("name" "description")))
+   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con auto%) " where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con auto%) "insert auto (name, description) values (?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
+   (test-case "delete sql correct?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
+   (test-case "select sql correct?" 
+              (check-equal? (select-sql con auto% "where id=?") "select name, description, id from auto t where id=?"))
+  
+   (test-case "fields set?"
+              (set-field! name obj "test")
+              (set-field! description obj "this is a test")
+              (check-eq? (get-field name obj) "test")
+              (check-eq? (get-field description obj) "this is a test"))
+   
+   (test-case "object inserted?" 
+              (send obj insert con)
+              (check-not-eq? (get-field id obj) #f))
+                 
+   (test-case "object changed?" 
+              (set-field! name obj "test2")
+              (check-eq? (get-field name obj) "test2"))
+   
+   (test-case "object updated?"
+              (send obj update con)
+              (check-equal? (query-value con "select name from auto where id=?" (get-field id obj)) "test2"))  
+   
+   (test-case "object loaded?"
+              (let ([s (make-data-object con auto% (get-field id obj))])
+                (check-equal? (get-field name s) "test2")))
+   
+   (test-case "object deleted?" 
+              (send obj delete con)
+              (check-eq? (query-value con "select count(*) from auto where id=?" (get-field id obj)) 0)) 
+   ))
+
 #|
 (define ds (data-class data-object% 
              (table-name "test") 
@@ -156,6 +212,7 @@ ds
 
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
+(run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-data-class 'verbose)
   
 (disconnect con)
