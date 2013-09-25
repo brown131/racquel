@@ -181,7 +181,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (syntax-parse stx 
     [(data-class base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
-         (class* base-cls (data-class<%> ) elem.expr ...           
+         (class* base-cls (data-class<%>) elem.expr ...           
            (let ([cls (let-values ([(c x) (object-info this)]) c)])
              (unless (hash-has-key? *data-class-metadata* cls)
                (unless (get-field external-name m) (set-field! external-name m (get-field table-name m)))
