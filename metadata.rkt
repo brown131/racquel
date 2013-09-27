@@ -5,7 +5,7 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(provide data-class-metadata% *data-class-metadata* 
+(provide data-class-metadata% data-join% *data-class-metadata* 
          get-class-metadata set-class-metadata!
          dynamic-get-class-metadata dynamic-set-class-metadata!
          data-class-info)
@@ -13,9 +13,18 @@
 ;;; Define data class metadata struct.
 (define data-class-metadata% 
   (class object% 
-    (field (table-name #f) (column-names null) (primary-key #f) (autoincrement-key #f) (external-name #f) (class-name #f))
+    (field [table-name #f] 
+           [column-names null] 
+           [joins null]
+           [primary-key #f] 
+           [autoincrement-key #f]
+           [external-name #f]
+           [class-name #f])
     (super-new)
     (inspect #f)))
+
+;;; Define join object.
+(define data-join% (class object% (init-field column-fld foreign-key join-class join-key) (super-new)))
 
 ;;; Define a global table holding data class metadata.
 (define *data-class-metadata* (make-hash))

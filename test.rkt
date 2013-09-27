@@ -33,24 +33,28 @@
             (super-new)
             )
 |#
+
 (define-test-suite test-define-data-object
  (let* ([test-class% (data-class data-object%
                                  (table-name "test")
-                                 ;(init-column [x "x"])
-                                 (column [id #f "id"] [name #f "name"] [description #f "description"])
+                                 ;(init-column [x 1 "x"])
+                                 (column [id #f "id"] 
+                                         [name #f "name"] 
+                                         [description #f "description"])
+                                 (join [id "id" data-object% "id"])
                                  (primary-key "id")
                                  (inspect #f)
-                                 (super-new)
-                                 )]
-        [obj (new test-class% (x 2))])
+                                 (super-new))]
+        [obj (new test-class%)])
    (test-case "test class created?" (check-not-eq? test-class% #f))
    (test-true "test class is a data class?" (data-class? test-class%))
    (test-case "test object created?" (check-not-eq? obj #f))
    
    (test-case "data object metadata set?" 
-              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info test-class%)])
+              (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm cls-nm) (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
                 (check-equal? col-nms '("id" "name" "description"))
+                (check-not-eq? j-defs null)
                 (check-eq? pkey "id")
                 (check-eq? auto-key #f)
                 (check-eq? ext-nm "test")
@@ -85,11 +89,12 @@
    (test-case "simple object created?" (check-not-eq? obj #f))
    
    (test-case "simple class metadata set?" 
-              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info simple%)])
+              (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm cls-nm) (data-class-info simple%)])
                 (check-eq? tbl-nm "simple")
                 (check-equal? col-nms '("name" "description" "id"))
                 (check-eq? pkey "id")
                 (check-eq? auto-key #f)
+                (check-eq? j-defs null)
                 (check-eq? ext-nm "simple")
                 (check-eq? cls-nm 'simple%)
                 ))
@@ -141,11 +146,12 @@
    (test-case "auto object created?" (check-not-eq? obj #f))
    
    (test-case "auto class metadata set?" 
-              (let-values ([(tbl-nm col-nms pkey auto-key ext-nm cls-nm) (data-class-info auto%)])
+              (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm cls-nm) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
                 (check-equal? col-nms '("name" "description" "id"))
                 (check-eq? pkey "id")
                 (check-eq? auto-key "id")
+                (check-eq? j-defs null)
                 (check-eq? ext-nm "auto")
                 (check-eq? cls-nm 'auto%)
                 ))
