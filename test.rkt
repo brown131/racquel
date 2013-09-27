@@ -37,7 +37,7 @@
 (define-test-suite test-define-data-object
  (let* ([test-class% (data-class data-object%
                                  (table-name "test")
-                                 ;(init-column [x 1 "x"])
+                                 (init-column [x 1 "x"])
                                  (column [id #f "id"] 
                                          [name #f "name"] 
                                          [description #f "description"])
@@ -45,7 +45,7 @@
                                  (primary-key "id")
                                  (inspect #f)
                                  (super-new))]
-        [obj (new test-class%)])
+        [obj (new test-class% [x 2])])
    (test-case "test class created?" (check-not-eq? test-class% #f))
    (test-true "test class is a data class?" (data-class? test-class%))
    (test-case "test object created?" (check-not-eq? obj #f))

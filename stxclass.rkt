@@ -12,8 +12,12 @@
 
 (define-syntax-class init-column-def
   #:description "init column definition" 
-  ;(pattern (col:id nm:str) #:with expr #'col)
-  ;(pattern ((col:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol)))
+  (pattern (col:id nm:str) #:with expr #'col
+           #:with str #'(let ([fld (get-field column-names m)]) 
+                                        (set-field! column-names m (append fld (list nm)))))
+  (pattern ((col:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol))
+           #:with str #'(let ([fld (get-field column-names m)]) 
+                                        (set-field! column-names m (append fld (list nm)))))
   (pattern (col:id val:expr nm:str)
            #:with expr #'(col (let ([fld (get-field column-names m)]) 
                                 (set-field! column-names m (append fld (list nm))) val)))
