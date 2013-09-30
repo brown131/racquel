@@ -6,7 +6,7 @@
 ;;;; Copyright (c) Scott Brown 2013
 
 (require syntax/parse 
-         (for-template "keywords.rkt" "metadata.rkt"  racket))
+         (for-template "keywords.rkt" "metadata.rkt" racket))
 
 (provide data-class-element *column-names*)
 
@@ -26,9 +26,7 @@
 
 (define-syntax-class join-def
   #:description "join definition"
-  (pattern (col:id fk:str jcls:id jk:str)
-           #:with expr #'(let ([fld (get-field joins m)])
-                           (set-field! joins m (append fld (list (make-object data-join% col fk jcls jk)))))))
+  (pattern (col:id fk:str jcls:id jk:str) #:with expr #'(make-object data-join% col fk jcls jk)))
 
 (define-syntax-class data-class-element
   #:description "data class element" 
@@ -40,7 +38,8 @@
            #:attr col-nms #'(list col-def.col-nm ...))
   (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
            #:attr col-nms #'(list col-def.col-nm ...))
-  (pattern (join j-def:join-def ...) #:with expr #'(begin j-def.expr ...) #:attr col-nms #'null)
+  (pattern (join jn-def:join-def ...) 
+           #:with expr #'(set-field! joins m (append (get-field joins m) (list jn-def.expr ...))) #:attr col-nms #'null)
   (pattern (primary-key pkey:expr #:autoincrement flag:boolean) #:with expr 
            #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) #:attr col-nms #'null)
   (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey) #:attr col-nms #'null)

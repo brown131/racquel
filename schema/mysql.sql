@@ -4,6 +4,7 @@ create table simple (
   id int(11) not null,
   `name` varchar(30) default null,
   description varchar(500) default null,
+  x int not null,
   primary key (id)
 ) engine=InnoDB auto_increment=1 default charset=latin1;
 

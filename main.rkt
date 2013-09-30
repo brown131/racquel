@@ -199,19 +199,20 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
          [pkey (find-primary-key-fields con schema)]
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
          [auto-key (unless (eq? auto-key-found #f) (vector-ref auto-key-found 0))]
-         [ext-nm tbl-nm])
-    (eval `(let ([,(string->symbol (string-append tbl-nm "%"))
+         [ext-nm tbl-nm]
+         [cls-nm (string->symbol (string-append tbl-nm "%"))])
+    (eval-syntax #`(let ([#,cls-nm
                   (data-class data-object%
-                              (table-name ,tbl-nm)
-                              ,(append '(column) cols)
-                              ,(append (if (vector? auto-key-found) 
+                              (table-name #,tbl-nm)
+                              #,(append '(column) cols)
+                              #,(append (if (vector? auto-key-found) 
                                            (list 'primary-key pkey '#:autoincrement #t)
                                            (list 'primary-key pkey)))
                               (super-new)
                               (inspect #f)
-                              ;(if (eq? rest null) (apply values rest) null)
+                              #,@rest
                               )])
-             ,(string->symbol (string-append tbl-nm "%"))) ns)
+             #,cls-nm) ns)
     ))
 
 ;;; Sets the data in a data object.
