@@ -181,9 +181,10 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (syntax-parse stx 
     [(data-class base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
-         (class* base-cls (data-class<%>) elem.expr ...           
+         (class* base-cls (data-class<%>) elem.expr ... 
            (let ([cls (let-values ([(c x) (object-info this)]) c)])
              (unless (hash-has-key? *data-class-metadata* cls)
+               (set-field! column-names m (append elem.col-nms ...))
                (unless (get-field external-name m) (set-field! external-name m (get-field table-name m)))
                (set-field! class-name m (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
                                                       (class-info cls)]) cls-nm))

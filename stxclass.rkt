@@ -8,31 +8,22 @@
 (require syntax/parse 
          (for-template "keywords.rkt" "metadata.rkt"  racket))
 
-(provide data-class-element)
+(provide data-class-element *column-names*)
+
+(define *column-names* null)
 
 (define-syntax-class init-column-def
-  #:description "init column definition" 
-  (pattern (col:id nm:str) #:with expr #'col
-           #:with str #'(let ([fld (get-field column-names m)]) 
-                                        (set-field! column-names m (append fld (list nm)))))
-  (pattern ((col:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol))
-           #:with str #'(let ([fld (get-field column-names m)]) 
-                                        (set-field! column-names m (append fld (list nm)))))
-  (pattern (col:id val:expr nm:str)
-           #:with expr #'(col (let ([fld (get-field column-names m)]) 
-                                (set-field! column-names m (append fld (list nm))) val)))
-  (pattern ((icol:id xcol:id) val:expr nm:str)
-           #:with expr #'((icol xcol) (let ([fld (get-field column-names m)]) 
-                                        (set-field! column-names m (append fld (list nm))) val))))
+  #:description "init column definition"
+  (pattern (col:id nm:str) #:with expr #'col #:attr col-nm #'nm)
+  (pattern ((col:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol)) #:attr col-nm #'nm)
+  (pattern (col:id val:expr nm:str) #:with expr #'(col val) #:attr col-nm #'nm)
+  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol) val) #:attr col-nm #'nm))
 
 (define-syntax-class column-def
   #:description "column definition" 
-  (pattern (col:id val:expr nm:str) 
-           #:with expr #'(col (let ([fld (get-field column-names m)]) 
-                                (set-field! column-names m (append fld (list nm))) val)))
-  (pattern ((icol:id xcol:id) val:expr nm:str) 
-           #:with expr #'((icol xcol) (let ([fld (get-field column-names m)]) 
-                                        (set-field! column-names m (append fld (list nm))) val))))
+  (pattern (col:id val:expr nm:str) #:with expr #'(col val) #:attr col-nm #'nm)
+  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol) val) #:attr col-nm #'nm))
+
 (define-syntax-class join-def
   #:description "join definition"
   (pattern (col:id fk:str jcls:id jk:str)
@@ -42,12 +33,15 @@
 (define-syntax-class data-class-element
   #:description "data class element" 
   #:literals (table-name external-name init-column column join primary-key)
-  (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm))
-  (pattern (external-name ext-nm:str) #:with expr #'(set-field! external-name m ext-nm))
-  (pattern (init-column col-def:init-column-def ...) #:with expr #'(init-field col-def.expr ...))
-  (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...))
-  (pattern (join j-def:join-def ...) #:with expr #'(begin j-def.expr ...))
+  #:attributes (expr col-nms)
+  (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm) #:attr col-nms #'null)
+  (pattern (external-name ext-nm:str) #:with expr #'(set-field! external-name m ext-nm) #:attr col-nms #'null)
+  (pattern (init-column col-def:init-column-def ...) #:with expr #'(init-field col-def.expr ...)
+           #:attr col-nms #'(list col-def.col-nm ...))
+  (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
+           #:attr col-nms #'(list col-def.col-nm ...))
+  (pattern (join j-def:join-def ...) #:with expr #'(begin j-def.expr ...) #:attr col-nms #'null)
   (pattern (primary-key pkey:expr #:autoincrement flag:boolean) #:with expr 
-           #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))))
-  (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey))
-  (pattern (x:expr ...) #:with expr #'(x ...)))
+           #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) #:attr col-nms #'null)
+  (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey) #:attr col-nms #'null)
+  (pattern (x:expr ...) #:with expr #'(x ...) #:attr col-nms #'null))

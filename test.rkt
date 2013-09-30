@@ -37,7 +37,7 @@
 (define-test-suite test-define-data-object
  (let* ([test-class% (data-class data-object%
                                  (table-name "test")
-                                 (init-column [x 1 "x"])
+                                 (init-column [x "x"])
                                  (column [id #f "id"] 
                                          [name #f "name"] 
                                          [description #f "description"])
@@ -53,7 +53,7 @@
    (test-case "data object metadata set?" 
               (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm cls-nm) (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
-                (check-equal? col-nms '("id" "name" "description"))
+                (check-equal? col-nms '("x" "id" "name" "description"))
                 (check-not-eq? j-defs null)
                 (check-eq? pkey "id")
                 (check-eq? auto-key #f)

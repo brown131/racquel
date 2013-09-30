@@ -29,21 +29,26 @@
 ;;; Define a global table holding data class metadata.
 (define *data-class-metadata* (make-hash))
 
+(define-syntax-rule (get-class-metadata-object cls)  
+  (begin (unless (hash-has-key? *data-class-metadata* cls) 
+           (hash-set! *data-class-metadata* cls (new data-class-metadata%)))
+         (hash-ref *data-class-metadata* cls)))
+
 ;;; Get a data class metadata field.
 (define-syntax-rule (get-class-metadata id cls)
-  (get-field id (hash-ref *data-class-metadata* cls)))
+  (get-field id (get-class-metadata-object cls)))
 
 ;;; Set a data class metadata field.
 (define-syntax-rule (set-class-metadata! id cls val)
-  (set-field! id (hash-ref *data-class-metadata* cls) val))
+  (set-field! id (get-class-metadata-object cls) val))
 
 ;;; Dynamically get a data class metadata field.
 (define-syntax-rule (dynamic-get-class-metadata id cls)
-  (dynamic-get-field id (hash-ref *data-class-metadata* cls)))
+  (dynamic-get-field id (get-class-metadata-object cls)))
 
 ;;; Dynamically set a data class metadata field.
 (define-syntax-rule (dynamic-set-class-metadata! id cls val)
-  (dynamic-set-field! id (hash-ref *data-class-metadata* cls) val))
+  (dynamic-set-field! id (get-class-metadata-object cls) val))
 
 ;;; Return info about a data class.
 (define-syntax-rule (data-class-info cls)
