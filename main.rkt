@@ -8,7 +8,8 @@
 (require db "keywords.rkt" "metadata.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
 (provide data-object% data-class? data-class-info gen-data-class data-class make-data-object
-         select-data-object select-data-objects (all-from-out "keywords.rkt"))
+         select-data-object select-data-objects save-data-object insert-data-object
+         update-data-object delete-data-object (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
 (define-namespace-anchor anchr)
@@ -126,29 +127,29 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                  where-clause))
 
 ;;; Data Object class.
-(define-local-member-name new? deleted?)
+(define-local-member-name state)
 (define data-object% 
   (class object%
-    (field [new? #t] [deleted? #f])
-    (define/public (save con) (if (get-field new? this) (insert con) (update con)))
+    (field [state 'new])
+    (define/public (save con) (if (eq? (get-field state this) 'new) (insert con) (update con)))
     (define/public (insert con) 
       (let ([sql (insert-sql con (object-class this))]
             [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con (object-class this)))])
         (apply query-exec con sql flds)
         (set-autoincrement-id! con this)
-        (set-field! new? this #f)
+        (set-field! state this 'saved)
       ))
     (define/public (update con) 
       (let ([sql (update-sql con (object-class this))]
             [flds (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (savable-fields con (object-class this)))]
             [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields (object-class this)))])
         (apply query-exec con sql (append flds pkey))
-        (set-field! new? this #f)))
+        (set-field! state this 'saved)))
     (define/public (delete con) 
       (let ([sql (delete-sql con (object-class this))]
             [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) this)) (primary-key-fields (object-class this)))])
         (apply query-exec con sql pkey)
-        (set-field! deleted? this #t)))
+        (set-field! state this 'deleted)))
     (super-new)
     (inspect #f)
     ))
@@ -181,7 +182,9 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (syntax-parse stx 
     [(data-class base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
+         (define-local-member-name state)
          (class* base-cls (data-class<%>) elem.expr ... 
+           (field [state 'new])
            (let ([cls (let-values ([(c x) (object-info this)]) c)])
              (unless (hash-has-key? *data-class-metadata* cls)
                (set-field! column-names m (append elem.col-nms ...))
@@ -219,7 +222,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 (define (set-data-object! con obj row)
   (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) 
         (get-class-metadata column-names (object-class obj)) (vector->list row))
-   (set-field! new? obj #f))
+   (set-field! state obj 'loaded))
 
 ;;; Select a data object from the database.
 (define-syntax-rule (select-data-object con cls where-clause rest)
@@ -235,7 +238,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     obj
     ))
 
-;;; Select data-objects from the database
+;;; Select data objects from the database
 (define-syntax-rule (select-data-objects con cls where-clause rest)
   (let* ([obj (new cls)]
          [rows (query-rows con (select-sql con obj where-clause) rest)]
@@ -243,3 +246,36 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (map (lambda (o r) (set-data-object! con o r)) objs rows)
     objs
     ))
+
+;;; Save a data object.
+(define (save-data-object con obj) 
+  (if (eq? (get-field state obj) 'new) (insert-data-object con obj) 
+      (update-data-object con obj)))
+
+;;; Insert a data object
+(define (insert-data-object con obj) 
+  (let ([sql (insert-sql con (object-class obj))]
+        [flds (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+                   (savable-fields con (object-class obj)))])
+    (apply query-exec con sql flds)
+    (set-autoincrement-id! con obj)
+    (set-field! state obj 'saved)
+    ))
+
+;;; Update a data object.
+(define (update-data-object con obj) 
+  (let ([sql (update-sql con (object-class obj))]
+        [flds (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+                   (savable-fields con (object-class obj)))]
+        [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+                   (primary-key-fields (object-class obj)))])
+    (apply query-exec con sql (append flds pkey))
+    (set-field! state obj 'saved)))
+
+;;; Delete a data object.
+(define (delete-data-object con obj) 
+  (let ([sql (delete-sql con (object-class obj))]
+        [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+                   (primary-key-fields (object-class obj)))])
+    (apply query-exec con sql pkey)
+    (set-field! state obj 'deleted)))

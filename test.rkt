@@ -41,7 +41,7 @@
                                          [name #f "name"] 
                                          [description #f "description"])
                                  (init-column [x "x"])
-                                 (join [id "id" data-object% "id"])
+                                 (join [id "id" object% "id"])
                                  (primary-key "id")
                                  (inspect #f)
                                  (super-new))]
@@ -93,8 +93,8 @@
                 (check-eq? tbl-nm "simple")
                 (check-equal? col-nms '("x" "name" "description" "id"))
                 (check-eq? pkey "id")
-                (check-eq? auto-key #f)
-                (check-eq? j-defs null)
+                (check-eqv? auto-key #f)
+                (check-equal? j-defs '#hash())
                 (check-eq? ext-nm "simple")
                 (check-eq? cls-nm 'simple%)
                 ))
@@ -120,7 +120,7 @@
               (check-eq? (get-field x obj) 17)
    
    (test-case "object inserted?" 
-              (send obj insert con)
+              (insert-data-object con obj)
               (check-not-eq? (get-field id obj) #f))
                  
    (test-case "object changed?" 
@@ -128,7 +128,7 @@
               (check-eq? (get-field name obj) "test2"))
    
    (test-case "object updated?"
-              (send obj update con)
+              (update-data-object con obj)
               (check-equal? (query-value con "select name from simple where id=?" (get-field id obj)) "test2"))  
    
    (test-case "object loaded?"
@@ -136,7 +136,7 @@
                 (check-equal? (get-field name s) "test2")))
    
    (test-case "object deleted?" 
-              (send obj delete con)
+              (delete-data-object con obj)
               (check-eq? (query-value con "select count(*) from simple where id=?" (get-field id obj)) 0)) 
    ))
 
@@ -153,7 +153,7 @@
                 (check-equal? col-nms '("name" "description" "id"))
                 (check-eq? pkey "id")
                 (check-eq? auto-key "id")
-                (check-eq? j-defs null)
+                (check-equal? j-defs '#hash())
                 (check-eq? ext-nm "auto")
                 (check-eq? cls-nm 'auto%)
                 ))
