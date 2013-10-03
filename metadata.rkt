@@ -19,7 +19,7 @@
            [primary-key #f] 
            [autoincrement-key #f]
            [external-name #f]
-           [class-name #f])
+           [state-key (generate-member-key)])
     (super-new)
     (inspect #f)))
 

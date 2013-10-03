@@ -38,10 +38,12 @@
            #:attr col-nms #'(list col-def.col-nm ...))
   (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
            #:attr col-nms #'(list col-def.col-nm ...))
-  ; TODO: Add to existing hash
   (pattern (join jn-def:join-def ...) 
-           #:with expr #'(set-field! joins m (make-hash (list jn-def.expr ...))) #:attr col-nms #'null)
+           #:with expr #'(set-field! joins m (hash-for-each (make-hash (list jn-def.expr ...))
+                                                            (lambda (k v) (hash-set! (get-field joins m) k v)))) 
+           #:attr col-nms #'null)
   (pattern (primary-key pkey:expr #:autoincrement flag:boolean) #:with expr 
-           #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) #:attr col-nms #'null)
+           #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) 
+           #:attr col-nms #'null)
   (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey) #:attr col-nms #'null)
   (pattern (x:expr ...) #:with expr #'(x ...) #:attr col-nms #'null))
