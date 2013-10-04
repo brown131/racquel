@@ -10,6 +10,7 @@
 (provide data-class data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
+         get-joined-data-object get-joined-data-objects
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -100,10 +101,10 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (foldr (lambda (f l) 
            (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-class-metadata column-names cls)))
          
-;;; SQL where-clause for the primary key.
-(define (primary-key-where-clause con cls)
+;;; SQL where-clause for a key.
+(define (key-where-clause con cls key)
   (string-append " where " (string-join (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
-                       null (primary-key-fields cls)) " and ")))
+                       null (if (list? key) key (list key))) " and ")))
 
 ;;; Insert SQL.
 (define (insert-sql con cls)
@@ -118,13 +119,13 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                        null (savable-fields con cls))])
     (string-append "update " (get-class-metadata table-name cls)
                  " set " (string-join values ", ")
-                 (primary-key-where-clause con cls))
+                 (key-where-clause con cls (primary-key-fields cls)))
     ))
 
 ;;; Delete SQL.
 (define (delete-sql con cls)
   (string-append "delete from " (get-class-metadata table-name cls)
-                 (primary-key-where-clause con cls)))
+                 (key-where-clause con cls (primary-key-fields cls))))
 
 ;;; Select SQL.
 (define (select-sql con cls where-clause)
@@ -215,7 +216,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey)
   (let* ([obj (new cls)])
-    (set-data-object! con obj (query-row con (select-sql con cls (primary-key-where-clause con cls)) pkey))
+    (set-data-object! con obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
     obj
     ))
 
@@ -264,13 +265,20 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
     (set-field! data-object-state obj 'deleted)))
 
-;;; Join to a contained data object.
-;;; TODO: 1-M joins & multi-part keys.
-(define (get-join id obj con)
-  (let* ([cls (object-class obj)]
-         [jn (hash-ref (get-class-metadata joins (object-class obj)) id)])
-    (set-field! id obj (make-data-object con (data-join-class jn)
-                                         (dynamic-get-field (data-join-foreign-key jn) obj)))
-    ))
-   
-    
+;;; Get a contained data object. This will join to the object on first use.
+(define (get-joined-data-object id obj con)
+  (when (eq? (dynamic-get-field id obj) #f)
+    (let* ([jn-def (hash-ref (get-class-metadata joins (object-class obj)) id)])
+      (dynamic-set-field! id obj (make-data-object con (data-join-class jn-def)
+                                                   (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
+    (dynamic-get-field id obj))
+
+;;; Get contained data objects. This will select the objects on first use.
+(define (get-joined-data-objects id obj con)
+  (when (eq? (dynamic-get-field id obj) #f)
+    (let* ([cls (object-class obj)]
+           [jn-def (hash-ref (get-class-metadata joins cls) id)])
+      (dynamic-set-field! id obj (select-data-objects con (data-join-class jn-def) 
+                                                      (key-where-clause con cls (data-join-key jn-def))
+                                                      (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
+    (dynamic-get-field id obj))

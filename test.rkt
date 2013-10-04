@@ -7,7 +7,8 @@
 (require rackunit rackunit/text-ui db racquel)
 
 (require/expose racquel (savable-fields 
-                         primary-key-where-clause 
+                         key-where-clause
+                         primary-key-fields
                          insert-sql 
                          update-sql 
                          delete-sql 
@@ -73,7 +74,7 @@
               (check-eq? (get-field object obj) #f))
    
    (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '("id" "name" "description" "x")))
-   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con test-class%) " where id=?"))
+   (test-case "where clause correct?" (check-equal? (key-where-clause con test-class% (primary-key-fields test-class%)) " where id=?"))
    (test-case "insert sql correct?" (check-equal? (insert-sql con test-class%) "insert test (id, name, description, x) values (?, ?, ?, ?)"))
    (test-case "update sql correct?" (check-equal? (update-sql con test-class%) "update test set id=?, name=?, description=?, x=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con test-class%) "delete from test where id=?"))
@@ -106,7 +107,7 @@
    (test-case "object class correct?" (check-equal? (object-class obj) simple%))
    
    (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '("x" "name" "description" "id")))
-   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con simple%) " where id=?"))
+   (test-case "where clause correct?" (check-equal? (key-where-clause con simple% (primary-key-fields simple%)) " where id=?"))
    (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (x, name, description, id) values (?, ?, ?, ?)"))
    (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set x=?, name=?, description=?, id=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
@@ -168,7 +169,7 @@
    (test-case "object class correct?" (check-equal? (object-class obj) auto%))
    
    (test-case "savable field correct?" (check-equal? (savable-fields con auto%) '("name" "description")))
-   (test-case "where clause correct?" (check-equal? (primary-key-where-clause con auto%) " where id=?"))
+   (test-case "where clause correct?" (check-equal? (key-where-clause con auto% (primary-key-fields auto%)) " where id=?"))
    (test-case "insert sql correct?" (check-equal? (insert-sql con auto%) "insert auto (name, description) values (?, ?)"))
    (test-case "update sql correct?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
