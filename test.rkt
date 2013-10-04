@@ -26,7 +26,7 @@
             (table-name "test")
             (column [id #f "id"] [name #f "name"] [description #f "description"])
             (primary-key "id")
-            (join (id "id" object% "id"))
+            (join (object "id" object% "id"))
             (inspect #f)
             (super-new))
 
@@ -37,7 +37,7 @@
                                          [name #f "name"] 
                                          [description #f "description"])
                                  (init-column [x "x"])
-                                 (join [id "id" object% "id"])
+                                 (join [object "id" object% "id"])
                                  (primary-key "id")
                                  (inspect #f)
                                  (super-new))]
@@ -54,7 +54,7 @@
                             (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
                 (check-equal? col-nms '("id" "name" "description" "x"))
-                (check-not-eq? j-defs null)
+                (check-eq? (hash-count j-defs) 1)
                 (check-eq? pkey "id")
                 (check-eq? auto-key #f)
                 (check-eq? ext-nm "test")
@@ -69,7 +69,8 @@
               (set-field! description obj "This is a test")
               (check-eq? (get-field id obj) 1)
               (check-eq? (get-field name obj) "Test")
-              (check-eq? (get-field description obj) "This is a test"))
+              (check-eq? (get-field description obj) "This is a test")
+              (check-eq? (get-field object obj) #f))
    
    (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '("id" "name" "description" "x")))
    (test-case "where clause correct?" (check-equal? (primary-key-where-clause con test-class%) " where id=?"))
@@ -95,9 +96,9 @@
               (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm st-key) (data-class-info simple%)])
                 (check-eq? tbl-nm "simple")
                 (check-equal? col-nms '("x" "name" "description" "id"))
+                (check-eq? (hash-count j-defs) 0)
                 (check-eq? pkey "id")
                 (check-eqv? auto-key #f)
-                (check-eq? (hash-count j-defs) (hash-count '#hash()))
                 (check-eq? ext-nm "simple")
                 (check-not-eq? st-key #f)
                 ))
@@ -157,9 +158,9 @@
               (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm st-key) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
                 (check-equal? col-nms '("name" "description" "id"))
+                (check-eq? (hash-count j-defs) 0)
                 (check-eq? pkey "id")
                 (check-eq? auto-key "id")
-                (check-eq? (hash-count j-defs) (hash-count '#hash()))
                 (check-eq? ext-nm "auto")
                 (check-not-eq? st-key #f)
                 ))
@@ -178,11 +179,13 @@
               (set-field! name obj "test")
               (set-field! description obj "this is a test")
               (check-eq? (get-field name obj) "test")
-              (check-eq? (get-field description obj) "this is a test"))
+              (check-eq? (get-field description obj) "this is a test")
+              (check-eq? (data-object-state obj) 'new))
    
    (test-case "object inserted?" 
               (insert-data-object con obj)
-              (check-not-eq? (get-field id obj) #f))
+              (check-not-eq? (get-field id obj) #f)
+              (check-eq? (data-object-state obj) 'saved))
                  
    (test-case "object changed?" 
               (set-field! name obj "test2")
@@ -193,12 +196,14 @@
               (check-equal? (query-value con "select name from auto where id=?" (get-field id obj)) "test2"))  
    
    (test-case "object loaded?"
-              (let ([s (make-data-object con auto% (get-field id obj))])
-                (check-equal? (get-field name s) "test2")))
+              (let ([a (make-data-object con auto% (get-field id obj))])
+                (check-equal? (get-field name a) "test2")
+                (check-eq? (data-object-state a) 'loaded)))
    
    (test-case "object deleted?" 
               (delete-data-object con obj)
-              (check-eq? (query-value con "select count(*) from auto where id=?" (get-field id obj)) 0)) 
+              (check-eq? (query-value con "select count(*) from auto where id=?" (get-field id obj)) 0)
+              (check-eq? (data-object-state obj) 'deleted)) 
    ))
 
 #|

@@ -7,7 +7,7 @@
 
 (require db "keywords.rkt" "metadata.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
-(provide data-class data-class? data-class-info data-object-info gen-data-class 
+(provide data-class data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
          (all-from-out "keywords.rkt"))
@@ -74,10 +74,10 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Class of an object
 (define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
 
-;;; Return info about a data object.
-(define (data-object-info obj)
-  (define-member-name state (get-class-metadata state-key (object-class obj)))
-  (values (object-class obj) (get-field state obj)))
+;;; Return the state of a data object.
+(define (data-object-state obj)
+  (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+  (get-field data-object-state obj))
         
 ;;; Set autoincrement id.
 (define (set-autoincrement-id! con obj)
@@ -160,12 +160,15 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (syntax-parse stx 
     [(data-class base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
-         (define-member-name state (get-field state-key m))
+         (define-member-name data-object-state (get-field state-key m))
          (class* base-cls (data-class<%>) elem.expr ... 
-           (field [state 'new])
+           (field [data-object-state 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! column-names m (append elem.col-nms ...))
-             (unless (get-field external-name m) (set-field! external-name m (get-field table-name m)))
+             (hash-for-each (make-hash (append elem.jn-defs ...))
+                            (lambda (k v) (hash-set! (get-field joins m) k v)))
+             (unless (get-field external-name m) 
+               (set-field! external-name m (get-field table-name m)))
              (hash-set! *data-class-metadata* this% m))
            this))]
     ))
@@ -173,7 +176,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Generates a class using database schema information.
 (define (gen-data-class con tbl-nm . rest) 
   (let* ([schema (query-rows con (schema-sql con tbl-nm))]
-         [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l (cons (vector-ref f 0) l))) null schema)]
+         [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l 
+                                           (cons (vector-ref f 0) l))) null schema)]
          [cols (map (lambda (f) (list (string->symbol f) #f f)) col-nms)]
          [pkey (find-primary-key-fields con schema)]
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
@@ -198,8 +202,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 (define (set-data-object! con obj row)
   (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) 
        (get-class-metadata column-names (object-class obj)) (vector->list row))
-  (define-member-name state (get-class-metadata state-key (object-class obj)))
-  (set-field! state obj 'loaded))
+  (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+  (set-field! data-object-state obj 'loaded))
 
 ;;; Select a data object from the database.
 (define-syntax-rule (select-data-object con cls where-clause rest)
@@ -226,8 +230,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 
 ;;; Save a data object.
 (define (save-data-object con obj) 
-  (define-member-name state (get-class-metadata state-key (object-class obj)))
-  (if (eq? (get-field state obj) 'new) (insert-data-object con obj) 
+  (if (eq? (data-object-state obj) 'new) (insert-data-object con obj) 
       (update-data-object con obj)))
 
 ;;; Insert a data object
@@ -237,8 +240,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                    (savable-fields con (object-class obj)))])
     (apply query-exec con sql flds)
     (set-autoincrement-id! con obj)
-    (define-member-name state (get-class-metadata state-key (object-class obj)))
-    (set-field! state obj 'saved)
+    (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+    (set-field! data-object-state obj 'saved)
     ))
 
 ;;; Update a data object.
@@ -249,8 +252,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
         [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
                    (primary-key-fields (object-class obj)))])
     (apply query-exec con sql (append flds pkey))
-    (define-member-name state (get-class-metadata state-key (object-class obj)))
-    (set-field! state obj 'saved)))
+    (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+    (set-field! data-object-state obj 'saved)))
 
 ;;; Delete a data object.
 (define (delete-data-object con obj) 
@@ -258,11 +261,16 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
         [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
                    (primary-key-fields (object-class obj)))])
     (apply query-exec con sql pkey)
-    (define-member-name state (get-class-metadata state-key (object-class obj)))
-    (set-field! state obj 'deleted)))
+    (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+    (set-field! data-object-state obj 'deleted)))
 
 ;;; Join to a contained data object.
-;(define (get-join id obj con)
-;  (let ([jn (hash-ref (get-class-metadata joins (object-class obj)) id)])
-;    (
+;;; TODO: 1-M joins & multi-part keys.
+(define (get-join id obj con)
+  (let* ([cls (object-class obj)]
+         [jn (hash-ref (get-class-metadata joins (object-class obj)) id)])
+    (set-field! id obj (make-data-object con (data-join-class jn)
+                                         (dynamic-get-field (data-join-foreign-key jn) obj)))
+    ))
+   
     

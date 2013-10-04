@@ -26,24 +26,24 @@
 
 (define-syntax-class join-def
   #:description "join definition"
-  (pattern (col:id fk:str jcls:id jk:str) #:with expr #'(cons col (data-join fk jcls jk))))
+  (pattern (jcol:id fk:str jcls:id jk:str) #:with expr #'(jcol #f) #:attr jn-def #'(cons jcol (data-join fk jcls jk))))
 
 (define-syntax-class data-class-element
   #:description "data class element" 
   #:literals (table-name external-name init-column column join primary-key)
-  #:attributes (expr col-nms)
-  (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm) #:attr col-nms #'null)
-  (pattern (external-name ext-nm:str) #:with expr #'(set-field! external-name m ext-nm) #:attr col-nms #'null)
+  #:attributes (expr col-nms jn-defs)
+  (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm) #:attr col-nms #'null #:attr jn-defs #'null)
+  (pattern (external-name ext-nm:str) #:with expr #'(set-field! external-name m ext-nm) 
+           #:attr col-nms #'null #:attr jn-defs #'null)
   (pattern (init-column col-def:init-column-def ...) #:with expr #'(init-field col-def.expr ...)
-           #:attr col-nms #'(list col-def.col-nm ...))
+           #:attr col-nms #'(list col-def.col-nm ...) #:attr jn-defs #'null)
   (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
-           #:attr col-nms #'(list col-def.col-nm ...))
-  (pattern (join jn-def:join-def ...) 
-           #:with expr #'(set-field! joins m (hash-for-each (make-hash (list jn-def.expr ...))
-                                                            (lambda (k v) (hash-set! (get-field joins m) k v)))) 
-           #:attr col-nms #'null)
-  (pattern (primary-key pkey:expr #:autoincrement flag:boolean) #:with expr 
-           #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) 
-           #:attr col-nms #'null)
-  (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey) #:attr col-nms #'null)
-  (pattern (x:expr ...) #:with expr #'(x ...) #:attr col-nms #'null))
+           #:attr col-nms #'(list col-def.col-nm ...) #:attr jn-defs #'null)
+  (pattern (join jn-def:join-def ...) #:with expr #'(field jn-def.expr ...) 
+           #:attr col-nms #'null  #:attr jn-defs #'(list jn-def.jn-def ...)) 
+  (pattern (primary-key pkey:expr #:autoincrement flag:boolean) 
+           #:with expr #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) 
+           #:attr col-nms #'null #:attr jn-defs #'null)
+  (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey) 
+           #:attr col-nms #'null #:attr jn-defs #'null)
+  (pattern (x:expr ...) #:with expr #'(x ...) #:attr col-nms #'null #:attr jn-defs #'null))

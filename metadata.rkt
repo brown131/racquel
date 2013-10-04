@@ -5,7 +5,8 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(provide data-class-metadata% data-join *data-class-metadata* 
+(provide data-class-metadata% *data-class-metadata* 
+         data-join data-join-foreign-key data-join-class data-join-key
          get-class-metadata set-class-metadata!
          dynamic-get-class-metadata dynamic-set-class-metadata!
          data-class-info)
@@ -23,11 +24,11 @@
     (super-new)
     (inspect #f)))
 
-;;; Define data join struct.
-(define-struct data-join (foreign-key join-class join-key))
-
 ;;; Define a global table holding data class metadata.
 (define *data-class-metadata* (make-hash))
+
+;;; Define data join struct.
+(define-struct data-join (foreign-key class key))
 
 (define-syntax-rule (get-class-metadata-object cls)  
   (begin (unless (hash-has-key? *data-class-metadata* cls) 
