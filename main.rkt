@@ -266,12 +266,20 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (set-field! data-object-state obj 'deleted)))
 
 ;;; Get a contained data object. This will join to the object on first use.
-(define (get-joined-data-object id obj con)
-  (when (eq? (dynamic-get-field id obj) #f)
-    (let* ([jn-def (hash-ref (get-class-metadata joins (object-class obj)) id)])
-      (dynamic-set-field! id obj (make-data-object con (data-join-class jn-def)
-                                                   (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
-    (dynamic-get-field id obj))
+;(define-syntax (get-joined-data-object stx)
+ ; (syntax-parse stx 
+  ;  [(data-class id:id obj:expr con:expr) 
+   ;  #'(let* ([m (new data-class-metadata%)])
+
+(define-syntax-rule (get-joined-data-object id obj con)
+  (get-field id obj)
+)
+
+;  (when (eq? (dynamic-get-field `id `obj) #f)
+ ;   (let* ([jn-def (hash-ref (get-class-metadata joins (object-class `obj)) `id)])
+  ;    (dynamic-set-field! `id `obj (make-data-object con (data-join-class jn-def)
+   ;                                                (dynamic-get-field (data-join-foreign-key jn-def) `obj)))))
+    ;(dynamic-get-field localized `obj))]))
 
 ;;; Get contained data objects. This will select the objects on first use.
 (define (get-joined-data-objects id obj con)

@@ -40,7 +40,7 @@
   (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
            #:attr col-nms #'(list col-def.col-nm ...) #:attr jn-defs #'null)
   (pattern (join jn-def:join-def ...) #:with expr #'(field jn-def.expr ...) 
-           #:attr col-nms #'null  #:attr jn-defs #'(list jn-def.jn-def ...)) 
+           #:attr col-nms #'null #:attr jn-defs #'(list jn-def.jn-def ...)) 
   (pattern (primary-key pkey:expr #:autoincrement flag:boolean) 
            #:with expr #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) 
            #:attr col-nms #'null #:attr jn-defs #'null)

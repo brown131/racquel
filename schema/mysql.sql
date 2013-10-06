@@ -1,10 +1,12 @@
 /* Test schema for MySQL */
 
+/* DDL */
+
 create table simple (
   id int(11) not null,
   `name` varchar(30) default null,
   description varchar(500) default null,
-  x int not null,
+  x real not null,
   primary key (id)
 ) engine=InnoDB auto_increment=1 default charset=latin1;
 
@@ -23,3 +25,14 @@ create table if not exists multipartKey (
   constraint fk_simple_id_multipartKey foreign key (simple_id) references simple (id),
   constraint fk_auto_id_multipartKey foreign key (auto_id) references auto (id)
 ) engine=InnoDB default charset=latin1;
+
+/* DML */
+
+insert simple (id, `name`, description, x)
+values (1, 'join test', 'join test', 2.1)
+
+insert auto (`name`, description)
+values ('join test', 'join test')
+
+insert multipartkey (simple_id, auto_id)
+values (1, 1)

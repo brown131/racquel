@@ -48,7 +48,8 @@
    (test-case "test object created?" (check-not-eq? obj #f))
    (test-case "test class is correct?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info test-class%)]) 
-                (check-eq? cls-nm 'test-class%)))
+                (check-eq? cls-nm 'test-class%)
+                (check-equal? fld-nms '(id name description object x))))
 
    (test-case "data object metadata set?" 
               (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm st-key) 
@@ -118,11 +119,11 @@
               (set-field! id obj 23)
               (set-field! name obj "test")
               (set-field! description obj "this is a test")
-              (set-field! x obj 17)
+              (set-field! x obj 1.7)
               (check-eq? (get-field id obj) 23)
               (check-eq? (get-field name obj) "test")
               (check-eq? (get-field description obj) "this is a test"))
-              (check-eq? (get-field x obj) 17)
+              (check-eq? (get-field x obj) 1.7)
    
    (test-case "object inserted?" 
               (insert-data-object con obj)
@@ -207,33 +208,51 @@
               (check-eq? (data-object-state obj) 'deleted)) 
    ))
 
-#|
-(define ds (data-class object% 
-             (table-name "test") 
-             (external-name "Test") 
-             (column (name #f "name") (color #f "color"))
-             (field (x 1) (y 2))
+(define-test-suite test-joins
+ (let* ([person% (data-class object% 
+             (table-name "address") 
+             (external-name "Address") 
+             (column (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
+             (primary-key "id" #:autoincrement #t)
+             ;(join (addresses "id" address% "person_id"))
              (super-new)
-             (inspect #f)))
-ds
-|#
+             (inspect #f))]
+        [address% (data-class object% 
+             (table-name "address") 
+             (external-name "Address") 
+             (column (person-id #f "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
+             (primary-key "id" #:autoincrement #t)
+             (join (person "person_id" person% "id"))
+             (super-new)
+             (inspect #f))]
+        [person-obj (new person%)]
+        [address-obj (new address%)])
 
-(define-test-suite test-data-class
- (let* ([cls (data-class object% 
-             (table-name "test") 
-             (external-name "Test") 
-             (column (name #f "name") (color #f "color"))
-             (primary-key "name" #:autoincrement #t)
-             (field (x 1) (y 2))
-             (super-new)
-             (inspect #f))])
-   (test-true "data class parsed?" (class? cls))
-  ; cls
+   (test-case "address class is correct?" 
+              (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info address%)]) 
+                (check-eq? cls-nm 'address%)
+                (check-equal? fld-nms '(person-id line city state zip-code person))))
+   
+   (test-case "address class metadata set?" 
+              (let-values ([(tbl-nm col-nms j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
+                (check-eq? tbl-nm "address")
+                (check-equal? col-nms '("person_id" "line" "city" "state" "zip_code"))
+                (check-eq? (hash-count j-defs) 1)
+                (check-eq? pkey "id")
+                (check-eq? auto-key "id")
+                (check-eq? ext-nm "Address")
+                (check-not-eq? st-key #f)
+                ))
+   
+   (test-case "person not joined?" (eq? (get-field person address-obj) #f))
+   
+   ; TODO: This should fail
+   (test-case "person joined?" (equal? (get-joined-data-object person address-obj con) #f));person-obj))
 ))
 
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
-(run-tests test-data-class 'verbose)
+(run-tests test-joins 'verbose)
 
 (disconnect con)
