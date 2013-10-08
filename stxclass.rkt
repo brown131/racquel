@@ -26,7 +26,7 @@
 
 (define-syntax-class join-def
   #:description "join definition"
-  (pattern (jcol:id fk:str jcls:id jk:str) #:with expr #'(jcol #f) #:attr jn-def #'(cons jcol (data-join fk jcls jk))))
+  (pattern (jcol:id fk:expr jcls:id jk:expr) #:with expr #'(jcol #f) #:attr j-def #'(cons 'jcol (data-join 'fk jcls 'jk))))
 
 (define-syntax-class data-class-element
   #:description "data class element" 
@@ -40,7 +40,7 @@
   (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
            #:attr col-nms #'(list col-def.col-nm ...) #:attr jn-defs #'null)
   (pattern (join jn-def:join-def ...) #:with expr #'(field jn-def.expr ...) 
-           #:attr col-nms #'null #:attr jn-defs #'(list jn-def.jn-def ...)) 
+           #:attr col-nms #'null #:attr jn-defs #'(list jn-def.j-def ...)) 
   (pattern (primary-key pkey:expr #:autoincrement flag:boolean) 
            #:with expr #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) 
            #:attr col-nms #'null #:attr jn-defs #'null)

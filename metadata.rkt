@@ -7,7 +7,7 @@
 
 (provide data-class-metadata% *data-class-metadata* 
          data-join data-join-foreign-key data-join-class data-join-key
-         get-class-metadata set-class-metadata!
+         get-class-metadata-object get-class-metadata set-class-metadata!
          dynamic-get-class-metadata dynamic-set-class-metadata!
          data-class-info)
 

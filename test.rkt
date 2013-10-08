@@ -210,19 +210,19 @@
 
 (define-test-suite test-joins
  (let* ([person% (data-class object% 
-             (table-name "address") 
-             (external-name "Address") 
+             (table-name "person") 
+             (external-name "Person") 
              (column (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
              (primary-key "id" #:autoincrement #t)
-             ;(join (addresses "id" address% "person_id"))
+             ;(join (addresses id address% person-id))
              (super-new)
              (inspect #f))]
         [address% (data-class object% 
              (table-name "address") 
              (external-name "Address") 
-             (column (person-id #f "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
+             (column (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
              (primary-key "id" #:autoincrement #t)
-             (join (person "person_id" person% "id"))
+             (join (person person-id person% id))
              (super-new)
              (inspect #f))]
         [person-obj (new person%)]
@@ -244,10 +244,10 @@
                 (check-not-eq? st-key #f)
                 ))
    
-   (test-case "person not joined?" (eq? (get-field person address-obj) #f))
+   (test-case "person not joined?" (check-eq? (get-field person address-obj) #f))
    
    ; TODO: This should fail
-   (test-case "person joined?" (equal? (get-joined-data-object person address-obj con) #f));person-obj))
+   (test-case "person joined?" (check-equal? (get-joined-data-object person address-obj con) person-obj))
 ))
 
 (run-tests test-define-data-object 'verbose)
