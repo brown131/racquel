@@ -8,21 +8,19 @@
 (require syntax/parse 
          (for-template "keywords.rkt" "metadata.rkt" racket))
 
-(provide data-class-element *column-names*)
-
-(define *column-names* null)
+(provide data-class-element)
 
 (define-syntax-class init-column-def
   #:description "init column definition"
-  (pattern (col:id nm:str) #:with expr #'col #:attr col-nm #'nm)
-  (pattern ((col:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol)) #:attr col-nm #'nm)
-  (pattern (col:id val:expr nm:str) #:with expr #'(col val) #:attr col-nm #'nm)
-  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol) val) #:attr col-nm #'nm))
+  (pattern (col:id nm:str) #:with expr #'col #:attr col-def #'(cons 'col nm))
+  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol)) #:attr col-def #'(cons 'xcol nm))
+  (pattern (col:id val:expr nm:str) #:with expr #'(col val) #:attr col-def #'(cons 'col nm))
+  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol) val) #:attr col-def #'(cons 'xcol nm)))
 
 (define-syntax-class column-def
   #:description "column definition" 
-  (pattern (col:id val:expr nm:str) #:with expr #'(col val) #:attr col-nm #'nm)
-  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol) val) #:attr col-nm #'nm))
+  (pattern (col:id val:expr nm:str) #:with expr #'(col val) #:attr col-def #'(cons 'col nm))
+  (pattern ((icol:id xcol:id) val:expr nm:str) #:with expr #'((icol xcol) val) #:attr col-def #'(cons 'xcol nm)))
 
 (define-syntax-class join-def
   #:description "join definition"
@@ -31,19 +29,19 @@
 (define-syntax-class data-class-element
   #:description "data class element" 
   #:literals (table-name external-name init-column column join primary-key)
-  #:attributes (expr col-nms jn-defs)
-  (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm) #:attr col-nms #'null #:attr jn-defs #'null)
+  #:attributes (expr col-defs jn-defs)
+  (pattern (table-name tbl-nm:str) #:with expr #'(set-field! table-name m tbl-nm) #:attr col-defs #'null #:attr jn-defs #'null)
   (pattern (external-name ext-nm:str) #:with expr #'(set-field! external-name m ext-nm) 
-           #:attr col-nms #'null #:attr jn-defs #'null)
-  (pattern (init-column col-def:init-column-def ...) #:with expr #'(init-field col-def.expr ...)
-           #:attr col-nms #'(list col-def.col-nm ...) #:attr jn-defs #'null)
-  (pattern (column col-def:column-def ...) #:with expr #'(field col-def.expr ...) 
-           #:attr col-nms #'(list col-def.col-nm ...) #:attr jn-defs #'null)
+           #:attr col-defs #'null #:attr jn-defs #'null)
+  (pattern (init-column cl-def:init-column-def ...) #:with expr #'(init-field cl-def.expr ...)
+           #:attr col-defs #'(list cl-def.col-def ...) #:attr jn-defs #'null)
+  (pattern (column cl-def:column-def ...) #:with expr #'(field cl-def.expr ...) 
+           #:attr col-defs #'(list cl-def.col-def ...) #:attr jn-defs #'null)
   (pattern (join jn-def:join-def ...) #:with expr #'(field jn-def.expr ...) 
-           #:attr col-nms #'null #:attr jn-defs #'(list jn-def.j-def ...)) 
-  (pattern (primary-key pkey:expr #:autoincrement flag:boolean) 
-           #:with expr #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m pkey))) 
-           #:attr col-nms #'null #:attr jn-defs #'null)
-  (pattern (primary-key pkey:expr) #:with expr #'(set-field! primary-key m pkey) 
-           #:attr col-nms #'null #:attr jn-defs #'null)
-  (pattern (x:expr ...) #:with expr #'(x ...) #:attr col-nms #'null #:attr jn-defs #'null))
+           #:attr col-defs #'null #:attr jn-defs #'(list jn-def.j-def ...)) 
+  (pattern (primary-key pkey:id #:autoincrement flag:boolean) 
+           #:with expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m 'pkey))) 
+           #:attr col-defs #'null #:attr jn-defs #'null)
+  (pattern (primary-key pkey:id) #:with expr #'(set-field! primary-key m 'pkey) 
+           #:attr col-defs #'null #:attr jn-defs #'null)
+  (pattern (x:expr ...) #:with expr #'(x ...) #:attr col-defs #'null #:attr jn-defs #'null))

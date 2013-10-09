@@ -88,7 +88,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 (define (set-autoincrement-id! con obj)
   (when (get-class-metadata autoincrement-key (object-class obj))
     (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
-           (dynamic-set-field! (string->symbol (get-class-metadata autoincrement-key (object-class obj))) 
+           (dynamic-set-field! (get-class-metadata autoincrement-key (object-class obj))
                                obj (query-value con "select last_insert_id()"))]
           )))
 
@@ -103,23 +103,23 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Columns without the autoincrement key
 (define (savable-fields con cls)
   (foldr (lambda (f l) 
-           (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-class-metadata column-names cls)))
+           (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-column-ids cls)))
          
 ;;; SQL where-clause for a key.
 (define (key-where-clause con cls key)
-  (string-append " where " (string-join (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
+  (string-append " where " (string-join (foldr (lambda (f l) (cons (string-append (get-column-name f cls) "=" (sql-placeholder con)) l)) 
                        null (if (list? key) key (list key))) " and ")))
 
 ;;; Insert SQL.
 (define (insert-sql con cls)
-  (let ([col-nms (savable-fields con cls)])
+  (let ([col-nms (map (lambda (f) (get-column-name f cls)) (savable-fields con cls))])
     (string-append "insert " (get-class-metadata table-name cls)
                  " (" (string-join col-nms ", ") ")"
                  " values (" (string-join (make-list (length col-nms) "?") ", ") ")")))
 
 ;;; Update SQL.
 (define (update-sql con cls)
-  (let ([values (foldr (lambda (f l) (cons (string-append f "=" (sql-placeholder con)) l)) 
+  (let ([values (foldr (lambda (f l) (cons (string-append (get-column-name f cls) "=" (sql-placeholder con)) l)) 
                        null (savable-fields con cls))])
     (string-append "update " (get-class-metadata table-name cls)
                  " set " (string-join values ", ")
@@ -132,16 +132,9 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 
 ;;; Select SQL.
 (define (select-sql con cls where-clause)
-  (string-append "select " (string-join (get-class-metadata column-names cls) ", ")
+  (string-append "select " (string-join (get-column-names cls) ", ")
                  " from " (get-class-metadata table-name cls) " t "
                  where-clause))
-
-;;; Find primary key fields in a table schema.
-(define (find-primary-key-fields con schema)
-  (let ([pkey (map (lambda (v) (vector-ref v 0)) 
-                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "PRIMARY KEY") #f))
-                           schema))])
-    (if (eq? (length pkey) 1) (first pkey) pkey)))
 
 #| Model:
 (data-class object% 
@@ -168,7 +161,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
          (class* base-cls (data-class<%>) elem.expr ... 
            (field [data-object-state 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
-             (set-field! column-names m (append elem.col-nms ...))
+             (hash-for-each (make-hash (append elem.col-defs ...))
+                            (lambda (k v) (hash-set! (get-field columns m) k v)))
              (hash-for-each (make-hash (append elem.jn-defs ...))
                             (lambda (k v) (hash-set! (get-field joins m) k v)))
              (unless (get-field external-name m) 
@@ -176,6 +170,13 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
              (hash-set! *data-class-metadata* this% m))
            this))]
     ))
+
+;;; Find primary key fields in a table schema.
+(define (find-primary-key-fields con schema)
+  (let ([pkey (map (lambda (v) (string->symbol (vector-ref v 0)) )
+                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "PRIMARY KEY") #f))
+                           schema))])
+    (if (eq? (length pkey) 1) (first pkey) pkey)))
 
 ;;; Generates a class using database schema information.
 (define (gen-data-class con tbl-nm . rest) 
@@ -204,8 +205,8 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 
 ;;; Sets the data in a data object.
 (define (set-data-object! con obj row)
-  (map (lambda (f d) (dynamic-set-field! (string->symbol f) obj d)) 
-       (get-class-metadata column-names (object-class obj)) (vector->list row))
+  (map (lambda (f v) (dynamic-set-field! f obj v)) 
+       (get-column-ids (object-class obj)) (vector->list row))
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
   (set-field! data-object-state obj 'loaded))
 
@@ -240,7 +241,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Insert a data object
 (define (insert-data-object con obj) 
   (let ([sql (insert-sql con (object-class obj))]
-        [flds (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+        [flds (map (lambda (f) (dynamic-get-field f obj)) 
                    (savable-fields con (object-class obj)))])
     (apply query-exec con sql flds)
     (set-autoincrement-id! con obj)
@@ -251,9 +252,9 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Update a data object.
 (define (update-data-object con obj) 
   (let ([sql (update-sql con (object-class obj))]
-        [flds (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+        [flds (map (lambda (f) (dynamic-get-field f obj)) 
                    (savable-fields con (object-class obj)))]
-        [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+        [pkey (map (lambda (f) (dynamic-get-field f obj)) 
                    (primary-key-fields (object-class obj)))])
     (apply query-exec con sql (append flds pkey))
     (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
@@ -262,7 +263,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Delete a data object.
 (define (delete-data-object con obj) 
   (let ([sql (delete-sql con (object-class obj))]
-        [pkey (map (lambda (f) (dynamic-get-field (string->symbol f) obj)) 
+        [pkey (map (lambda (f) (dynamic-get-field f obj)) 
                    (primary-key-fields (object-class obj)))])
     (apply query-exec con sql pkey)
     (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))

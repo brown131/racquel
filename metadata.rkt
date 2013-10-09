@@ -9,13 +9,13 @@
          data-join data-join-foreign-key data-join-class data-join-key
          get-class-metadata-object get-class-metadata set-class-metadata!
          dynamic-get-class-metadata dynamic-set-class-metadata!
-         data-class-info)
+         data-class-info get-column-ids get-column-names get-column-name)
 
 ;;; Define data class metadata struct.
 (define data-class-metadata% 
   (class object% 
     (field [table-name #f] 
-           [column-names null] 
+           [columns (make-hash)] 
            [joins (make-hash)]
            [primary-key #f] 
            [autoincrement-key #f]
@@ -55,3 +55,15 @@
 (define-syntax-rule (data-class-info cls)
   (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info data-class-metadata%)])
     (apply values (map (lambda (f) (dynamic-get-class-metadata f cls)) fld-nms))))
+
+;;; Get column ids for class in an order.
+(define-syntax-rule (get-column-ids cls)
+  (hash-map (get-class-metadata columns cls) (lambda (k v) (values k))))
+
+;;; Get column names for class in an order.
+(define-syntax-rule (get-column-names cls)
+  (hash-map (get-class-metadata columns cls) (lambda (k v) (values v))))
+
+;;; Get a column name.
+(define-syntax-rule (get-column-name col cls)
+  (hash-ref (get-class-metadata columns cls) col))
