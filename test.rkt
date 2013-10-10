@@ -4,7 +4,7 @@
 ;;;; test - Tests the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
-(require rackunit rackunit/text-ui db racquel)
+(require rackunit rackunit/text-ui db racquel "metadata.rkt")
 
 (require/expose racquel (savable-fields 
                          key-where-clause
@@ -15,7 +15,7 @@
                          select-sql
                          object-class))
 
-(require/expose "metadata.rkt" (data-class-metadata% *data-class-metadata*))
+;(require/expose "metadata.rkt" (data-class-metadata% *data-class-metadata*))
   
 ;;;; SETUP
  
@@ -46,17 +46,17 @@
    (test-case "test class created?" (check-not-eq? test-class% #f))
    (test-true "test class is a data class?" (data-class? test-class%))
    (test-case "test object created?" (check-not-eq? obj #f))
-   (test-case "test class is correct?" 
+   (test-case "test class info is correct?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info test-class%)]) 
                 (check-eq? cls-nm 'test-class%)
                 (check-equal? fld-nms '(id name description object x))))
-
+   
    (test-case "data object metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) 
                             (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
-                (check-equal? col-defs (make-hash '((x . "x") (description . "description") (id . "id") (name . "name"))))
-                (check-eq? (hash-count j-defs) 1)
+                (check-equal? col-defs '((id . "id") (name . "name") (description . "description") (x . "x")))
+                (check-eq? (length j-defs) 1)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key #f)
                 (check-eq? ext-nm "test")
@@ -64,6 +64,7 @@
                 ))
    
    (test-case "object class correct?" (check-equal? (object-class obj) test-class%))
+  ; (test-case "get column name?" (check-eq? (get-column-name id test-class%) "id"))
    
    (test-case "fields set?" 
               (set-field! id obj 1)
@@ -74,13 +75,14 @@
               (check-eq? (get-field description obj) "This is a test")
               (check-eq? (get-field object obj) #f))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '(x description id name)))
+   (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '(id name description x)))
+   (test-case "primary key fields correct?" (check-equal? (primary-key-fields test-class%) '(id)))
    (test-case "where clause correct?" (check-equal? (key-where-clause con test-class% (primary-key-fields test-class%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con test-class%) "insert test (x, description, id, name) values (?, ?, ?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con test-class%) "update test set x=?, description=?, id=?, name=? where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con test-class%) "insert test (id, name, description, x) values (?, ?, ?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con test-class%) "update test set id=?, name=?, description=?, x=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con test-class%) "delete from test where id=?"))
    (test-case "select sql correct?" 
-              (check-equal? (select-sql con test-class% "where id=?") "select x, description, id, name from test t where id=?"))
+              (check-equal? (select-sql con test-class% "where id=?") "select id, name, description, x from test t where id=?"))
    )
 )
 
@@ -97,8 +99,8 @@
    (test-case "simple class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info simple%)])
                 (check-eq? tbl-nm "simple")
-                (check-equal? col-defs (make-hash '((x . "x") (description . "description") (id . "id") (name . "name"))))
-                (check-eq? (hash-count j-defs) 0)
+                (check-equal? col-defs '((x . "x") (name . "name") (description . "description") (id . "id")))
+                (check-eq? (length j-defs) 0)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key #f)
                 (check-eq? ext-nm "simple")
@@ -107,13 +109,13 @@
    
    (test-case "object class correct?" (check-equal? (object-class obj) simple%))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '(x description id name)))
+   (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '(x name description id)))
    (test-case "where clause correct?" (check-equal? (key-where-clause con simple% (primary-key-fields simple%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (x, description, id, name) values (?, ?, ?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set x=?, description=?, id=?, name=? where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (x, name, description, id) values (?, ?, ?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set x=?, name=?, description=?, id=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
    (test-case "select sql correct?" 
-              (check-equal? (select-sql con simple% "where id=?") "select x, description, id, name from simple t where id=?"))
+              (check-equal? (select-sql con simple% "where id=?") "select x, name, description, id from simple t where id=?"))
   
    (test-case "fields set?"
               (set-field! id obj 23)
@@ -166,8 +168,8 @@
    (test-case "auto class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
-                (check-equal? col-defs (make-hash '((description . "description") (id . "id") (name . "name"))))
-                (check-eq? (hash-count j-defs) 0)
+                (check-equal? col-defs '((name . "name") (description . "description") (id . "id")))
+                (check-eq? (length j-defs) 0)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "auto")
@@ -176,13 +178,13 @@
    
    (test-case "object class correct?" (check-equal? (object-class obj) auto%))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con auto%) '(description name)))
+   (test-case "savable field correct?" (check-equal? (savable-fields con auto%) '(name description)))
    (test-case "where clause correct?" (check-equal? (key-where-clause con auto% (primary-key-fields auto%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con auto%) "insert auto (description, name) values (?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con auto%) "update auto set description=?, name=? where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con auto%) "insert auto (name, description) values (?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
    (test-case "select sql correct?" 
-              (check-equal? (select-sql con auto% "where id=?") "select description, id, name from auto t where id=?"))
+              (check-equal? (select-sql con auto% "where id=?") "select name, description, id from auto t where id=?"))
   
    (test-case "fields set?"
               (set-field! name obj "test")
@@ -243,9 +245,9 @@
    (test-case "address class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
                 (check-eq? tbl-nm "address")
-                (check-equal? col-defs (make-hash '((person-id . "person_id") (state . "state") (city . "city")
-                                                    (line . "line") (id . "id") (zip-code . "zip_code"))))
-                (check-equal? (hash-keys j-defs) '(person))
+                (check-equal? col-defs '((id . "id") (person-id . "person_id") (line . "line") (city . "city")
+                                         (state . "state") (zip-code . "zip_code")))
+                (check-equal? (map car j-defs) '(person))
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Address")
