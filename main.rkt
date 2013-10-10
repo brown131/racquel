@@ -9,8 +9,7 @@
  
 (provide data-class data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
-         insert-data-object update-data-object delete-data-object 
-         get-joined-data-object get-joined-data-objects
+         insert-data-object update-data-object delete-data-object get-data-object-join
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -213,13 +212,6 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
   (set-field! data-object-state obj 'loaded))
 
-;;; Select a data object from the database.
-(define-syntax-rule (select-data-object con cls where-clause rest)
-  (let* ([obj (new cls)])
-    (set-data-object! con obj (query-row con (select-sql con obj where-clause) rest))
-    obj
-    ))
-
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey)
   (let* ([obj (new cls)])
@@ -227,10 +219,16 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     obj
     ))
 
+;;; Select a data object from the database.
+(define-syntax-rule (select-data-object con cls where-clause rest)
+  (let* ([obj (new cls)])
+    (set-data-object! con obj (query-row con (select-sql con obj where-clause) rest))
+    obj
+    ))
+
 ;;; Select data objects from the database
 (define-syntax-rule (select-data-objects con cls where-clause rest)
-  (let* ([obj (new cls)]
-         [rows (query-rows con (select-sql con obj where-clause) rest)]
+  (let* ([rows (query-rows con (select-sql con cls where-clause) rest)]
          [objs (make-list (length rows) (new cls))])
     (map (lambda (o r) (set-data-object! con o r)) objs rows)
     objs
@@ -272,20 +270,16 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
     (set-field! data-object-state obj 'deleted)))
 
-;;; Get a contained data object. This will join to the object on first use.
-(define-syntax (get-joined-data-object stx)
+;;; Get joined data objects. This will select the objects on first use.
+(define-syntax (get-data-object-join stx)
   (syntax-case stx ()
     ([_ id obj con] 
      #'(when (eq? (get-field id obj) #f)
-         (let ([jn-def (cdr (findf (lambda (f) (eq? 'id (car f))) (get-class-metadata joins (object-class obj))))])
-           (make-data-object con (data-join-class jn-def) (dynamic-get-field (data-join-foreign-key jn-def) obj)))))))
-
-;;; Get contained data objects. This will select the objects on first use.
-(define (get-joined-data-objects id obj con)
-  (when (eq? (dynamic-get-field id obj) #f)
-    (let* ([cls (object-class obj)]
-           [jn-def (cdr (findf (lambda (f) (eq? 'id (car f))) (get-class-metadata joins (object-class obj))))])
-      (dynamic-set-field! id obj (select-data-objects con (data-join-class jn-def) 
-                                                      (key-where-clause con cls (data-join-key jn-def))
-                                                      (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
-    (dynamic-get-field id obj))
+         (let* ([cls (object-class obj)]
+                [jn-def (cdr (findf (lambda (f) (eq? 'id (car f))) (get-class-metadata joins (object-class obj))))])
+           (set-field! id obj (if (eq? (data-join-cardinality jn-def) 'one-to-one)
+                                  (make-data-object con (data-join-class jn-def) (dynamic-get-field (data-join-foreign-key jn-def) obj))
+                                  (select-data-objects con (data-join-class jn-def) 
+                                                       (key-where-clause con cls (data-join-key jn-def))
+                                                       (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
+     (get-field id obj)))))

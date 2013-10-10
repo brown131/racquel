@@ -6,7 +6,8 @@
 ;;;; Copyright (c) Scott Brown 2013
 
 (provide data-class-metadata% *data-class-metadata* 
-         data-join data-join-foreign-key data-join-class data-join-key
+         data-join data-join-foreign-key 
+         data-join-class data-join-key data-join-cardinality
          get-class-metadata-object get-class-metadata set-class-metadata!
          dynamic-get-class-metadata dynamic-set-class-metadata!
          data-class-info get-column-ids get-column-names)
@@ -28,7 +29,7 @@
 (define *data-class-metadata* (make-hash))
 
 ;;; Define data join struct.
-(define-struct data-join (foreign-key class key))
+(define-struct data-join (foreign-key class key [cardinality #:auto]) #:auto-value 'one-to-many)
 
 (define-syntax-rule (get-class-metadata-object cls)  
   (begin (unless (hash-has-key? *data-class-metadata* cls) 

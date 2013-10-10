@@ -248,6 +248,10 @@
                 (check-equal? col-defs '((id . "id") (person-id . "person_id") (line . "line") (city . "city")
                                          (state . "state") (zip-code . "zip_code")))
                 (check-equal? (map car j-defs) '(person))
+                (check-equal? (data-join-foreign-key (first (map cdr j-defs))) 'person-id)
+                (check-equal? (data-join-class (first (map cdr j-defs))) person%)
+                (check-equal? (data-join-key (first (map cdr j-defs))) 'id)
+                (check-equal? (data-join-cardinality (first (map cdr j-defs))) 'one-to-many)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Address")
@@ -256,7 +260,7 @@
    
    (test-case "person not joined?" (check-eq? (get-field person address-obj) #f))
     
-   (test-case "person joined?" (check-true (is-a? (get-joined-data-object person address-obj con) person%)))
+   (test-case "persons joined?" (check-true (is-a? (first (get-data-object-join person address-obj con)) person%)))
 ))
 
 (run-tests test-define-data-object 'verbose)
