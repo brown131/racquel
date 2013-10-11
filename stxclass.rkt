@@ -24,7 +24,8 @@
 
 (define-syntax-class join-def
   #:description "join definition"
-  (pattern (jcol:id fk:expr jcls:id jk:expr) #:with expr #'(jcol #f) #:attr j-def #'(cons 'jcol (data-join 'fk jcls 'jk))))
+  (pattern (jcol:id fk:expr jcls:id jk:expr) #:with expr #'(jcol #f) #:attr j-def #'(cons 'jcol (data-join 'fk jcls 'jk 'one-to-many)))
+  (pattern (jcol:id fk:expr jcls:id jk:expr crd:expr) #:with expr #'(jcol #f) #:attr j-def #'(cons 'jcol (data-join 'fk jcls 'jk crd))))
 
 (define-syntax-class data-class-element
   #:description "data class element" 

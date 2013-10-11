@@ -29,7 +29,7 @@
 (define *data-class-metadata* (make-hash))
 
 ;;; Define data join struct.
-(define-struct data-join (foreign-key class key [cardinality #:auto]) #:auto-value 'one-to-many)
+(define-struct data-join (foreign-key class key cardinality))
 
 (define-syntax-rule (get-class-metadata-object cls)  
   (begin (unless (hash-has-key? *data-class-metadata* cls) 
