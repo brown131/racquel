@@ -9,7 +9,7 @@
  
 (provide data-class data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
-         insert-data-object update-data-object delete-data-object get-data-object-join
+         insert-data-object update-data-object delete-data-object get-join
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -74,10 +74,6 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 ;;; Class of an object
 (define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
 
-;;; Field id from a column name.
-;(define (column-field col cls)
-;  (get-class-metadata-object cls)
-
 ;;; Return the state of a data object.
 (define (data-object-state obj)
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
@@ -104,15 +100,14 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
   (foldr (lambda (f l) 
            (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-column-ids cls)))
          
+;;; Get the column name for a column field in a class.
 (define (get-column-name f cls)
    (cdr (findf (lambda (c) (eq? f (car c))) (get-class-metadata columns cls))))
 
 ;;; SQL where-clause for a key.
 (define (key-where-clause con cls key)
-  (string-append " where " (string-join (map (lambda (f) (string-append (get-column-name f cls) 
-                                                          ;(cdr (findf (lambda (c) (eq? f (car c))) (get-class-metadata columns cls)));
-                                                                        "=" (sql-placeholder con))) 
-                                               (if (list? key) key (list key))) " and ")))
+  (string-append " where " (string-join (map (lambda (f) (string-append (get-column-name f cls) "=" (sql-placeholder con))) 
+                                             (if (list? key) key (list key))) " and ")))
 
 ;;; Insert SQL.
 (define (insert-sql con cls)
@@ -149,7 +144,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                     (description #f "description")
                     (address-id #f "address_id"))
             (join (vehicles id vehicle% person-id)
-                  (address address-id address% id))
+                  (address address-id 'address% id))
             (primary-key id #:autoincrement #t)
             (field (data #f))
             (super-new)
@@ -181,6 +176,17 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
 ;;; Generates a class using database schema information.
+;;; Keywords: #:generate-joins #t|#f  
+;;;           #:generate-reverse-joins #t|#f 
+;;;           #:schema "schema-name"
+;;;           #:inherits base-class%
+;;;           #:nicknames (["name" "subst"] ...)
+;;;           #:singularize $t|#f
+;;;           #:table-name-prefix "ex_"
+;;;           #:table-name-seperator "_"|case-change
+;;;           #:column-name-prefix "ex_"
+;;;           #:column-name-seperator "_"|'case-change
+
 (define (gen-data-class con tbl-nm . rest) 
   (let* ([schema (query-rows con (schema-sql con tbl-nm))]
          [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l 
@@ -271,15 +277,21 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
     (set-field! data-object-state obj 'deleted)))
 
 ;;; Get joined data objects. This will select the objects on first use.
-(define-syntax (get-data-object-join stx)
+(define-syntax (get-join stx)
   (syntax-case stx ()
     ([_ id obj con] 
      #'(when (eq? (get-field id obj) #f)
          (let* ([cls (object-class obj)]
-                [jn-def (cdr (findf (lambda (f) (eq? 'id (car f))) (get-class-metadata joins (object-class obj))))])
-           (set-field! id obj (if (eq? (data-join-cardinality jn-def) 'one-to-one)
-                                  (make-data-object con (data-join-class jn-def) (dynamic-get-field (data-join-foreign-key jn-def) obj))
-                                  (select-data-objects con (data-join-class jn-def) 
-                                                       (key-where-clause con cls (data-join-key jn-def))
+                [jn-def (cdr (findf (lambda (f) (eq? 'id (car f))) (get-class-metadata joins (object-class obj))))]
+                [jn-cls-expr (data-join-class jn-def)]
+                [jn-cls (cond
+                          [(class? jn-cls-expr) jn-cls-expr]
+                          [(symbol? jn-cls-expr) 
+                           (findf (lambda (k) (string=? (~a k) (string-append "#<class:" (symbol->string jn-cls-expr) ">"))) 
+                                  (hash-keys *data-class-metadata*))])])
+           (set-field! id obj (if (eq? (data-join-cardinality jn-def) 'one-to-one) 
+                                  (make-data-object con jn-cls (dynamic-get-field (data-join-foreign-key jn-def) obj))
+                                  (select-data-objects con jn-cls 
+                                                       (key-where-clause con jn-cls (data-join-key jn-def))
                                                        (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
      (get-field id obj)))))

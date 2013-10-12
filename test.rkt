@@ -23,13 +23,6 @@
 (define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test"))
 
 ;;;; TESTS
-(data-class object%
-            (table-name "test")
-            (column [id #f "id"] [name #f "name"] [description #f "description"])
-            (primary-key id)
-            (join (object id object% id))
-            (inspect #f)
-            (super-new))
 
 (define-test-suite test-define-data-object
  (let* ([test-class% (data-class object%
@@ -221,21 +214,44 @@
  (let* ([person% (data-class object% 
              (table-name "person") 
              (external-name "Person") 
-             (column (id #f "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
+             (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
              (primary-key id #:autoincrement #t)
-             ;(join (addresses id address% person-id))
+             (join (addresses id 'address% person-id))
              (super-new)
              (inspect #f))]
         [address% (data-class object% 
              (table-name "address") 
              (external-name "Address") 
-             (column (id #f "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
+             (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
              (primary-key id #:autoincrement #t)
              (join (person person-id person% id 'one-to-one))
              (super-new)
              (inspect #f))]
         [person-obj (new person%)]
         [address-obj (new address%)])
+
+   (test-case "person class is correct?" 
+              (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info person%)]) 
+                (check-eq? cls-nm 'person%)
+                (check-equal? fld-nms '(id first-name last-name age addresses))))
+   
+   (test-case "person class metadata set?" 
+              (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info person%)])
+                (check-eq? tbl-nm "person")
+                (check-equal? col-defs '((id . "id") (first-name . "first_name") (last-name . "last_name") (age . "age")))
+                (check-equal? (map car j-defs) '(addresses))
+                (check-equal? (data-join-foreign-key (first (map cdr j-defs))) 'id)
+                (check-equal? (data-join-class (first (map cdr j-defs))) 'address%)
+                (check-equal? (data-join-key (first (map cdr j-defs))) 'person-id)
+                (check-equal? (data-join-cardinality (first (map cdr j-defs))) 'one-to-many)
+                (check-eq? pkey 'id)
+                (check-eq? auto-key 'id)
+                (check-eq? ext-nm "Person")
+                (check-not-eq? st-key #f)
+                ))
+   
+   (test-case "addresses not joined?" (check-eq? (get-field addresses person-obj) #f))
+   (test-case "addresses joined?" (check-true (is-a? (first (get-join addresses person-obj con)) address%)))
 
    (test-case "address class is correct?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info address%)]) 
@@ -259,8 +275,7 @@
                 ))
    
    (test-case "person not joined?" (check-eq? (get-field person address-obj) #f))
-    
-   (test-case "persons joined?" (check-true (is-a? (get-data-object-join person address-obj con) person%)))
+   (test-case "person joined?" (check-true (is-a? (get-join person address-obj con) person%)))
 ))
 
 (run-tests test-define-data-object 'verbose)
