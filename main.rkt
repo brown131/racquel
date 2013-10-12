@@ -7,9 +7,10 @@
 
 (require db "keywords.rkt" "metadata.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
-(provide data-class data-class? data-class-info data-object-state gen-data-class 
+(provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
-         insert-data-object update-data-object delete-data-object get-join
+         insert-data-object update-data-object delete-data-object 
+         get-join get-column set-column!
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -17,59 +18,30 @@
 (define ns (namespace-anchor->namespace anchr))
 
 ;;; Define an empty interface used to identify a data class.
-(define data-class<%> (interface ()))
+(define data-class-internal<%> (interface ()))
 
 ;;; Define type checker for a data class.
-(define (data-class? cls) (implementation? cls data-class<%>))
+(define (data-class? cls) (implementation? cls data-class-internal<%>))
 
-;;; SQL placeholder by database system.
-(define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
 
-;;; SQL schema by database system.
-(define (schema-sql con tbl-nm)
-  (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
-         (string-append "select cols.column_name, cons.constraint_type, fkey.ordinal_position, 
-   case when cols.extra='auto_increment' then 1 end autoincrement
-from information_schema.columns AS cols
-left join information_schema.key_column_usage as fkey
-   on fkey.column_name=cols.column_name
-   and fkey.table_name=cols.table_name
-   and fkey.table_schema=cols.table_schema
-left join information_schema.table_constraints as cons
-   on cons.constraint_name=fkey.constraint_name
-   and cons.constraint_schema=fkey.constraint_schema
-   and cons.table_name=fkey.table_name
-   and cons.table_schema=fkey.table_schema
-where cols.table_name='" tbl-nm "'
-order by cons.constraint_type desc, fkey.ordinal_position, cols.column_name")]
-        [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlite3) (string-append "pragma table_info(" tbl-nm ");")]
-        [(eq? (dbsystem-name (connection-dbsystem con)) 'oracle)
-         (string-append "select cols.column_name,
-   case when cons.constraint_type='P' then 'PRIMARY KEY' end constraint_type, cc.position, null
-from all_tab_cols cols
-join all_cons_columns cc
-   on cols.owner=cc.owner
-   and cols.table_name=cc.table_name
-   and cols.column_name=cc.column_name
-left outer join all_constraints cons
-   on cc.constraint_name=cons.constraint_name
-   and cons.owner=cols.owner
-   and cons.constraint_type='P'
-where cols.table_name='" tbl-nm "'
-order by constraint_type desc, cc.position, cols.column_name")]
-        ;; PostGres, SQL Server, and DB/2.
-        [else (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, null
-from information_schema.columns as cols
-left join information_schema.key_column_usage as keycols
-  on keycols.column_name=cols.column_name
-  and keycols.table_name=cols.table_name
-  and keycols.table_schema=cols.table_schema
-left join information_schema.table_constraints as cons
-  ON cons.constraint_name=keycols.constraint_name
-  and cons.constraint_schema=cons.constraint_schema
-where cols.table_name='" tbl-nm "'
-order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
-        ))
+;;; DATA CLASS DEFINITION
+
+
+#| Model:
+(data-class object% 
+            (table-name "TST_Person") 
+            (external-name "Person")
+            (init-column (id "id"))
+            (column (name #f "name")
+                    (description #f "description")
+                    (address-id #f "address_id"))
+            (join (vehicles id vehicle% person-id)
+                  (address address-id 'address% id))
+            (primary-key id #:autoincrement #t)
+            (field (data #f))
+            (super-new)
+            (inspect #f))
+|#
 
 ;;; Class of an object
 (define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
@@ -135,30 +107,31 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                  " from " (get-class-metadata table-name cls) " t "
                  where-clause))
 
-#| Model:
-(data-class object% 
-            (table-name "TST_Person") 
-            (external-name "Person")
-            (init-column (id "id"))
-            (column (name #f "name")
-                    (description #f "description")
-                    (address-id #f "address_id"))
-            (join (vehicles id vehicle% person-id)
-                  (address address-id 'address% id))
-            (primary-key id #:autoincrement #t)
-            (field (data #f))
-            (super-new)
-            (inspect #f))
-|#
-
-;;; Creates a data class.
+;;; Define a data class.
 (define-syntax (data-class stx)
   (syntax-parse stx 
     [(data-class base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
-         (define-member-name data-object-state (get-field state-key m))
-         (class* base-cls (data-class<%>) elem.expr ... 
-           (field [data-object-state 'new])
+         (define-member-name data-object-state-internal (get-field state-key m))
+         (class* base-cls (data-class-internal<%>) elem.expr ... 
+           (field [data-object-state-internal 'new])
+           (unless (hash-has-key? *data-class-metadata* this%)
+             (set-field! columns m (append elem.col-defs ...))
+             (set-field! joins m (append elem.jn-defs ...))
+             (unless (get-field external-name m) 
+               (set-field! external-name m (get-field table-name m)))
+             (hash-set! *data-class-metadata* this% m))
+           this))]
+    ))
+
+;;; Define a data class with interfaces.
+(define-syntax (data-class* stx)
+  (syntax-parse stx 
+    [(data-class base-cls:id (i-face:id ...) elem:data-class-element ...) 
+     #'(let* ([m (new data-class-metadata%)])
+         (define-member-name data-object-state-internal (get-field state-key m))
+         (class* base-cls (data-class-internal<%> i-face ...) elem.expr ... 
+           (field [data-object-state-internal 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! columns m (append elem.col-defs ...))
              (set-field! joins m (append elem.jn-defs ...))
@@ -175,30 +148,79 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
-;;; Generates a class using database schema information.
-;;; Keywords: #:generate-joins #t|#f  
-;;;           #:generate-reverse-joins #t|#f 
-;;;           #:schema "schema-name"
-;;;           #:inherits base-class%
-;;;           #:nicknames (["name" "subst"] ...)
-;;;           #:singularize $t|#f
-;;;           #:table-name-prefix "ex_"
-;;;           #:table-name-seperator "_"|case-change
-;;;           #:column-name-prefix "ex_"
-;;;           #:column-name-seperator "_"|'case-change
 
-(define (gen-data-class con tbl-nm . rest) 
+;;; GENERATE DATA CLASSES
+
+
+;;; SQL placeholder by database system.
+(define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
+
+;;; SQL schema by database system.
+(define (schema-sql con tbl-nm)
+  (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
+         (string-append "select cols.column_name, cons.constraint_type, fkey.ordinal_position, 
+   case when cols.extra='auto_increment' then 1 end autoincrement
+from information_schema.columns AS cols
+left join information_schema.key_column_usage as fkey
+   on fkey.column_name=cols.column_name
+   and fkey.table_name=cols.table_name
+   and fkey.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+   on cons.constraint_name=fkey.constraint_name
+   and cons.constraint_schema=fkey.constraint_schema
+   and cons.table_name=fkey.table_name
+   and cons.table_schema=fkey.table_schema
+where cols.table_name='" tbl-nm "'
+order by cons.constraint_type desc, fkey.ordinal_position, cols.column_name")]
+        [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlite3) (string-append "pragma table_info(" tbl-nm ");")]
+        [(eq? (dbsystem-name (connection-dbsystem con)) 'oracle)
+         (string-append "select cols.column_name,
+   case when cons.constraint_type='P' then 'PRIMARY KEY' end constraint_type, cc.position, null
+from all_tab_cols cols
+join all_cons_columns cc
+   on cols.owner=cc.owner
+   and cols.table_name=cc.table_name
+   and cols.column_name=cc.column_name
+left outer join all_constraints cons
+   on cc.constraint_name=cons.constraint_name
+   and cons.owner=cols.owner
+   and cons.constraint_type='P'
+where cols.table_name='" tbl-nm "'
+order by constraint_type desc, cc.position, cols.column_name")]
+        ;; PostGres, SQL Server, and DB/2.
+        [else (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, null
+from information_schema.columns as cols
+left join information_schema.key_column_usage as keycols
+  on keycols.column_name=cols.column_name
+  and keycols.table_name=cols.table_name
+  and keycols.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+  ON cons.constraint_name=keycols.constraint_name
+  and cons.constraint_schema=cons.constraint_schema
+where cols.table_name='" tbl-nm "'
+order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
+        ))
+
+;;; Generate a class using database schema information.
+(define (gen-data-class con tbl-nm 
+                        ;#:generate-joins #t|#f  
+                        ;#:generate-reverse-joins #t|#f 
+                        ;#:schema-name "schemaname"
+                        #:inherits (base-cls 'object%)
+                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (string-downcase n) "%"))) 
+                        #:column-name-normalizer (col-nm-norm (lambda (n) (string-downcase n))) 
+                        . rest) 
   (let* ([schema (query-rows con (schema-sql con tbl-nm))]
          [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l 
                                            (cons (vector-ref f 0) l))) null schema)]
-         [cols (map (lambda (f) (list (string->symbol f) #f f)) col-nms)]
+         [cols (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms)]
          [pkey (find-primary-key-fields con schema)]
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
          [auto-key (unless (eq? auto-key-found #f) (vector-ref auto-key-found 0))]
          [ext-nm tbl-nm]
-         [cls-nm (string->symbol (string-append tbl-nm "%"))])
+         [cls-nm (string->symbol (tbl-nm-norm tbl-nm))])
     (eval-syntax #`(let ([#,cls-nm
-                  (data-class object%
+                  (data-class #,base-cls
                               (table-name #,tbl-nm)
                               #,(append '(column) cols)
                               #,(append (if (vector? auto-key-found) 
@@ -211,12 +233,16 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
              #,cls-nm) ns)
     ))
 
-;;; Sets the data in a data object.
+
+;;; STORAGE/RETRIEVAL
+
+
+;;; Set the data in a data object.
 (define (set-data-object! con obj row)
   (map (lambda (f v) (dynamic-set-field! f obj v)) 
        (get-column-ids (object-class obj)) (vector->list row))
-  (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
-  (set-field! data-object-state obj 'loaded))
+  (define-member-name data-object-state-internal (get-class-metadata state-key (object-class obj)))
+  (set-field! data-object-state-internal obj 'loaded))
 
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey)
@@ -295,3 +321,23 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                                                        (key-where-clause con jn-cls (data-join-key jn-def))
                                                        (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
      (get-field id obj)))))
+
+;;; Get a data column.
+; TODO: Track state
+(define-syntax-rule (get-column col obj) (get-field col obj))
+
+;;; Set a data column.
+(define-syntax-rule (set-column! col obj val) (set-field! col obj val))
+
+
+;;; RQL 
+
+
+#| Model:
+(select (address% a)
+        (left-join state% (= abbr (a state)))
+        (and (like (person last-name) "A%")
+             (or (= (id #,(get-field id obj))
+                 (not (in city ("Chicago" "New York"))))
+             (between zip-code 10000 60999)))
+|#

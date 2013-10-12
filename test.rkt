@@ -24,8 +24,10 @@
 
 ;;;; TESTS
 
+(define test-interface<%> (interface ()))
+
 (define-test-suite test-define-data-object
- (let* ([test-class% (data-class object%
+ (let* ([test-class% (data-class* object% (test-interface<%>)
                                  (table-name "test")
                                  (column [id #f "id"] 
                                          [name #f "name"] 
@@ -59,14 +61,14 @@
    (test-case "object class correct?" (check-equal? (object-class obj) test-class%))
   ; (test-case "get column name?" (check-eq? (get-column-name id test-class%) "id"))
    
-   (test-case "fields set?" 
-              (set-field! id obj 1)
-              (set-field! name obj "Test")
-              (set-field! description obj "This is a test")
-              (check-eq? (get-field id obj) 1)
-              (check-eq? (get-field name obj) "Test")
-              (check-eq? (get-field description obj) "This is a test")
-              (check-eq? (get-field object obj) #f))
+   (test-case "columns set?" 
+              (set-column! id obj 1)
+              (set-column! name obj "Test")
+              (set-column! description obj "This is a test")
+              (check-eq? (get-column id obj) 1)
+              (check-eq? (get-column name obj) "Test")
+              (check-eq? (get-column description obj) "This is a test")
+              (check-eq? (get-column object obj) #f))
    
    (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '(id name description x)))
    (test-case "primary key fields correct?" (check-equal? (primary-key-fields test-class%) '(id)))
@@ -79,8 +81,14 @@
    )
 )
 
+(define (table-name-normalizer n) (string-downcase (string-append (regexp-replace* "([a-z])([A-Z])" n "\\1-\\2") "%")))
+
+(define (column-name-normalizer n) (string-downcase (string-replace n "_" "-")))
+
 (define-test-suite test-make-data-object
- (let* ([simple% (gen-data-class con "simple")]
+ (let* ([simple% (gen-data-class con "simple" 
+                                 #:table-name-normalizer table-name-normalizer
+                                 #:column-name-normalizer column-name-normalizer)]
         [obj (new simple%)])
    (test-case "simple class created?" (check-not-eq? simple% #f))
    (test-true "simple class is a data class?" (data-class? simple%))
@@ -110,15 +118,15 @@
    (test-case "select sql correct?" 
               (check-equal? (select-sql con simple% "where id=?") "select x, name, description, id from simple t where id=?"))
   
-   (test-case "fields set?"
-              (set-field! id obj 23)
-              (set-field! name obj "test")
-              (set-field! description obj "this is a test")
-              (set-field! x obj 1.7)
-              (check-eq? (get-field id obj) 23)
-              (check-eq? (get-field name obj) "test")
-              (check-eq? (get-field description obj) "this is a test"))
-              (check-eq? (get-field x obj) 1.7)
+   (test-case "columns set?"
+              (set-column! id obj 23)
+              (set-column! name obj "test")
+              (set-column! description obj "this is a test")
+              (set-column! x obj 1.7)
+              (check-eq? (get-column id obj) 23)
+              (check-eq? (get-column name obj) "test")
+              (check-eq? (get-column description obj) "this is a test"))
+              (check-eq? (get-column x obj) 1.7)
    
    (test-case "object inserted?" 
               (insert-data-object con obj)
@@ -179,11 +187,11 @@
    (test-case "select sql correct?" 
               (check-equal? (select-sql con auto% "where id=?") "select name, description, id from auto t where id=?"))
   
-   (test-case "fields set?"
-              (set-field! name obj "test")
-              (set-field! description obj "this is a test")
-              (check-eq? (get-field name obj) "test")
-              (check-eq? (get-field description obj) "this is a test")
+   (test-case "columns set?"
+              (set-column! name obj "test")
+              (set-column! description obj "this is a test")
+              (check-eq? (get-column name obj) "test")
+              (check-eq? (get-column description obj) "this is a test")
               (check-eq? (data-object-state obj) 'new))
    
    (test-case "object inserted?" 
