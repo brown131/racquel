@@ -158,8 +158,9 @@
 ;;; SQL schema by database system.
 (define (schema-sql con tbl-nm)
   (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
-         (string-append "select cols.column_name, cons.constraint_type, fkey.ordinal_position, 
-   case when cols.extra='auto_increment' then 1 end autoincrement
+         (string-append "select cols.column_name, cons.constraint_type, cons.ordinal_position, 
+   case when cols.extra='auto_increment' then 1 end autoincrement, fkey.ordinal_position,
+   fkey.referenced_table_name, fkey.referenced_column_name
 from information_schema.columns AS cols
 left join information_schema.key_column_usage as fkey
    on fkey.column_name=cols.column_name
@@ -175,7 +176,8 @@ order by cons.constraint_type desc, fkey.ordinal_position, cols.column_name")]
         [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlite3) (string-append "pragma table_info(" tbl-nm ");")]
         [(eq? (dbsystem-name (connection-dbsystem con)) 'oracle)
          (string-append "select cols.column_name,
-   case when cons.constraint_type='P' then 'PRIMARY KEY' end constraint_type, cc.position, null
+   case when cons.constraint_type='P' then 'PRIMARY KEY' when cons.constraint_type='R' then 'FOREIGN KEY' end, 
+   cc.position, null, rcons.table_name, rcc.column_name
 from all_tab_cols cols
 join all_cons_columns cc
    on cols.owner=cc.owner
@@ -183,20 +185,76 @@ join all_cons_columns cc
    and cols.column_name=cc.column_name
 left outer join all_constraints cons
    on cc.constraint_name=cons.constraint_name
-   and cons.owner=cols.owner
-   and cons.constraint_type='P'
+   and cols.owner=cons.owner
+   and cons.constraint_type in ('P','R')
+left outer join all_constraints rcons
+   on cons.r_constraint_name=rcons.constraint_name
+   and cons.r_owner=rcons.owner 
+left outer join all_cons_columns rcc
+   on rcons.constraint_name=rcc.constraint_name
+   and rcons.owner=rcc.owner
+   and rcons.table_name=rcc.table_name
 where cols.table_name='" tbl-nm "'
 order by constraint_type desc, cc.position, cols.column_name")]
-        ;; PostGres, SQL Server, and DB/2.
-        [else (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, null
+        ;; SQL Server
+        [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlserver)
+        (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
+  case when COLUMNPROPERTY(object_id(TABLE_NAME), COLUMN_NAME, 'IsIdentity')=1 then 'auto_increment' end,
+  fkey.table_name, fkey.column_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
   on keycols.column_name=cols.column_name
   and keycols.table_name=cols.table_name
   and keycols.table_schema=cols.table_schema
 left join information_schema.table_constraints as cons
-  ON cons.constraint_name=keycols.constraint_name
+  on cons.constraint_name=keycols.constraint_name
   and cons.constraint_schema=cons.constraint_schema
+left join information_schema.referential_constraints as refs
+  on  refs.constraint_schema = cons.constraint_schema
+  and refs.constraint_name = cons.constraint_name
+left join information_schema.key_column_usage as fkey
+  on fkey.constraint_schema = refs.unique_constraint_schema
+  and fkey.constraint_name = refs.unique_constraint_name
+where cols.table_name='" tbl-nm "'
+order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
+        ;; PostGreSQL
+        [(eq? (dbsystem-name (connection-dbsystem con)) 'postgresql)
+        (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
+  case when substring(cols.column_default from 1 for 6) = 'nextval' then 'auto_increment' end
+  fkey.table_name, fkey.column_name
+from information_schema.columns as cols
+left join information_schema.key_column_usage as keycols
+  on keycols.column_name=cols.column_name
+  and keycols.table_name=cols.table_name
+  and keycols.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+  on cons.constraint_name=keycols.constraint_name
+  and cons.constraint_schema=cons.constraint_schema
+left join information_schema.referential_constraints as refs
+  on  refs.constraint_schema = cons.constraint_schema
+  and refs.constraint_name = cons.constraint_name
+left join information_schema.key_column_usage as fkey
+  on fkey.constraint_schema = refs.unique_constraint_schema
+  and fkey.constraint_name = refs.unique_constraint_name
+where cols.table_name='" tbl-nm "'
+order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
+        ;; DB/2, etc.
+        [else (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, null,
+  fkey.table_name, fkey.column_name
+from information_schema.columns as cols
+left join information_schema.key_column_usage as keycols
+  on keycols.column_name=cols.column_name
+  and keycols.table_name=cols.table_name
+  and keycols.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+  on cons.constraint_name=keycols.constraint_name
+  and cons.constraint_schema=cons.constraint_schema
+left join information_schema.referential_constraints as refs
+  on  refs.constraint_schema = cons.constraint_schema
+  and refs.constraint_name = cons.constraint_name
+left join information_schema.key_column_usage as fkey
+  on fkey.constraint_schema = refs.unique_constraint_schema
+  and fkey.constraint_name = refs.unique_constraint_name
 where cols.table_name='" tbl-nm "'
 order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
         ))
