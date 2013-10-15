@@ -35,6 +35,7 @@
                                  (init-column [x "x"])
                                  (join [object id object% id])
                                  (primary-key id)
+                                 (define/public (test) (x + 1))
                                  (inspect #f)
                                  (super-new))]
         [obj (new test-class% [x 2])])
@@ -87,6 +88,7 @@
 
 (define-test-suite test-make-data-object
  (let* ([simple% (gen-data-class con "simple" 
+                                 #:generate-joins #t
                                  #:table-name-normalizer table-name-normalizer
                                  #:column-name-normalizer column-name-normalizer)]
         [obj (new simple%)])
@@ -170,7 +172,7 @@
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
                 (check-equal? col-defs '((name . "name") (description . "description") (id . "id")))
-                (check-eq? (length j-defs) 0)
+                (check-equal? j-defs null)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "auto")
@@ -286,9 +288,39 @@
    (test-case "person joined?" (check-true (is-a? (get-join person address-obj con) person%)))
 ))
 
+
+(define-test-suite test-generate-class
+ (let* ([address% (gen-data-class con "address" 
+                                  #:generate-joins #t
+                                  #:table-name-normalizer table-name-normalizer
+                                  #:column-name-normalizer column-name-normalizer)]
+        [obj (new address%)])
+   (test-case "address class created?" (check-not-eq? address% #f))
+   (test-true "address class is a data class?" (data-class? address%))
+   (test-case "address object created?" (check-not-eq? obj #f))
+   (test-case "address class is correct?" 
+              (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info address%)]) 
+                (check-eq? cls-nm 'address%)))
+   
+   (test-case "address class metadata set?" 
+              (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
+                (check-eq? tbl-nm "address")
+                (check-equal? col-defs '((zip-code . "zip_code") (state . "state") (line . "line") (city . "city")
+                                         (person-id . "person_id") (id . "id")))
+                (check-equal? (length j-defs) 1)
+                (check-eq? pkey 'id)
+                (check-eqv? auto-key 'id)
+                (check-eq? ext-nm "address")
+                (check-not-eq? st-key #f)
+                ))
+   
+   (test-case "object class correct?" (check-equal? (object-class obj) address%))
+))
+
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-joins 'verbose)
+(run-tests test-generate-class 'verbose)
 
 (disconnect con)

@@ -144,7 +144,7 @@
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields con schema)
   (let ([pkey (map (lambda (v) (string->symbol (vector-ref v 0)) )
-                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "PRIMARY KEY") #f))
+                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "primary key") #f))
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
@@ -158,10 +158,9 @@
 ;;; SQL schema by database system.
 (define (schema-sql con tbl-nm)
   (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
-         (string-append "select cols.column_name, cons.constraint_type, cons.ordinal_position, 
-   case when cols.extra='auto_increment' then 1 end autoincrement, fkey.ordinal_position,
-   fkey.referenced_table_name, fkey.referenced_column_name
-from information_schema.columns AS cols
+         (string-append "select cols.column_name, lower(cons.constraint_type), fkey.ordinal_position, 
+   case when cols.extra='auto_increment' then 1 end, fkey.referenced_table_name, fkey.referenced_column_name
+from information_schema.columns as cols
 left join information_schema.key_column_usage as fkey
    on fkey.column_name=cols.column_name
    and fkey.table_name=cols.table_name
@@ -176,7 +175,7 @@ order by cons.constraint_type desc, fkey.ordinal_position, cols.column_name")]
         [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlite3) (string-append "pragma table_info(" tbl-nm ");")]
         [(eq? (dbsystem-name (connection-dbsystem con)) 'oracle)
          (string-append "select cols.column_name,
-   case when cons.constraint_type='P' then 'PRIMARY KEY' when cons.constraint_type='R' then 'FOREIGN KEY' end, 
+   case when cons.constraint_type='P' then 'primary key' when cons.constraint_type='R' then 'primary key' end, 
    cc.position, null, rcons.table_name, rcc.column_name
 from all_tab_cols cols
 join all_cons_columns cc
@@ -199,7 +198,7 @@ order by constraint_type desc, cc.position, cols.column_name")]
         ;; SQL Server
         [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlserver)
         (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
-  case when COLUMNPROPERTY(object_id(TABLE_NAME), COLUMN_NAME, 'IsIdentity')=1 then 'auto_increment' end,
+  case when columnproperty(object_id(table_name), column_nam, 'isidentity')=1 then 1 end,
   fkey.table_name, fkey.column_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
@@ -220,7 +219,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
         ;; PostGreSQL
         [(eq? (dbsystem-name (connection-dbsystem con)) 'postgresql)
         (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
-  case when substring(cols.column_default from 1 for 6) = 'nextval' then 'auto_increment' end
+  case when substring(cols.column_default from 1 for 6) = 'nextval' then 1 end
   fkey.table_name, fkey.column_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
@@ -261,38 +260,46 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
 
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
-                        ;#:generate-joins #t|#f  
+                        ;#:connection-type 
+                        #:generate-joins (gen-joins #f)
                         ;#:generate-reverse-joins #t|#f 
-                        ;#:schema-name "schemaname"
+                        ;#:schema-name "schema_name"
                         #:inherits (base-cls 'object%)
                         #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (string-downcase n) "%"))) 
                         #:column-name-normalizer (col-nm-norm (lambda (n) (string-downcase n))) 
+                        #:join-name-normalizer (join-nm-norm (lambda (n) (string-downcase n))) 
+                        #:external-name-normalizer (ext-nm-norm (lambda (n) (string-downcase n))) 
                         . rest) 
   (let* ([schema (query-rows con (schema-sql con tbl-nm))]
          [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l 
                                            (cons (vector-ref f 0) l))) null schema)]
          [cols (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms)]
+         [jns (if gen-joins (foldl (lambda (f l) (if (equal? (vector-ref f 1) "foreign key")
+                                                     (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
+                                                                 (vector-ref f 0) (vector-ref f 4) (vector-ref f 5)) l) l))
+                                       null schema) null)]
          [pkey (find-primary-key-fields con schema)]
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
          [auto-key (unless (eq? auto-key-found #f) (vector-ref auto-key-found 0))]
          [ext-nm tbl-nm]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))])
     (eval-syntax #`(let ([#,cls-nm
-                  (data-class #,base-cls
-                              (table-name #,tbl-nm)
-                              #,(append '(column) cols)
-                              #,(append (if (vector? auto-key-found) 
-                                           (list 'primary-key pkey '#:autoincrement #t)
-                                           (list 'primary-key pkey)))
-                              (super-new)
-                              (inspect #f)
-                              #,@rest
-                              )])
-             #,cls-nm) ns)
+                          (data-class #,base-cls
+                                      (table-name #,tbl-nm)
+                                      #,(append '(column) cols)
+                                      #,(append (if (vector? auto-key-found) 
+                                                    (list 'primary-key pkey '#:autoincrement #t)
+                                                    (list 'primary-key pkey)))
+                                      #,(if (and gen-joins (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
+                                      (super-new)
+                                      (inspect #f)
+                                      #,@rest
+                                      )])
+                     #,cls-nm) ns)
     ))
 
 
-;;; STORAGE/RETRIEVAL
+;;; PERSISTENCE
 
 
 ;;; Set the data in a data object.
