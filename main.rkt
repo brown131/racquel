@@ -144,7 +144,7 @@
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields con schema)
   (let ([pkey (map (lambda (v) (string->symbol (vector-ref v 0)) )
-                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "primary key") #f))
+                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "P") #f))
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
@@ -155,10 +155,9 @@
 ;;; SQL placeholder by database system.
 (define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
 
-;;; SQL schema by database system.
-(define (schema-sql con tbl-nm)
-  (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
-         (string-append "select cols.column_name, lower(cons.constraint_type), fkey.ordinal_position, 
+;;; Load MySQL schema.
+(define (load-mysql-schema con schema-nm tbl-nm rev-jn?)
+  (let ([schema-sql (string-append "select cols.column_name, substring(cons.constraint_type, 1, 1) as constraint_type, fkey.ordinal_position, 
    case when cols.extra='auto_increment' then 1 end, fkey.referenced_table_name, fkey.referenced_column_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as fkey
@@ -170,12 +169,30 @@ left join information_schema.table_constraints as cons
    and cons.constraint_schema=fkey.constraint_schema
    and cons.table_name=fkey.table_name
    and cons.table_schema=fkey.table_schema
-where cols.table_name='" tbl-nm "'
-order by cons.constraint_type desc, fkey.ordinal_position, cols.column_name")]
-        [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlite3) (string-append "pragma table_info(" tbl-nm ");")]
-        [(eq? (dbsystem-name (connection-dbsystem con)) 'oracle)
-         (string-append "select cols.column_name,
-   case when cons.constraint_type='P' then 'primary key' when cons.constraint_type='R' then 'primary key' end, 
+where cols.table_name='" tbl-nm "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
+    (when rev-jn? 
+      (begin (set! schema-sql (string-append schema-sql " union 
+select fkey.referenced_column_name, 'R', fkey.ordinal_position, 
+   case when cols.extra='auto_increment' then 1 end, cols.table_name, cols.column_name
+from information_schema.columns as cols
+left join information_schema.key_column_usage as fkey
+   on fkey.column_name=cols.column_name
+   and fkey.table_name=cols.table_name
+   and fkey.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+   on cons.constraint_name=fkey.constraint_name
+   and cons.constraint_schema=fkey.constraint_schema
+   and cons.table_name=fkey.table_name
+   and cons.table_schema=fkey.table_schema
+where fkey.referenced_table_name='" tbl-nm "'"))
+             (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.referenced_table_schema='" schema-nm "'")))))
+    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, column_name"))
+    (query-rows con schema-sql)))
+
+;;; Load Oracle schema
+(define (load-oracle-schema con schema-nm tbl-nm rev-jn?)
+  (let ([schema-sql (string-append "select cols.column_name,cons.constraint_type
    cc.position, null, rcons.table_name, rcc.column_name
 from all_tab_cols cols
 join all_cons_columns cc
@@ -193,11 +210,80 @@ left outer join all_cons_columns rcc
    on rcons.constraint_name=rcc.constraint_name
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
-where cols.table_name='" tbl-nm "'
-order by constraint_type desc, cc.position, cols.column_name")]
-        ;; SQL Server
-        [(eq? (dbsystem-name (connection-dbsystem con)) 'sqlserver)
-        (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
+where cols.table_name='" tbl-nm "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.owner='" schema-nm "'")))
+    (when rev-jn? 
+      (begin (set! schema-sql (string-append schema-sql " union 
+select rcc.column_name, 'R', cc.position, 
+   case when cols.extra='auto_increment' then 1 end, cols.table_name, cols.column_name
+from all_tab_cols cols
+join all_cons_columns cc
+   on cols.owner=cc.owner
+   and cols.table_name=cc.table_name
+   and cols.column_name=cc.column_name
+left outer join all_constraints cons
+   on cc.constraint_name=cons.constraint_name
+   and cols.owner=cons.owner
+   and cons.constraint_type in ('P','R')
+left outer join all_constraints rcons
+   on cons.r_constraint_name=rcons.constraint_name
+   and cons.r_owner=rcons.owner 
+left outer join all_cons_columns rcc
+   on rcons.constraint_name=rcc.constraint_name
+   and rcons.owner=rcc.owner
+   and rcons.table_name=rcc.table_name
+where rcons.table_name='" tbl-nm "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and rcols.owner='" schema-nm "'"))))
+    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, column_name"))
+    (query-rows con schema-sql)))
+
+;;; Load PostgreSQL schema.
+(define (load-postgresql-schema con schema-nm tbl-nm rev-jn?)
+  (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
+  case when substring(cols.column_default from 1 for 6) = 'nextval' then 1 end, fkey.table_name, fkey.column_name
+from information_schema.columns as cols
+left join information_schema.key_column_usage as keycols
+  on keycols.column_name=cols.column_name
+  and keycols.table_name=cols.table_name
+  and keycols.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+  on cons.constraint_name=keycols.constraint_name
+  and cons.constraint_schema=cons.constraint_schema
+left join information_schema.referential_constraints as refs
+  on  refs.constraint_schema = cons.constraint_schema
+  and refs.constraint_name = cons.constraint_name
+left join information_schema.key_column_usage as fkey
+  on fkey.constraint_schema = refs.unique_constraint_schema
+  and fkey.constraint_name = refs.unique_constraint_name
+where cols.table_name='" tbl-nm "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
+    (when rev-jn? 
+      (begin (set! schema-sql (string-append schema-sql " union 
+select fkey.column_name, 'R', fkey.ordinal_position, 
+   case when substring(cols.column_default from 1 for 6) = 'nextval' then 1 end, cols.table_name, cols.column_name
+from information_schema.columns as cols
+left join information_schema.key_column_usage as fkey
+   on fkey.column_name=cols.column_name
+   and fkey.table_name=cols.table_name
+   and fkey.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+   on cons.constraint_name=fkey.constraint_name
+   and cons.constraint_schema=fkey.constraint_schema
+   and cons.table_name=fkey.table_name
+   and cons.table_schema=fkey.table_schema
+where fkey.table_name='" tbl-nm "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
+    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, column_name"))
+    (query-rows con schema-sql)))
+
+;;; Load SQLite3 schema.
+(define (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)
+  (let ([schema-sql (string-append "pragma table_info(" tbl-nm ");")])
+    (query-rows con schema-sql)))
+
+;;; Load SQL Server schema.
+(define (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)
+  (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
   case when columnproperty(object_id(table_name), column_nam, 'isidentity')=1 then 1 end,
   fkey.table_name, fkey.column_name
 from information_schema.columns as cols
@@ -214,12 +300,31 @@ left join information_schema.referential_constraints as refs
 left join information_schema.key_column_usage as fkey
   on fkey.constraint_schema = refs.unique_constraint_schema
   and fkey.constraint_name = refs.unique_constraint_name
-where cols.table_name='" tbl-nm "'
-order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
-        ;; PostGreSQL
-        [(eq? (dbsystem-name (connection-dbsystem con)) 'postgresql)
-        (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
-  case when substring(cols.column_default from 1 for 6) = 'nextval' then 1 end
+where cols.table_name='" tbl-nm "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
+    (when rev-jn? 
+      (begin (set! schema-sql (string-append schema-sql " union 
+select fkey.column_name, 'R', fkey.ordinal_position, 
+   case when columnproperty(object_id(table_name), column_nam, 'isidentity')=1 then 1 end, 
+   cols.table_name, cols.column_name
+from information_schema.columns as cols
+left join information_schema.key_column_usage as fkey
+   on fkey.column_name=cols.column_name
+   and fkey.table_name=cols.table_name
+   and fkey.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+   on cons.constraint_name=fkey.constraint_name
+   and cons.constraint_schema=fkey.constraint_schema
+   and cons.table_name=fkey.table_name
+   and cons.table_schema=fkey.table_schema
+where fkey.table_name='" tbl-nm "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
+    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, column_name"))
+    (query-rows con schema-sql)))
+
+;;; Load default schema.
+(define (load-default-schema con schema-nm tbl-nm rev-jn?)
+  (let ([schema-sql (string-append "select cols.column_name as col_name, cons.constraint_type, keycols.ordinal_position, null,
   fkey.table_name, fkey.column_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
@@ -235,49 +340,58 @@ left join information_schema.referential_constraints as refs
 left join information_schema.key_column_usage as fkey
   on fkey.constraint_schema = refs.unique_constraint_schema
   and fkey.constraint_name = refs.unique_constraint_name
-where cols.table_name='" tbl-nm "'
-order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
-        ;; DB/2, etc.
-        [else (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, null,
-  fkey.table_name, fkey.column_name
+where cols.table_name='" tbl-nm "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
+    (when rev-jn? 
+      (begin (set! schema-sql (string-append schema-sql " union 
+select fkey.column_name, 'R', fkey.ordinal_position, null, 
+   cols.table_name, cols.column_name
 from information_schema.columns as cols
-left join information_schema.key_column_usage as keycols
-  on keycols.column_name=cols.column_name
-  and keycols.table_name=cols.table_name
-  and keycols.table_schema=cols.table_schema
-left join information_schema.table_constraints as cons
-  on cons.constraint_name=keycols.constraint_name
-  and cons.constraint_schema=cons.constraint_schema
-left join information_schema.referential_constraints as refs
-  on  refs.constraint_schema = cons.constraint_schema
-  and refs.constraint_name = cons.constraint_name
 left join information_schema.key_column_usage as fkey
-  on fkey.constraint_schema = refs.unique_constraint_schema
-  and fkey.constraint_name = refs.unique_constraint_name
-where cols.table_name='" tbl-nm "'
-order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")]
+   on fkey.column_name=cols.column_name
+   and fkey.table_name=cols.table_name
+   and fkey.table_schema=cols.table_schema
+left join information_schema.table_constraints as cons
+   on cons.constraint_name=fkey.constraint_name
+   and cons.constraint_schema=fkey.constraint_schema
+   and cons.table_name=fkey.table_name
+   and cons.table_schema=fkey.table_schema
+where fkey.table_name='" tbl-nm "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
+    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, col_name"))
+    (query-rows con schema-sql)))
+
+;;; SQL schema by database system type.
+(define (load-schema con schema-nm tbl-nm #:reverse-join? rev-jn? #:db-system-type db-sys-type)
+  (cond [(eq? db-sys-type 'mysql) (load-mysql-schema con schema-nm tbl-nm rev-jn?)]
+        [(eq? db-sys-type 'oracle) (load-oracle-schema con schema-nm tbl-nm rev-jn?)]
+        [(eq? db-sys-type 'postgresql) (load-postgresql-schema con schema-nm tbl-nm rev-jn?)]
+        [(eq? db-sys-type 'sqlite3) (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)]
+        [(eq? db-sys-type 'sqlserver) (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)]
+        [else (load-default-schema con schema-nm tbl-nm rev-jn?)]
         ))
 
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
-                        ;#:connection-type 
-                        #:generate-joins (gen-joins #f)
-                        ;#:generate-reverse-joins #t|#f 
-                        ;#:schema-name "schema_name"
+                        #:db-system-type (db-sys-type (dbsystem-name (connection-dbsystem con)))
+                        #:generate-joins? (gen-joins? #t)
+                        #:generate-reverse-joins? (gen-rev-joins? #f)
+                        #:schema-name (schema-nm #f)
                         #:inherits (base-cls 'object%)
                         #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (string-downcase n) "%"))) 
                         #:column-name-normalizer (col-nm-norm (lambda (n) (string-downcase n))) 
                         #:join-name-normalizer (join-nm-norm (lambda (n) (string-downcase n))) 
                         #:external-name-normalizer (ext-nm-norm (lambda (n) (string-downcase n))) 
                         . rest) 
-  (let* ([schema (query-rows con (schema-sql con tbl-nm))]
+  (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type db-sys-type)]
          [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l 
                                            (cons (vector-ref f 0) l))) null schema)]
          [cols (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms)]
-         [jns (if gen-joins (foldl (lambda (f l) (if (equal? (vector-ref f 1) "foreign key")
-                                                     (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
-                                                                 (vector-ref f 0) (vector-ref f 4) (vector-ref f 5)) l) l))
-                                       null schema) null)]
+         [jns (if (or gen-joins? gen-rev-joins?) 
+                  (foldl (lambda (f l) (if (or (equal? (vector-ref f 1) "F") (equal? (vector-ref f 1) "R"))
+                                           (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
+                                                       (vector-ref f 0) (vector-ref f 4) (vector-ref f 5)) l) l))
+                         null schema) null)]
          [pkey (find-primary-key-fields con schema)]
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
          [auto-key (unless (eq? auto-key-found #f) (vector-ref auto-key-found 0))]
@@ -290,7 +404,7 @@ order by cons.constraint_type desc, keycols.ordinal_position, cols.column_name")
                                       #,(append (if (vector? auto-key-found) 
                                                     (list 'primary-key pkey '#:autoincrement #t)
                                                     (list 'primary-key pkey)))
-                                      #,(if (and gen-joins (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
+                                      #,(if (and gen-joins? (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
                                       (super-new)
                                       (inspect #f)
                                       #,@rest

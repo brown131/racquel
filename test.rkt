@@ -88,7 +88,7 @@
 
 (define-test-suite test-make-data-object
  (let* ([simple% (gen-data-class con "simple" 
-                                 #:generate-joins #t
+                                 #:generate-joins? #t
                                  #:table-name-normalizer table-name-normalizer
                                  #:column-name-normalizer column-name-normalizer)]
         [obj (new simple%)])
@@ -102,7 +102,7 @@
    (test-case "simple class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info simple%)])
                 (check-eq? tbl-nm "simple")
-                (check-equal? col-defs '((x . "x") (name . "name") (description . "description") (id . "id")))
+                (check-equal? col-defs '((id . "id") (x . "x") (name . "name") (description . "description")))
                 (check-eq? (length j-defs) 0)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key #f)
@@ -112,13 +112,13 @@
    
    (test-case "object class correct?" (check-equal? (object-class obj) simple%))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '(x name description id)))
+   (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '(id x name description)))
    (test-case "where clause correct?" (check-equal? (key-where-clause con simple% (primary-key-fields simple%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (x, name, description, id) values (?, ?, ?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set x=?, name=?, description=?, id=? where id=?"))
+   (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (id, x, name, description) values (?, ?, ?, ?)"))
+   (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set id=?, x=?, name=?, description=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
    (test-case "select sql correct?" 
-              (check-equal? (select-sql con simple% "where id=?") "select x, name, description, id from simple t where id=?"))
+              (check-equal? (select-sql con simple% "where id=?") "select id, x, name, description from simple t where id=?"))
   
    (test-case "columns set?"
               (set-column! id obj 23)
@@ -171,7 +171,7 @@
    (test-case "auto class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
-                (check-equal? col-defs '((name . "name") (description . "description") (id . "id")))
+                (check-equal? col-defs '((id . "id") (name . "name") (description . "description")))
                 (check-equal? j-defs null)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
@@ -187,7 +187,7 @@
    (test-case "update sql correct?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
    (test-case "delete sql correct?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
    (test-case "select sql correct?" 
-              (check-equal? (select-sql con auto% "where id=?") "select name, description, id from auto t where id=?"))
+              (check-equal? (select-sql con auto% "where id=?") "select id, name, description from auto t where id=?"))
   
    (test-case "columns set?"
               (set-column! name obj "test")
@@ -288,10 +288,8 @@
    (test-case "person joined?" (check-true (is-a? (get-join person address-obj con) person%)))
 ))
 
-
-(define-test-suite test-generate-class
+(define-test-suite test-generate-join
  (let* ([address% (gen-data-class con "address" 
-                                  #:generate-joins #t
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer)]
         [obj (new address%)])
@@ -305,9 +303,9 @@
    (test-case "address class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
                 (check-eq? tbl-nm "address")
-                (check-equal? col-defs '((zip-code . "zip_code") (state . "state") (line . "line") (city . "city")
-                                         (person-id . "person_id") (id . "id")))
-                (check-equal? (length j-defs) 1)
+                (check-equal? col-defs '((id . "id") (person-id . "person_id") (zip-code . "zip_code")
+                                         (state . "state") (line . "line") (city . "city")))
+                (check-equal? (caar j-defs) 'person)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key 'id)
                 (check-eq? ext-nm "address")
@@ -317,10 +315,38 @@
    (test-case "object class correct?" (check-equal? (object-class obj) address%))
 ))
 
+(define-test-suite test-generate-reverse-join
+ (let* ([person% (gen-data-class con "person" 
+                                 #:generate-reverse-joins? #t
+                                 #:table-name-normalizer table-name-normalizer
+                                 #:column-name-normalizer column-name-normalizer)]
+        [obj (new person%)])
+   (test-case "person class created?" (check-not-eq? person% #f))
+   (test-true "person class is a data class?" (data-class? person%))
+   (test-case "person object created?" (check-not-eq? obj #f))
+   (test-case "person class is correct?" 
+              (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info person%)]) 
+                (check-eq? cls-nm 'person%)))
+   
+   (test-case "person class metadata set?" 
+              (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info person%)])
+                (check-eq? tbl-nm "person")
+                (check-equal? col-defs '((id . "id") (last-name . "last_name") (first-name . "first_name") (age . "age")))
+                (check-equal? (caar j-defs) 'address)
+                (check-eq? pkey 'id)
+                (check-eqv? auto-key #f)
+                (check-eq? ext-nm "person")
+                (check-not-eq? st-key #f)
+                ))
+   
+   (test-case "object class correct?" (check-equal? (object-class obj) person%))
+))
+
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-joins 'verbose)
-(run-tests test-generate-class 'verbose)
+(run-tests test-generate-join 'verbose)
+(run-tests test-generate-reverse-join 'verbose)
 
 (disconnect con)
