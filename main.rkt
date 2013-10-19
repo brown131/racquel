@@ -10,7 +10,7 @@
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-         get-join get-column set-column!
+         get-join get-column set-column! test-rql
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -520,3 +520,23 @@ where fkey.table_name='" tbl-nm "'")))
                  (not (in city ("Chicago" "New York"))))
              (between zip-code 10000 60999)))
 |#
+
+(define-syntax rql-and [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " and " ) ")"))])
+(define-syntax rql-or [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " or " ) ")"))])
+(define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " (~a a) ... ")"))])
+(define-syntax rql-= [syntax-rules () ((_ a b) (string-append (~a a) " = " (~a b)))])
+
+(begin-for-syntax
+  (define-syntax-class rql-expr
+    #:literals (and or not =)
+    (pattern and #:with (expr ...) #'(rql-and))
+    (pattern or #:with (expr ...) #'(rql-or))
+    (pattern not #:with (expr ...) #'(rql-not))
+    (pattern = #:with (expr ...) #'(rql-=))
+    (pattern i:id #:with (expr ...) #'('i))
+    (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
+  (define-syntax-class rql-expr-list
+    (pattern (a:rql-expr ...) #:with (expr ...) #'(a.expr ... ...))))
+
+(define-syntax (test-rql stx)
+   (syntax-parse stx [(_ x:rql-expr) #'(list x.expr ...)]))

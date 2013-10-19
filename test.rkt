@@ -342,11 +342,16 @@
    (test-case "object class correct?" (check-equal? (object-class obj) person%))
 ))
 
+(define-test-suite test-rql-parsing
+  (test-case "test operator parsing" (check-equal? (test-rql (and (or (= f g)) x (not q) (and a d e)))
+                                                   '("((f = g) and x and (not q) and (a and d and e))")))
+  )
+
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-joins 'verbose)
 (run-tests test-generate-join 'verbose)
-(run-tests test-generate-reverse-join 'verbose)
+(run-tests test-rql-parsing 'verbose)
 
 (disconnect con)
