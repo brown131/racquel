@@ -214,6 +214,11 @@
                 (check-equal? (get-field name a) "test2")
                 (check-eq? (data-object-state a) 'loaded)))
    
+   (test-case "object selected?"
+              (let ([a (select-data-object con auto% (where (= name ?)) (get-field name obj))])
+                (check-equal? (get-field name a) "test2")
+                (check-eq? (data-object-state a) 'loaded)))
+   
    (test-case "object deleted?" 
               (delete-data-object con obj)
               (check-eq? (query-value con "select count(*) from auto where id=?" (get-field id obj)) 0)
@@ -342,11 +347,26 @@
    (test-case "object class correct?" (check-equal? (object-class obj) person%))
 ))
 
+(define-test-suite test-rql-parsing
+   (let* ([address% (gen-data-class con "address" 
+                                  #:table-name-normalizer table-name-normalizer
+                                  #:column-name-normalizer column-name-normalizer)]
+        [obj (new address%)])
+
+     (test-case "test where class" (check-equal? (select-rql con address% (where (= id 1))) 
+                                                 "select id, person_id, zip_code, state, line, city from address t where (id = 1)"))
+     (test-case "test rql select" (check-true (is-a? (select-data-object con address% (where (= id 1))) address%)))
+     (test-case "object selected with rql?"
+                (let ([a (select-data-object con address% (where (= id 1)))])
+                  (check-equal? (get-field city a) "Chicago")
+                  (check-eq? (data-object-state a) 'loaded)))
+  ))
+
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-joins 'verbose)
 (run-tests test-generate-join 'verbose)
-(run-tests test-generate-reverse-join 'verbose)
+(run-tests test-rql-parsing 'verbose)
 
 (disconnect con)

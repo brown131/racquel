@@ -26,7 +26,7 @@
     (inspect #f)))
 
 ;;; Define a global table holding data class metadata.
-(define *data-class-metadata* (make-hash))
+(define *data-class-metadata* (make-weak-hash))
 
 ;;; Define data join struct.
 (define-struct data-join (foreign-key class key cardinality))
