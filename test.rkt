@@ -349,18 +349,20 @@
 
 (define-test-suite test-rql-parsing
    (let* ([address% (gen-data-class con "address" 
-                                  #:table-name-normalizer table-name-normalizer
-                                  #:column-name-normalizer column-name-normalizer)]
-        [obj (new address%)])
-
-     (test-case "test where class" (check-equal? (select-rql con address% (where (= id 1))) 
-                                                 "select id, person_id, zip_code, state, line, city from address t where (id = 1)"))
-     (test-case "test rql select" (check-true (is-a? (select-data-object con address% (where (= id 1))) address%)))
+                                    #:table-name-normalizer table-name-normalizer
+                                    #:column-name-normalizer column-name-normalizer)]
+          [obj (new address%)])
+     (test-case "test rql select" 
+                (check-true (is-a? (select-data-object con address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
      (test-case "object selected with rql?"
                 (let ([a (select-data-object con address% (where (= id 1)))])
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
-  ))
+     (test-case "object selected with sql?"
+                (let ([a (select-data-object con address% (string-append "where id = " "1"))])
+                  (check-equal? (get-field city a) "Chicago")
+                  (check-eq? (data-object-state a) 'loaded)))
+     ))
 
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
