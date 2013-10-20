@@ -348,6 +348,7 @@
 ))
 
 (define-test-suite test-rql-parsing
+<<<<<<< HEAD
    (let* ([address% (gen-data-class con "address" 
                                     #:table-name-normalizer table-name-normalizer
                                     #:column-name-normalizer column-name-normalizer)]
@@ -363,6 +364,11 @@
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
      ))
+=======
+  (test-case "test operator parsing" (check-equal? (test-rql (and (or (= f g)) x (not q) (and a d e)))
+                                                   '("((f = g) and x and (not q) and (a and d and e))")))
+  )
+>>>>>>> bd78e7b172a1d7825aa1583bfe0caa3881911f60
 
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
