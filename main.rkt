@@ -10,11 +10,7 @@
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-<<<<<<< HEAD
          get-join get-column set-column! 
-=======
-         get-join get-column set-column! test-rql
->>>>>>> bd78e7b172a1d7825aa1583bfe0caa3881911f60
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -510,31 +506,21 @@ where fkey.table_name='" tbl-nm "'")))
              (between zip-code 10000 60999)))
 |#
 
-<<<<<<< HEAD
 ;;; Define RQL operators.
-=======
->>>>>>> bd78e7b172a1d7825aa1583bfe0caa3881911f60
 (define-syntax rql-and [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " and " ) ")"))])
 (define-syntax rql-or [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " or " ) ")"))])
 (define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " (~a a) ... ")"))])
 (define-syntax rql-= [syntax-rules () ((_ a b) (string-append (~a a) " = " (~a b)))])
 
-<<<<<<< HEAD
 ;;; Parse an RQL expression.
 (begin-for-syntax
   (define-syntax-class rql-expr
     #:literals (where and or not =)
-=======
-(begin-for-syntax
-  (define-syntax-class rql-expr
-    #:literals (and or not =)
->>>>>>> bd78e7b172a1d7825aa1583bfe0caa3881911f60
     (pattern and #:with (expr ...) #'(rql-and))
     (pattern or #:with (expr ...) #'(rql-or))
     (pattern not #:with (expr ...) #'(rql-not))
     (pattern = #:with (expr ...) #'(rql-=))
     (pattern i:id #:with (expr ...) #'('i))
-<<<<<<< HEAD
     (pattern s:str #:with (expr ...) #'(s))
     (pattern n:nat #:with (expr ...) #'(n))
     (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
@@ -567,11 +553,3 @@ where fkey.table_name='" tbl-nm "'")))
               [objs (make-list (length rows) (new cls))])
          (map (lambda (o r) (set-data-object! con o r)) objs rows)
          objs)]))
-=======
-    (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
-  (define-syntax-class rql-expr-list
-    (pattern (a:rql-expr ...) #:with (expr ...) #'(a.expr ... ...))))
-
-(define-syntax (test-rql stx)
-   (syntax-parse stx [(_ x:rql-expr) #'(list x.expr ...)]))
->>>>>>> bd78e7b172a1d7825aa1583bfe0caa3881911f60
