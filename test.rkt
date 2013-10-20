@@ -42,7 +42,7 @@
    (test-case "test class created?" (check-not-eq? test-class% #f))
    (test-true "test class is a data class?" (data-class? test-class%))
    (test-case "test object created?" (check-not-eq? obj #f))
-   (test-case "test class info is correct?" 
+   (test-case "test class info ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info test-class%)]) 
                 (check-eq? cls-nm 'test-class%)
                 (check-equal? fld-nms '(id name description object x))))
@@ -59,7 +59,7 @@
                 (check-not-eq? st-key #f)
                 ))
    
-   (test-case "object class correct?" (check-equal? (object-class obj) test-class%))
+   (test-case "object class ok?" (check-equal? (object-class obj) test-class%))
   ; (test-case "get column name?" (check-eq? (get-column-name id test-class%) "id"))
    
    (test-case "columns set?" 
@@ -71,13 +71,13 @@
               (check-eq? (get-column description obj) "This is a test")
               (check-eq? (get-column object obj) #f))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con test-class%) '(id name description x)))
-   (test-case "primary key fields correct?" (check-equal? (primary-key-fields test-class%) '(id)))
-   (test-case "where clause correct?" (check-equal? (key-where-clause con test-class% (primary-key-fields test-class%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con test-class%) "insert test (id, name, description, x) values (?, ?, ?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con test-class%) "update test set id=?, name=?, description=?, x=? where id=?"))
-   (test-case "delete sql correct?" (check-equal? (delete-sql con test-class%) "delete from test where id=?"))
-   (test-case "select sql correct?" 
+   (test-case "savable field ok?" (check-equal? (savable-fields con test-class%) '(id name description x)))
+   (test-case "primary key fields ok?" (check-equal? (primary-key-fields test-class%) '(id)))
+   (test-case "where clause ok?" (check-equal? (key-where-clause con test-class% (primary-key-fields test-class%)) " where id=?"))
+   (test-case "insert sql ok?" (check-equal? (insert-sql con test-class%) "insert test (id, name, description, x) values (?, ?, ?, ?)"))
+   (test-case "update sql ok?" (check-equal? (update-sql con test-class%) "update test set id=?, name=?, description=?, x=? where id=?"))
+   (test-case "delete sql ok?" (check-equal? (delete-sql con test-class%) "delete from test where id=?"))
+   (test-case "select sql ok?" 
               (check-equal? (select-sql con test-class% "where id=?") "select id, name, description, x from test t where id=?"))
    )
 )
@@ -95,7 +95,7 @@
    (test-case "simple class created?" (check-not-eq? simple% #f))
    (test-true "simple class is a data class?" (data-class? simple%))
    (test-case "simple object created?" (check-not-eq? obj #f))
-   (test-case "simple class is correct?" 
+   (test-case "simple class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info simple%)]) 
                 (check-eq? cls-nm 'simple%)))
    
@@ -110,14 +110,14 @@
                 (check-not-eq? st-key #f)
                 ))
    
-   (test-case "object class correct?" (check-equal? (object-class obj) simple%))
+   (test-case "object class ok?" (check-equal? (object-class obj) simple%))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con simple%) '(id x name description)))
-   (test-case "where clause correct?" (check-equal? (key-where-clause con simple% (primary-key-fields simple%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con simple%) "insert simple (id, x, name, description) values (?, ?, ?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con simple%) "update simple set id=?, x=?, name=?, description=? where id=?"))
-   (test-case "delete sql correct?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
-   (test-case "select sql correct?" 
+   (test-case "savable field ok?" (check-equal? (savable-fields con simple%) '(id x name description)))
+   (test-case "where clause ok?" (check-equal? (key-where-clause con simple% (primary-key-fields simple%)) " where id=?"))
+   (test-case "insert sql ok?" (check-equal? (insert-sql con simple%) "insert simple (id, x, name, description) values (?, ?, ?, ?)"))
+   (test-case "update sql ok?" (check-equal? (update-sql con simple%) "update simple set id=?, x=?, name=?, description=? where id=?"))
+   (test-case "delete sql ok?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
+   (test-case "select sql ok?" 
               (check-equal? (select-sql con simple% "where id=?") "select id, x, name, description from simple t where id=?"))
   
    (test-case "columns set?"
@@ -164,7 +164,7 @@
    (test-case "auto class created?" (check-not-eq? auto% #f))
    (test-true "auto class is a data class?" (data-class? auto%))
    (test-case "auto object created?" (check-not-eq? obj #f))
-   (test-case "auto class is correct?" 
+   (test-case "auto class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info auto%)]) 
                 (check-eq? cls-nm 'auto%)))
    
@@ -179,14 +179,14 @@
                 (check-not-eq? st-key #f)
                 ))
    
-   (test-case "object class correct?" (check-equal? (object-class obj) auto%))
+   (test-case "object class ok?" (check-equal? (object-class obj) auto%))
    
-   (test-case "savable field correct?" (check-equal? (savable-fields con auto%) '(name description)))
-   (test-case "where clause correct?" (check-equal? (key-where-clause con auto% (primary-key-fields auto%)) " where id=?"))
-   (test-case "insert sql correct?" (check-equal? (insert-sql con auto%) "insert auto (name, description) values (?, ?)"))
-   (test-case "update sql correct?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
-   (test-case "delete sql correct?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
-   (test-case "select sql correct?" 
+   (test-case "savable field ok?" (check-equal? (savable-fields con auto%) '(name description)))
+   (test-case "where clause ok?" (check-equal? (key-where-clause con auto% (primary-key-fields auto%)) " where id=?"))
+   (test-case "insert sql ok?" (check-equal? (insert-sql con auto%) "insert auto (name, description) values (?, ?)"))
+   (test-case "update sql ok?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
+   (test-case "delete sql ok?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
+   (test-case "select sql ok?" 
               (check-equal? (select-sql con auto% "where id=?") "select id, name, description from auto t where id=?"))
   
    (test-case "columns set?"
@@ -245,7 +245,7 @@
         [person-obj (new person%)]
         [address-obj (new address%)])
 
-   (test-case "person class is correct?" 
+   (test-case "person class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info person%)]) 
                 (check-eq? cls-nm 'person%)
                 (check-equal? fld-nms '(id first-name last-name age addresses))))
@@ -268,7 +268,7 @@
    (test-case "addresses not joined?" (check-eq? (get-field addresses person-obj) #f))
    (test-case "addresses joined?" (check-true (is-a? (first (get-join addresses person-obj con)) address%)))
 
-   (test-case "address class is correct?" 
+   (test-case "address class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info address%)]) 
                 (check-eq? cls-nm 'address%)
                 (check-equal? fld-nms '(id person-id line city state zip-code person))))
@@ -298,10 +298,27 @@
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer)]
         [obj (new address%)])
+   (test-case "generated class ok?" (check-equal? (gen-data-class con "address" #:print? #t
+                                                                  #:table-name-normalizer table-name-normalizer
+                                                                  #:column-name-normalizer column-name-normalizer)
+                                                  '(let ([address%
+                                                          (data-class object%
+                                                           (table-name "address")
+                                                           (column (id #f "id")
+                                                                   (person-id #f "person_id")
+                                                                   (zip-code #f "zip_code")
+                                                                   (state #f "state")
+                                                                   (line #f "line")
+                                                                   (city #f "city"))
+                                                           (primary-key id #:autoincrement #t)
+                                                           (join (person "person_id" "person" "id"))
+                                                           (super-new)
+                                                           (inspect #f))])
+   address%)))
    (test-case "address class created?" (check-not-eq? address% #f))
    (test-true "address class is a data class?" (data-class? address%))
    (test-case "address object created?" (check-not-eq? obj #f))
-   (test-case "address class is correct?" 
+   (test-case "address class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info address%)]) 
                 (check-eq? cls-nm 'address%)))
    
@@ -317,7 +334,7 @@
                 (check-not-eq? st-key #f)
                 ))
    
-   (test-case "object class correct?" (check-equal? (object-class obj) address%))
+   (test-case "object class ok?" (check-equal? (object-class obj) address%))
 ))
 
 (define-test-suite test-generate-reverse-join
@@ -329,7 +346,7 @@
    (test-case "person class created?" (check-not-eq? person% #f))
    (test-true "person class is a data class?" (data-class? person%))
    (test-case "person object created?" (check-not-eq? obj #f))
-   (test-case "person class is correct?" 
+   (test-case "person class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info person%)]) 
                 (check-eq? cls-nm 'person%)))
    
@@ -344,7 +361,7 @@
                 (check-not-eq? st-key #f)
                 ))
    
-   (test-case "object class correct?" (check-equal? (object-class obj) person%))
+   (test-case "object class ok?" (check-equal? (object-class obj) person%))
 ))
 
 (define-test-suite test-rql-parsing
@@ -352,16 +369,21 @@
                                     #:table-name-normalizer table-name-normalizer
                                     #:column-name-normalizer column-name-normalizer)]
           [obj (new address%)])
-     (test-case "test rql select" 
+     (test-case "select sql ok?" (check-equal? (select-data-object con address% #:print? #t (where (= id 1))) 
+                                               "select id, person_id, zip_code, state, line, city from address t where id = 1"))
+     (test-case "rql select runs?" 
                 (check-true (is-a? (select-data-object con address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
-     (test-case "object selected with rql?"
+     (test-case "selected with rql?"
                 (let ([a (select-data-object con address% (where (= id 1)))])
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
-     (test-case "object selected with sql?"
+     (test-case "selected with sql?"
                 (let ([a (select-data-object con address% (string-append "where id = " "1"))])
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
+     (test-case "select join sql ok?" (check-equal? (select-data-object con address% #:print? #t 
+                                                                        (join person (= id person_id)) (where (= id 1))) 
+"select id, person_id, zip_code, state, line, city from address t join person on id = person_id where id = 1"))
      ))
 
 (run-tests test-define-data-object 'verbose)
