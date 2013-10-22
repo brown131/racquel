@@ -41,7 +41,7 @@ create table if not exists address (
   city varchar(30) default nullL,
   state varchar(30) default null,
   zip_code varchar(30) default null,
-  primary key (id)
+  primary key (id),
   key fk_person_id_address (person_id),
   constraint fk_person_id_address foreign key (person_id) references person (id)
 ) engine=InnoDB default charset=latin1;

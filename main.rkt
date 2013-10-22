@@ -525,6 +525,7 @@ where fkey.table_name='" tbl-nm "'")))
 (define-syntax rql-or [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " or " ) ")"))])
 (define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " (~a a) ... ")"))])
 (define-syntax rql-= [syntax-rules () ((_ a b) (string-append (~a a) " = " (~a b)))])
+(define-syntax rql-column [syntax-rules () ((_ a b) (string-append (~a a) "." (~a b)))])
 
 ;;; Parse an RQL expression.
 (begin-for-syntax
@@ -537,6 +538,7 @@ where fkey.table_name='" tbl-nm "'")))
     (pattern i:id #:with (expr ...) #'('i))
     (pattern s:str #:with (expr ...) #'(s))
     (pattern n:nat #:with (expr ...) #'(n))
+    (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column 'p1 'p2)))
     (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
   (define-syntax-class rql-expr-list
     (pattern (rql:rql-expr ...) #:with (expr ...) #'(rql.expr ... ...)))

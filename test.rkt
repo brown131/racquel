@@ -88,9 +88,10 @@
 
 (define-test-suite test-make-data-object
  (let* ([simple% (gen-data-class con "simple" 
-                                 #:generate-joins? #t
-                                 #:table-name-normalizer table-name-normalizer
-                                 #:column-name-normalizer column-name-normalizer)]
+                                  #:schema-name "racquel_test"
+                                  #:generate-joins? #t
+                                  #:table-name-normalizer table-name-normalizer
+                                  #:column-name-normalizer column-name-normalizer)]
         [obj (new simple%)])
    (test-case "simple class created?" (check-not-eq? simple% #f))
    (test-true "simple class is a data class?" (data-class? simple%))
@@ -159,7 +160,7 @@
    ))
 
 (define-test-suite test-autoincrement-data-object
- (let* ([auto% (gen-data-class con "auto")]
+ (let* ([auto% (gen-data-class con "auto" #:schema-name "racquel_test")]
         [obj (new auto%)])
    (test-case "auto class created?" (check-not-eq? auto% #f))
    (test-true "auto class is a data class?" (data-class? auto%))
@@ -295,12 +296,14 @@
 
 (define-test-suite test-generate-join
  (let* ([address% (gen-data-class con "address" 
-                                  #:table-name-normalizer table-name-normalizer
-                                  #:column-name-normalizer column-name-normalizer)]
+                                   #:schema-name "racquel_test"
+                                   #:table-name-normalizer table-name-normalizer
+                                   #:column-name-normalizer column-name-normalizer)]
         [obj (new address%)])
    (test-case "generated class ok?" (check-equal? (gen-data-class con "address" #:print? #t
-                                                                  #:table-name-normalizer table-name-normalizer
-                                                                  #:column-name-normalizer column-name-normalizer)
+                                                                   #:schema-name "racquel_test"
+                                                                   #:table-name-normalizer table-name-normalizer
+                                                                   #:column-name-normalizer column-name-normalizer)
                                                   '(let ([address%
                                                           (data-class object%
                                                            (table-name "address")
@@ -339,6 +342,7 @@
 
 (define-test-suite test-generate-reverse-join
  (let* ([person% (gen-data-class con "person" 
+                                 #:schema-name "racquel_test"
                                  #:generate-reverse-joins? #t
                                  #:table-name-normalizer table-name-normalizer
                                  #:column-name-normalizer column-name-normalizer)]
@@ -366,6 +370,7 @@
 
 (define-test-suite test-rql-parsing
    (let* ([address% (gen-data-class con "address" 
+                                    #:schema-name "racquel_test"
                                     #:table-name-normalizer table-name-normalizer
                                     #:column-name-normalizer column-name-normalizer)]
           [obj (new address%)])
@@ -382,8 +387,8 @@
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
      (test-case "select join sql ok?" (check-equal? (select-data-object con address% #:print? #t 
-                                                                        (join person (= id person_id)) (where (= id 1))) 
-"select id, person_id, zip_code, state, line, city from address t join person on id = person_id where id = 1"))
+                                                                        (join person (= (person id) person_id)) (where (= id 1))) 
+"select id, person_id, zip_code, state, line, city from address t join person on person.id = person_id where id = 1"))
      ))
 
 (run-tests test-define-data-object 'verbose)
