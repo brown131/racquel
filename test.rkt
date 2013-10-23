@@ -1,7 +1,7 @@
 #lang racket
 ;;;; Racquel - An ORM for Racket
 ;;;;
-;;;; test - Tests the project
+;;;; test - Test module for the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 (require rackunit rackunit/text-ui db racquel "metadata.rkt")
