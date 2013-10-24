@@ -387,8 +387,26 @@
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
      (test-case "select join sql ok?" (check-equal? (select-data-object con address% #:print? #t 
-                                                                        (join person (= (person id) person_id)) (where (= id 1))) 
+                                                                        (join person (= (person id) person_id)) (where (= id 1)))
 "select id, person_id, zip_code, state, line, city from address t join person on person.id = person_id where id = 1"))
+     
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (= city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city = ?"))
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (<> city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city <> ?"))
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (>= city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city >= ?"))
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (<= city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city <= ?"))
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (> city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city > ?"))
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (< city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city < ?"))                
+     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (like city ?)))
+"select id, person_id, zip_code, state, line, city from address t where city like ?"))
+     (test-case "select quote ok?" (check-equal? (select-data-object con address% #:print? #t 
+                                                                     (where (in id ,(make-list 3 "?"))))
+"select id, person_id, zip_code, state, line, city from address t where id in (?,?,?)"))
      ))
 
 (run-tests test-define-data-object 'verbose)
