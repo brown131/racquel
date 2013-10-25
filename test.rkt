@@ -304,20 +304,23 @@
                                                                    #:schema-name "racquel_test"
                                                                    #:table-name-normalizer table-name-normalizer
                                                                    #:column-name-normalizer column-name-normalizer)
-                                                  '(let ([address%
-                                                          (data-class object%
+                                                  '(let ((address%
+                                                          (data-class
+                                                           object%
                                                            (table-name "address")
-                                                           (column (id #f "id")
-                                                                   (person-id #f "person_id")
-                                                                   (zip-code #f "zip_code")
-                                                                   (state #f "state")
-                                                                   (line #f "line")
-                                                                   (city #f "city"))
+                                                           (external-name "address")
+                                                           (column
+                                                            (id #f "id")
+                                                            (person-id #f "person_id")
+                                                            (zip-code #f "zip_code")
+                                                            (state #f "state")
+                                                            (line #f "line")
+                                                            (city #f "city"))
                                                            (primary-key id #:autoincrement #t)
                                                            (join (person "person_id" "person" "id"))
                                                            (super-new)
-                                                           (inspect #f))])
-   address%)))
+                                                           (inspect #f))))
+                                                     address%)))
    (test-case "address class created?" (check-not-eq? address% #f))
    (test-true "address class is a data class?" (data-class? address%))
    (test-case "address object created?" (check-not-eq? obj #f))
@@ -388,7 +391,8 @@
                   (check-eq? (data-object-state a) 'loaded)))
      (test-case "select join sql ok?" (check-equal? (select-data-object con address% #:print? #t 
                                                                         (join person (= (person id) person_id)) (where (= id 1)))
-"select id, person_id, zip_code, state, line, city from address t join person on person.id = person_id where id = 1"))
+                                                    "select id, person_id, zip_code, state, line, city from address t \
+join person on person.id = person_id where id = 1"))
      
      (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (= city ?)))
 "select id, person_id, zip_code, state, line, city from address t where city = ?"))
@@ -406,8 +410,26 @@
 "select id, person_id, zip_code, state, line, city from address t where city like ?"))
      (test-case "select quote ok?" (check-equal? (select-data-object con address% #:print? #t 
                                                                      (where (in id ,(make-list 3 "?"))))
-"select id, person_id, zip_code, state, line, city from address t where id in (?,?,?)"))
+                                                 "select id, person_id, zip_code, state, line, \
+city from address t where id in (?,?,?)"))
      ))
+
+
+(define-test-suite test-mixins
+  (let* ([test-class% (data-class object%
+                                 (table-name "test")
+                                 (column [id 1 "id"] 
+                                         [name "test" "name"] 
+                                         [description "Test" "description"])
+                                 (primary-key id)
+                                 (inspect #f)
+                                 (super-new))]
+         [test-mixed-class% (json-data-class-mixin test-class%)]
+         [test-mixed-object (new test-mixed-class%)])
+    (test-case "externalized ok?" (check-equal? (send test-mixed-object externalize) 
+"{\"test-mixed-class%\":{\"id\":1,\"name\":\"test\",\"description\":\"Test\"}}"))
+    ;(test-case "internalized ok?" (check-equal? (send test-mixed-object internalize) #f))
+  ))
 
 (run-tests test-define-data-object 'verbose)
 (run-tests test-make-data-object 'verbose)
@@ -415,5 +437,6 @@
 (run-tests test-joins 'verbose)
 (run-tests test-generate-join 'verbose)
 (run-tests test-rql-parsing 'verbose)
+(run-tests test-mixins 'verbose)
 
 (disconnect con)

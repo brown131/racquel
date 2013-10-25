@@ -5,12 +5,12 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db "keywords.rkt" "metadata.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
+(require db json "keywords.rkt" "metadata.rkt"  "mixin.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-         get-join get-column set-column! 
+         get-join get-column set-column! json-data-class-mixin
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
@@ -18,10 +18,10 @@
 (define ns (namespace-anchor->namespace anchr))
 
 ;;; Define an empty interface used to identify a data class.
-(define data-class-internal<%> (interface ()))
+(define data-class<%> (interface ()))
 
 ;;; Define type checker for a data class.
-(define (data-class? cls) (implementation? cls data-class-internal<%>))
+(define (data-class? cls) (implementation? cls data-class<%>))
 
 
 ;;; DATA CLASS DEFINITION
@@ -113,7 +113,7 @@
     [(data-class base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
          (define-member-name data-object-state-internal (get-field state-key m))
-         (class* base-cls (data-class-internal<%>) elem.expr ... 
+         (class* base-cls (data-class<%>) elem.expr ... 
            (field [data-object-state-internal 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! columns m (append elem.col-defs ...))
@@ -129,7 +129,7 @@
     [(data-class base-cls:id (i-face:id ...) elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
          (define-member-name data-object-state-internal (get-field state-key m))
-         (class* base-cls (data-class-internal<%> i-face ...) elem.expr ... 
+         (class* base-cls (data-class<%> i-face ...) elem.expr ... 
            (field [data-object-state-internal 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! columns m (append elem.col-defs ...))
