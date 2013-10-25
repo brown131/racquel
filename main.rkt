@@ -177,12 +177,12 @@
                          null schema) null)]
          [pkey (find-primary-key-fields con schema)]
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
-         [auto-key (unless (eq? auto-key-found #f) (vector-ref auto-key-found 0))]
-         [ext-nm tbl-nm]
+         [ext-nm (ext-nm-norm tbl-nm)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm)
+                                   (external-name #,ext-nm)
                                    #,(append '(column) cols)
                                    #,(append (if (vector? auto-key-found) 
                                                  (list 'primary-key pkey '#:autoincrement #t)
