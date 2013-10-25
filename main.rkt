@@ -179,8 +179,8 @@
          [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
          [auto-key (unless (eq? auto-key-found #f) (vector-ref auto-key-found 0))]
          [ext-nm tbl-nm]
-         [cls-nm (string->symbol (tbl-nm-norm tbl-nm))])
-    (if prnt? (syntax->datum #`(let ([#,cls-nm
+         [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
+         [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm)
                                    #,(append '(column) cols)
@@ -192,21 +192,8 @@
                                    (inspect #f)
                                    #,@rest
                                    )])
-                  #,cls-nm))
-        (eval-syntax #`(let ([#,cls-nm
-                              (data-class #,base-cls
-                                          (table-name #,tbl-nm)
-                                          #,(append '(column) cols)
-                                          #,(append (if (vector? auto-key-found) 
-                                                        (list 'primary-key pkey '#:autoincrement #t)
-                                                        (list 'primary-key pkey)))
-                                          #,(if (and gen-joins? (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
-                                          (super-new)
-                                          (inspect #f)
-                                          #,@rest
-                                          )])
-                         #,cls-nm) ns))))
-  
+                  #,cls-nm)])
+    (if prnt? (syntax->datum stx) (eval-syntax stx ns))))
 
 ;;; PERSISTENCE
 
