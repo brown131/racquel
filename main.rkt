@@ -5,20 +5,17 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db json "keywords.rkt" "metadata.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
+(require db json "keywords.rkt" "metadata.rkt""mixin.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-         get-join get-column set-column! json-data-class-mixin
+         get-join get-column set-column! json-data-class-mixin xml-data-class-mixin
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
 (define-namespace-anchor ns-anchor)
 (define ns (namespace-anchor->namespace ns-anchor))
-
-;;; Define an empty interface used to identify a data class.
-(define data-class<%> (interface ()))
 
 ;;; Define type checker for a data class.
 (define (data-class? cls) (implementation? cls data-class<%>))
@@ -368,25 +365,3 @@
               [objs (make-list (length rows) (new cls))])
          (map (lambda (o r) (set-data-object! o r)) objs rows)
          objs)]))
-
-
-;;;; MIX-INS
-
-
-(define-syntax-rule (json-data-class-mixin cls)
-  ;(unless (implementation? cls data-class<%>)
-  ;  (error "json-data-class-mixin: not a data-class<%> class"))
-  (class* cls (externalizable<%>)
-    (define/public (externalize)
-      (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info this%)]
-                   [(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info this%)])
-        (jsexpr->string 
-         (hasheq cls-nm (make-hasheq (map (lambda (f) (cons f (dynamic-get-field f this))) fld-nms))))
-        ))
-    (define/public (internalize str)
-      (let* ([jsx (string->jsexpr str)]
-             [row (list->vector (hash-values (first (hash-values jsx))))])
-        (set-data-object! this row)
-        ))
-    (inspect #f)
-    (super-new)))

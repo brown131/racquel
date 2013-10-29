@@ -418,20 +418,28 @@ city from address t where id in (?,?,?)"))
 (define-test-suite test-mixins
   (let* ([test-class% (data-class object%
                                  (table-name "test")
+                                 (external-name "Test")
                                  (column [id 1 "id"] 
                                          [name "test" "name"] 
                                          [description "Test" "description"])
                                  (primary-key id)
                                  (inspect #f)
                                  (super-new))]
-         [test-mixed-class% (json-data-class-mixin test-class%)]
-         [extern-obj (new test-mixed-class%)]
-         [intern-obj (new test-mixed-class%)])
-    (set-column! name extern-obj "new name")
-    (test-case "externalized ok?" (check-equal? (send extern-obj externalize) 
-"{\"test-mixed-class%\":{\"id\":1,\"name\":\"new name\",\"description\":\"Test\"}}"))
-    (send intern-obj internalize (send extern-obj externalize))
-    (test-case "internalized ok?" (check-equal? (get-column name intern-obj) "new name"))
+         [json-mixed-class% (json-data-class-mixin test-class%)]
+         [json-extern-obj (new json-mixed-class%)]
+         [json-intern-obj (new json-mixed-class%)]
+         [xml-mixed-class% (xml-data-class-mixin test-class%)]
+         [xml-extern-obj (new xml-mixed-class%)]
+         [xml-intern-obj (new xml-mixed-class%)])
+    
+    (set-column! name json-extern-obj "new name")
+    (test-case "json externalized ok?" (check-equal? (send json-extern-obj externalize) 
+"{\"Test\":{\"id\":1,\"name\":\"new name\",\"description\":\"Test\"}}")) 
+    (send json-intern-obj internalize (send json-extern-obj externalize))
+    (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
+    
+    (set-column! name xml-extern-obj "new name")
+    (test-case "xml externalized ok?" (check-equal? (send xml-extern-obj externalize) #f))
   ))
 
 (run-tests test-define-data-object 'verbose)
