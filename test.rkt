@@ -425,10 +425,13 @@ city from address t where id in (?,?,?)"))
                                  (inspect #f)
                                  (super-new))]
          [test-mixed-class% (json-data-class-mixin test-class%)]
-         [test-mixed-object (new test-mixed-class%)])
-    (test-case "externalized ok?" (check-equal? (send test-mixed-object externalize) 
-"{\"test-mixed-class%\":{\"id\":1,\"name\":\"test\",\"description\":\"Test\"}}"))
-    (test-case "internalized ok?" (check-equal? (send (new test-mixed-class%) internalize (send test-mixed-object externalize)) #f))
+         [extern-obj (new test-mixed-class%)]
+         [intern-obj (new test-mixed-class%)])
+    (set-column! name extern-obj "new name")
+    (test-case "externalized ok?" (check-equal? (send extern-obj externalize) 
+"{\"test-mixed-class%\":{\"id\":1,\"name\":\"new name\",\"description\":\"Test\"}}"))
+    (send intern-obj internalize (send extern-obj externalize))
+    (test-case "internalized ok?" (check-equal? (get-column name intern-obj) "new name"))
   ))
 
 (run-tests test-define-data-object 'verbose)
