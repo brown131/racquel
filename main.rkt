@@ -5,7 +5,7 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db json "keywords.rkt" "metadata.rkt"  "mixin.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
+(require db json "keywords.rkt" "metadata.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
@@ -14,8 +14,8 @@
          (all-from-out "keywords.rkt"))
 
 ;;; Define namespace anchor.
-(define-namespace-anchor anchr)
-(define ns (namespace-anchor->namespace anchr))
+(define-namespace-anchor ns-anchor)
+(define ns (namespace-anchor->namespace ns-anchor))
 
 ;;; Define an empty interface used to identify a data class.
 (define data-class<%> (interface ()))
@@ -24,7 +24,7 @@
 (define (data-class? cls) (implementation? cls data-class<%>))
 
 
-;;; DATA CLASS DEFINITION
+;;;; DATA CLASS DEFINITION
 
 
 #| Model:
@@ -147,7 +147,7 @@
     (if (eq? (length pkey) 1) (first pkey) pkey)))
 
 
-;;; GENERATE DATA CLASSES
+;;; DATA CLASS GENERATION
 
 
 ;;; SQL placeholder by database system.
@@ -195,11 +195,12 @@
                   #,cls-nm)])
     (if prnt? (syntax->datum stx) (eval-syntax stx ns))))
 
-;;; PERSISTENCE
+
+;;;; PERSISTENCE
 
 
 ;;; Set the data in a data object.
-(define (set-data-object! con obj row)
+(define (set-data-object! obj row)
   (map (lambda (f v) (dynamic-set-field! f obj v)) 
        (get-column-ids (object-class obj)) (vector->list row))
   (define-member-name data-object-state-internal (get-class-metadata state-key (object-class obj)))
@@ -208,7 +209,7 @@
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey)
   (let* ([obj (new cls)])
-    (set-data-object! con obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
+    (set-data-object! obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
     obj
     ))
 
@@ -276,7 +277,7 @@
 (define-syntax-rule (set-column! col obj val) (set-field! col obj val))
 
 
-;;; RQL 
+;;;; RQL 
 
 
 #| Model:
@@ -339,19 +340,19 @@
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
        #'(let* ([obj (new cls)]
                 [sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
-           (unless prnt? (set-data-object! con obj (query-row con rest ...)))
+           (unless prnt? (set-data-object! obj (query-row con rest ...)))
            (if prnt? sql obj)))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
        #'(let* ([obj (new cls)]
                 [sql (select-sql con cls (string-append where-expr.expr ...))])
-           (unless prnt? (set-data-object! con obj (query-row con sql rest ...)))
+           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
            (if prnt? sql obj)))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
        #'(let* ([obj (new cls)]
                 [sql (select-sql con cls where-expr)])
-           (unless prnt? (set-data-object! con obj (query-row con sql rest ...)))
+           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
            (if prnt? sql obj)))]))
 
 ;;; Select data objects from the database.
@@ -360,10 +361,32 @@
     [(_ con:id cls:id where-expr:where-expr rest:expr ...)
      #'(let* ([rows (query-rows con (select-sql con cls where-expr.expr ...) rest ...)]
               [objs (make-list (length rows) (new cls))])
-         (map (lambda (o r) (set-data-object! con o r)) objs rows)
+         (map (lambda (o r) (set-data-object! o r)) objs rows)
          objs)]
     [(_ con:id cls:id where-expr:expr rest:expr ...)
      #'(let* ([rows (query-rows con (select-sql con cls where-expr) rest ...)]
               [objs (make-list (length rows) (new cls))])
-         (map (lambda (o r) (set-data-object! con o r)) objs rows)
+         (map (lambda (o r) (set-data-object! o r)) objs rows)
          objs)]))
+
+
+;;;; MIX-INS
+
+
+(define-syntax-rule (json-data-class-mixin cls)
+  ;(unless (implementation? cls data-class<%>)
+  ;  (error "json-data-class-mixin: not a data-class<%> class"))
+  (class* cls (externalizable<%>)
+    (define/public (externalize)
+      (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info this%)]
+                   [(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info this%)])
+        (jsexpr->string 
+         (hasheq cls-nm (make-hasheq (map (lambda (f) (cons f (dynamic-get-field f this))) fld-nms))))
+        ))
+    (define/public (internalize str)
+      (let* ([jsx (string->jsexpr str)]
+             [row (list->vector (hash-values (first (hash-values jsx))))])
+        (set-data-object! this row)
+        ))
+    (inspect #f)
+    (super-new)))

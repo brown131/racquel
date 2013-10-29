@@ -428,7 +428,7 @@ city from address t where id in (?,?,?)"))
          [test-mixed-object (new test-mixed-class%)])
     (test-case "externalized ok?" (check-equal? (send test-mixed-object externalize) 
 "{\"test-mixed-class%\":{\"id\":1,\"name\":\"test\",\"description\":\"Test\"}}"))
-    ;(test-case "internalized ok?" (check-equal? (send test-mixed-object internalize) #f))
+    (test-case "internalized ok?" (check-equal? (send (new test-mixed-class%) internalize (send test-mixed-object externalize)) #f))
   ))
 
 (run-tests test-define-data-object 'verbose)
