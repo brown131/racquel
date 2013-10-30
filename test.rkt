@@ -434,12 +434,15 @@ city from address t where id in (?,?,?)"))
     
     (set-column! name json-extern-obj "new name")
     (test-case "json externalized ok?" (check-equal? (send json-extern-obj externalize) 
-"{\"Test\":{\"id\":1,\"name\":\"new name\",\"description\":\"Test\"}}")) 
+"{\"Test\":{\"description\":\"Test\",\"id\":1,\"name\":\"new name\"}}")) 
     (send json-intern-obj internalize (send json-extern-obj externalize))
     (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
     
     (set-column! name xml-extern-obj "new name")
-    (test-case "xml externalized ok?" (check-equal? (send xml-extern-obj externalize) #f))
+    (test-case "xml externalized ok?" (check-equal? (send xml-extern-obj externalize) 
+"<Test><id>1</id><name>new name</name><description>Test</description></Test>"))
+    (send xml-intern-obj internalize (send xml-extern-obj externalize))
+    (test-case "json internalized ok?" (check-equal? (get-column name xml-intern-obj) "new name"))
   ))
 
 (run-tests test-define-data-object 'verbose)

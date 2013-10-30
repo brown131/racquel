@@ -35,12 +35,14 @@
           (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info this%)]
                        [(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info this%)])
             (xexpr->string 
-             (list (string->symbol ext-nm) (map (lambda (f) (cons f (dynamic-get-field f this))) fld-nms)))
+             (append (list (string->symbol ext-nm) '()) 
+                     (map (lambda (f) (list f '() (~a (dynamic-get-field f this)))) fld-nms)))
             ))
         (define/public (internalize str)
-          (let* ([xmlx (string->xexpr str)]
-                 [cols (first (hash-values xmlx))])
-            (map (lambda (k) (dynamic-set-field! k this (hash-ref cols k))) (hash-keys cols))
+          (let* ([xmlx (string->xexpr str)])
+            (set-class-metadata! external-name this% (symbol->string (first xmlx)))
+            (map (lambda (i) (when (and (list? i) (eq? (length i) 2))
+                               (dynamic-set-field! (first i) this (third i)))) xmlx)
             ))
         (inspect #f)
         (super-new))
