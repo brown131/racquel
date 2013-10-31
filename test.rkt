@@ -419,9 +419,9 @@ city from address t where id in (?,?,?)"))
   (let* ([test-class% (data-class object%
                                  (table-name "test")
                                  (external-name "Test")
-                                 (column [id 1 "id"] 
-                                         [name "test" "name"] 
-                                         [description "Test" "description"])
+                                 (column [id 1 "Id"] 
+                                         [name "test" "Name"] 
+                                         [description "Test" "Description"])
                                  (primary-key id)
                                  (inspect #f)
                                  (super-new))]
@@ -433,16 +433,18 @@ city from address t where id in (?,?,?)"))
          [xml-intern-obj (new xml-mixed-class%)])
     
     (set-column! name json-extern-obj "new name")
+    (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
     (test-case "json externalized ok?" (check-equal? (send json-extern-obj externalize) 
-"{\"Test\":{\"description\":\"Test\",\"id\":1,\"name\":\"new name\"}}")) 
+"{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}")) 
     (send json-intern-obj internalize (send json-extern-obj externalize))
     (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
     
-    (set-column! name xml-extern-obj "new name")
+    (set-column! name xml-extern-obj "a new name")
+    (test-case "column name set?" (check-equal? (get-column name xml-extern-obj) "a new name"))
     (test-case "xml externalized ok?" (check-equal? (send xml-extern-obj externalize) 
-"<Test><id>1</id><name>new name</name><description>Test</description></Test>"))
+"<Test><Id>1</Id><Name>a new name</Name><Description>Test</Description></Test>"))
     (send xml-intern-obj internalize (send xml-extern-obj externalize))
-    (test-case "json internalized ok?" (check-equal? (get-column name xml-intern-obj) "new name"))
+    (test-case "xml internalized ok?" (check-equal? (get-column name xml-intern-obj) "a new name"))
   ))
 
 (run-tests test-define-data-object 'verbose)

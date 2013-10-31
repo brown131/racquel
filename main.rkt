@@ -5,7 +5,8 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db json "keywords.rkt" "metadata.rkt""mixin.rkt" "schema.rkt" (for-syntax syntax/parse "stxclass.rkt"))
+(require db json "keywords.rkt" "metadata.rkt" "mixin.rkt" "schema.rkt" "util.rkt"
+         (for-syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
@@ -16,9 +17,6 @@
 ;;; Define namespace anchor.
 (define-namespace-anchor ns-anchor)
 (define ns (namespace-anchor->namespace ns-anchor))
-
-;;; Define type checker for a data class.
-(define (data-class? cls) (implementation? cls data-class<%>))
 
 
 ;;;; DATA CLASS DEFINITION
@@ -39,15 +37,12 @@
             (super-new)
             (inspect #f))
 |#
-
-;;; Class of an object
-(define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
-
+   
 ;;; Return the state of a data object.
 (define (data-object-state obj)
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
   (get-field data-object-state obj))
-        
+     
 ;;; Set autoincrement id.
 (define (set-autoincrement-id! con obj)
   (when (get-class-metadata autoincrement-key (object-class obj))

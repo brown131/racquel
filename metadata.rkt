@@ -5,15 +5,14 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
+(require "util.rkt")
+
 (provide data-class-metadata% *data-class-metadata* data-class<%>
          data-join data-join-foreign-key 
          data-join-class data-join-key data-join-cardinality
          get-class-metadata-object get-class-metadata set-class-metadata!
          dynamic-get-class-metadata dynamic-set-class-metadata!
          data-class-info get-column-ids get-column-names)
-
-;;; Define an empty interface used to identify a data class.
-(define data-class<%> (interface ()))
 
 ;;; Define data class metadata struct.
 (define data-class-metadata% 
