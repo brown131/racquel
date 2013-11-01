@@ -6,7 +6,7 @@
 
 (require db)
 
-(provide load-schema)
+(provide load-schema sql-placeholder sql-autoincrement)
          
 ;;; Load MySQL schema.
 (define (load-mysql-schema con schema-nm tbl-nm rev-jn?)
@@ -92,7 +92,7 @@ where rcons.table_name='" tbl-nm "'")))
 
 ;;; Load PostgreSQL schema.
 (define (load-postgresql-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
+  (let ([schema-sql (string-append "select cols.column_name, substring(cons.constraint_type, 1, 1) as constraint_type, keycols.ordinal_position, 
   case when substring(cols.column_default from 1 for 6) = 'nextval' then 1 end, fkey.table_name, fkey.column_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
@@ -126,7 +126,7 @@ left join information_schema.table_constraints as cons
    and cons.table_schema=fkey.table_schema
 where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
-    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, column_name"))
+    (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, cols.column_name"))
     (query-rows con schema-sql)))
 
 ;;; Load SQLite3 schema.
@@ -222,4 +222,12 @@ where fkey.table_name='" tbl-nm "'")))
         [(eq? db-sys-type 'sqlite3) (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)]
         [(eq? db-sys-type 'sqlserver) (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)]
         [else (load-default-schema con schema-nm tbl-nm rev-jn?)]
+        ))
+
+(define (sql-placeholder con (count 1)) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
+
+(define (sql-autoincrement con #:db-system-type db-sys-type) 
+    (cond [(eq? db-sys-type 'mysql) "select last_insert_id()"]
+        [(eq? db-sys-type 'postgresql) "select currval('auto_id_seq')"]
+        [else (error "autocrement not defined for this database")]
         ))

@@ -49,16 +49,16 @@ create table if not exists address (
 /* DML */
 
 insert simple (id, `name`, description, x)
-values (1, 'join test', 'join test', 2.1)
+values (1, 'join test', 'join test', 2.1);
 
 insert auto (`name`, description)
-values ('join test', 'join test')
+values ('join test', 'join test');
 
 insert multipartkey (simple_id, auto_id)
-values (1, 1)
+values (1, 1);
 
 insert person (id, first_name, last_name, age)
-values (1, 'john', 'smith', 25)
+values (1, 'john', 'smith', 25);
 
 insert address (person_id, line, city, state, zip_code)
-values (1, '123 Main Street', 'Chicago', 'IL', '60606')
+values (1, '123 Main Street', 'Chicago', 'IL', '60606');

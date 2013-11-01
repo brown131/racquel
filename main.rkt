@@ -143,7 +143,6 @@
 
 
 ;;; SQL placeholder by database system.
-(define (sql-placeholder con) (if (eq? (dbsystem-name (connection-dbsystem con)) 'postgres) "$1" "?"))
 
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 

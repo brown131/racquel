@@ -43,9 +43,8 @@
           (let* ([xmlx (string->xexpr str)]
                  [vals (make-list (length xmlx) #f)]
                  [col-defs (get-class-metadata columns this%)])
-            (foldl (lambda (x v) (when (and (list? x) (> (length x) 1)) 
-                                   (dynamic-set-field! (car (findf (lambda (c) (equal? (symbol->string (first x)) (cdr c))) 
-                                                                   col-defs)) this (third x)))) null xmlx)))
+            (map (lambda (x) (dynamic-set-field! (car (findf (lambda (c) (equal? (symbol->string (first x)) (cdr c))) col-defs)) this (third x)))
+                 (filter (lambda (x) (and (list? x) (> (length x) 1))) xmlx))))
         (inspect #f)
         (super-new))
       (error "xml-data-class-mixin: not a data-class<%> class")))

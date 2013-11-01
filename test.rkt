@@ -20,7 +20,8 @@
 ;;;; SETUP
  
 ;;; Test database connection
-(define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test"))
+;(define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test"))
+(define con (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" #:password "test"))
 
 ;;;; TESTS
 
@@ -378,7 +379,7 @@
                                     #:column-name-normalizer column-name-normalizer)]
           [obj (new address%)])
      (test-case "select sql ok?" (check-equal? (select-data-object con address% #:print? #t (where (= id 1))) 
-                                               "select id, person_id, zip_code, state, line, city from address t where id = 1"))
+"select id, person_id, zip_code, state, line, city from address t where id = 1"))
      (test-case "rql select runs?" 
                 (check-true (is-a? (select-data-object con address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
      (test-case "selected with rql?"
@@ -389,10 +390,9 @@
                 (let ([a (select-data-object con address% (string-append "where id = " "1"))])
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
-     (test-case "select join sql ok?" (check-equal? (select-data-object con address% #:print? #t 
-                                                                        (join person (= (person id) person_id)) (where (= id 1)))
-                                                    "select id, person_id, zip_code, state, line, city from address t \
-join person on person.id = person_id where id = 1"))
+     (test-case "select join sql ok?" 
+                (check-equal? (select-data-object con address% #:print? #t (join person (= (person id) person_id)) (where (= id 1)))
+"select id, person_id, zip_code, state, line, city from address t join person on person.id = person_id where id = 1"))
      
      (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (= city ?)))
 "select id, person_id, zip_code, state, line, city from address t where city = ?"))
@@ -408,12 +408,10 @@ join person on person.id = person_id where id = 1"))
 "select id, person_id, zip_code, state, line, city from address t where city < ?"))                
      (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (like city ?)))
 "select id, person_id, zip_code, state, line, city from address t where city like ?"))
-     (test-case "select quote ok?" (check-equal? (select-data-object con address% #:print? #t 
-                                                                     (where (in id ,(make-list 3 "?"))))
-                                                 "select id, person_id, zip_code, state, line, \
-city from address t where id in (?,?,?)"))
+     (test-case "select quote ok?" 
+                (check-equal? (select-data-object con address% #:print? #t (where (in id ,(make-list 3 "?"))))
+"select id, person_id, zip_code, state, line, city from address t where id in (?,?,?)"))
      ))
-
 
 (define-test-suite test-mixins
   (let* ([test-class% (data-class object%
@@ -435,7 +433,7 @@ city from address t where id in (?,?,?)"))
     (set-column! name json-extern-obj "new name")
     (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
     (test-case "json externalized ok?" (check-equal? (send json-extern-obj externalize) 
-"{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}")) 
+"{\"Test\":{\"Name\":\"new name\",\"Id\":1,\"Description\":\"Test\"}}")) 
     (send json-intern-obj internalize (send json-extern-obj externalize))
     (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
     
