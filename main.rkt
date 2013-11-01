@@ -14,10 +14,6 @@
          get-join get-column set-column! json-data-class-mixin xml-data-class-mixin
          (all-from-out "keywords.rkt"))
 
-;;; Define namespace anchor.
-(define-namespace-anchor ns-anchor)
-(define ns (namespace-anchor->namespace ns-anchor))
-
 
 ;;;; DATA CLASS DEFINITION
 
@@ -46,23 +42,22 @@
 ;;; Set autoincrement id.
 (define (set-autoincrement-id! con obj)
   (when (get-class-metadata autoincrement-key (object-class obj))
-    (cond [(eq? (dbsystem-name (connection-dbsystem con)) 'mysql)
-           (dynamic-set-field! (get-class-metadata autoincrement-key (object-class obj))
-                               obj (query-value con "select last_insert_id()"))]
-          )))
+    (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
+      (dynamic-set-field! (get-class-metadata autoincrement-key (object-class obj)) obj
+                          (query-value con (sql-autoincrement dbsys-type))))))
 
 ;;; Primary key fields
 (define (primary-key-fields cls)
-  (let ([pkey (get-class-metadata primary-key cls)]) (if (list? pkey) pkey (list pkey))))
+  (let ([pkey (get-class-metadata primary-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
 
 ;;; Autoincrement key fields
 (define (autoincrement-key-fields cls)
-  (let ([pkey (get-class-metadata autoincrement-key cls)]) (if (list? pkey) pkey (list pkey))))
+  (let ([pkey (get-class-metadata autoincrement-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
     
 ;;; Columns without the autoincrement key
 (define (savable-fields con cls)
-  (foldr (lambda (f l) 
-           (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-column-ids cls)))
+  (sort (foldl (lambda (f l) 
+           (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-column-ids cls)) string<? #:key symbol->string))
          
 ;;; Get the column name for a column field in a class.
 (define (get-column-name f cls)
@@ -70,23 +65,28 @@
 
 ;;; SQL where-clause for a key.
 (define (key-where-clause con cls key)
-  (string-append " where " (string-join (map (lambda (f) (string-append (get-column-name f cls) "=" (sql-placeholder con))) 
-                                             (if (list? key) key (list key))) " and ")))
+  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
+    (string-append " where " (sql-placeholder (string-join (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
+                                                                (if (list? key) key (list key))) " and ") dbsys-type))))
 
 ;;; Insert SQL.
 (define (insert-sql con cls)
-  (let ([col-nms (map (lambda (f) (get-column-name f cls)) (savable-fields con cls))])
-    (string-append "insert " (get-class-metadata table-name cls)
-                 " (" (string-join col-nms ", ") ")"
-                 " values (" (string-join (make-list (length col-nms) "?") ", ") ")")))
+  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))]
+        [col-nms (map (lambda (f) (get-column-name f cls)) (savable-fields con cls))])
+    (string-append "insert into " (get-class-metadata table-name cls)
+                   " (" (string-join col-nms ", ") ")"
+                   " values (" (sql-placeholder (string-join (make-list (length col-nms) "?") ", ") dbsys-type) ")")))
 
 ;;; Update SQL.
 (define (update-sql con cls)
-  (let ([values (foldr (lambda (f l) (cons (string-append (get-column-name f cls) "=" (sql-placeholder con)) l)) 
-                       null (savable-fields con cls))])
-    (string-append "update " (get-class-metadata table-name cls)
-                 " set " (string-join values ", ")
-                 (key-where-clause con cls (primary-key-fields cls)))))
+  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))]
+        [key (primary-key-fields cls)]
+        [values (sort (foldr (lambda (f l) (cons (string-append (get-column-name f cls) "=?") l)) 
+                       null (savable-fields con cls)) string<?)])
+    (sql-placeholder (string-append "update " (get-class-metadata table-name cls)
+                                    " set " (string-join values ", ")
+                                    " where " (string-join (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
+                                                                (if (list? key) key (list key))) " and ")) dbsys-type)))
 
 ;;; Delete SQL.
 (define (delete-sql con cls)
@@ -95,9 +95,11 @@
 
 ;;; Select SQL.
 (define (select-sql con cls where-clause)
-  (string-append "select " (string-join (get-column-names cls) ", ")
-                 " from " (get-class-metadata table-name cls) " t "
-                 where-clause))
+  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))]
+        [col-nms (sort (get-column-names cls) string<?)])
+    (string-append "select " (string-join col-nms ", ")
+                   " from " (get-class-metadata table-name cls) " t "
+                   (sql-placeholder where-clause dbsys-type))))
 
 ;;; Define a data class.
 (define-syntax (data-class stx)
@@ -108,7 +110,7 @@
          (class* base-cls (data-class<%>) elem.expr ... 
            (field [data-object-state-internal 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
-             (set-field! columns m (append elem.col-defs ...))
+             (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (car k)))))
              (set-field! joins m (append elem.jn-defs ...))
              (unless (get-field external-name m) 
                (set-field! external-name m (get-field table-name m)))
@@ -131,22 +133,41 @@
              (hash-set! *data-class-metadata* this% m))
            this))]))
 
-;;; Find primary key fields in a table schema.
-(define (find-primary-key-fields con schema)
-  (let ([pkey (map (lambda (v) (string->symbol (vector-ref v 0)) )
-                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "P") #f))
-                           schema))])
-    (if (eq? (length pkey) 1) (first pkey) pkey)))
-
 
 ;;; DATA CLASS GENERATION
 
 
-;;; SQL placeholder by database system.
+;;; Define namespace anchor.
+(define-namespace-anchor ns-anchor)
+(define ns (namespace-anchor->namespace ns-anchor))
 
+;;; Get columns from the schema.
+(define (get-schema-columns schema col-nm-norm)
+  (let ([col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l (cons (vector-ref f 0) l))) null schema)])
+    (sort (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms) 
+          string<? #:key (lambda (k) (symbol->string (first k))))))
+
+;;; Get joins from the schema.
+(define (get-schema-joins schema join-nm-norm gen-joins? gen-rev-joins?)
+  (if (or gen-joins? gen-rev-joins?) 
+      (foldl (lambda (f l) (if (or (equal? (vector-ref f 1) "F") (equal? (vector-ref f 1) "R"))
+                               (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
+                                           (vector-ref f 0) (vector-ref f 4) (vector-ref f 5)) l) l))
+             null schema) null))
+
+;;; Find primary key fields in a table schema.
+(define (find-primary-key-fields schema)
+  (let ([pkey (map (lambda (v) (string->symbol (vector-ref v 0)) )
+                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "P") #f))
+                           schema))])
+    (if (eq? (length pkey) 1) (first pkey) pkey)))
+    
+;;; Find autoincrement key in the table schema.
+(define (has-autoincrement-key? schema) (vector? (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)))
+  
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
-                        #:db-system-type (db-sys-type (dbsystem-name (connection-dbsystem con)))
+                        #:db-system-type (dbsys-type (dbsystem-name (connection-dbsystem con)))
                         #:generate-joins? (gen-joins? #t)
                         #:generate-reverse-joins? (gen-rev-joins? #f)
                         #:schema-name (schema-nm #f)
@@ -157,27 +178,17 @@
                         #:external-name-normalizer (ext-nm-norm (lambda (n) (string-downcase n)))
                         #:print? (prnt? #f)
                         . rest) 
-  (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type db-sys-type)]
-         [col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l 
-                                           (cons (vector-ref f 0) l))) null schema)]
-         [cols (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms)]
-         [jns (if (or gen-joins? gen-rev-joins?) 
-                  (foldl (lambda (f l) (if (or (equal? (vector-ref f 1) "F") (equal? (vector-ref f 1) "R"))
-                                           (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
-                                                       (vector-ref f 0) (vector-ref f 4) (vector-ref f 5)) l) l))
-                         null schema) null)]
-         [pkey (find-primary-key-fields con schema)]
-         [auto-key-found (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)]
-         [ext-nm (ext-nm-norm tbl-nm)]
+  (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
+         [jns (get-schema-joins schema join-nm-norm gen-joins? gen-rev-joins?)]
+         [pkey (find-primary-key-fields schema)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm)
-                                   (external-name #,ext-nm)
-                                   #,(append '(column) cols)
-                                   #,(append (if (vector? auto-key-found) 
-                                                 (list 'primary-key pkey '#:autoincrement #t)
-                                                 (list 'primary-key pkey)))
+                                   (external-name #,(ext-nm-norm tbl-nm))
+                                   #,(append '(column) (get-schema-columns schema col-nm-norm))
+                                   #,(if (has-autoincrement-key? schema) (list 'primary-key pkey '#:autoincrement #t)
+                                         (list 'primary-key pkey))
                                    #,(if (and gen-joins? (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
                                    (super-new)
                                    (inspect #f)

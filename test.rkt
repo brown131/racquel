@@ -4,7 +4,7 @@
 ;;;; test - Test module for the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
-(require rackunit rackunit/text-ui db racquel "metadata.rkt")
+(require rackunit rackunit/text-ui db json racquel "metadata.rkt" "schema.rkt")
 
 (require/expose racquel (savable-fields 
                          key-where-clause
@@ -13,17 +13,39 @@
                          update-sql 
                          delete-sql 
                          select-sql
-                         object-class))
+                         object-class
+                         get-schema-columns
+                         get-schema-joins
+                         find-primary-key-fields
+                         has-autoincrement-key?))
+ 
 
-;(require/expose "metadata.rkt" (data-class-metadata% *data-class-metadata*))
-  
 ;;;; SETUP
  
-;;; Test database connection
-;(define con (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test"))
-(define con (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" #:password "test"))
 
-;;;; TESTS
+;;; Database system to test.
+(define *test-dbsys-type* 
+  ;'mysql
+  'postgresql
+  )
+
+;;; Database connection for testing.
+(define *con* 
+  (cond [(eq? *test-dbsys-type* 'mysql) 
+         (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test")]
+        [(eq? *test-dbsys-type* 'postgresql) 
+         (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" #:password "test")]
+        ))
+
+;;; Schema name for testing.
+(define *schema-name* 
+  (cond [(eq? *test-dbsys-type* 'mysql) "racquel_test"]
+        [(eq? *test-dbsys-type* 'postgresql) "public"]
+        ))
+
+
+;;;; TEST DATA OBJECT DEFINITION
+
 
 (define test-interface<%> (interface ()))
 
@@ -52,7 +74,8 @@
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) 
                             (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
-                (check-equal? col-defs '((id . "id") (name . "name") (description . "description") (x . "x")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '((description . "description") (id . "id") (name . "name") (x . "x")))
                 (check-eq? (length j-defs) 1)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key #f)
@@ -61,7 +84,6 @@
                 ))
    
    (test-case "object class ok?" (check-equal? (object-class obj) test-class%))
-  ; (test-case "get column name?" (check-eq? (get-column-name id test-class%) "id"))
    
    (test-case "columns set?" 
               (set-column! id obj 1)
@@ -72,24 +94,49 @@
               (check-eq? (get-column description obj) "This is a test")
               (check-eq? (get-column object obj) #f))
    
-   (test-case "savable field ok?" (check-equal? (savable-fields con test-class%) '(id name description x)))
+   (test-case "savable field ok?" (check-equal? (savable-fields *con* test-class%) '(description id name x)))
    (test-case "primary key fields ok?" (check-equal? (primary-key-fields test-class%) '(id)))
-   (test-case "where clause ok?" (check-equal? (key-where-clause con test-class% (primary-key-fields test-class%)) " where id=?"))
-   (test-case "insert sql ok?" (check-equal? (insert-sql con test-class%) "insert test (id, name, description, x) values (?, ?, ?, ?)"))
-   (test-case "update sql ok?" (check-equal? (update-sql con test-class%) "update test set id=?, name=?, description=?, x=? where id=?"))
-   (test-case "delete sql ok?" (check-equal? (delete-sql con test-class%) "delete from test where id=?"))
-   (test-case "select sql ok?" 
-              (check-equal? (select-sql con test-class% "where id=?") "select id, name, description, x from test t where id=?"))
+   (test-case "where clause ok?" (check-equal? (key-where-clause *con* test-class% (primary-key-fields test-class%)) 
+                                               (sql-placeholder" where id=?" *test-dbsys-type*)))
+   (test-case "insert sql ok?" (check-equal? (insert-sql *con* test-class%) 
+                                             (sql-placeholder "insert into test (description, id, name, x) values (?, ?, ?, ?)" *test-dbsys-type*)))
+   (test-case "update sql ok?" (check-equal? (update-sql *con* test-class%) 
+                                             (sql-placeholder "update test set description=?, id=?, name=?, x=? where id=?" *test-dbsys-type*)))
+   (test-case "delete sql ok?" (check-equal? (delete-sql *con* test-class%) 
+                                             (sql-placeholder "delete from test where id=?" *test-dbsys-type*)))
+   (test-case "select sql ok?"  (check-equal? (select-sql *con* test-class% "where id=?") 
+                                              (sql-placeholder "select description, id, name, x from test t where id=?" *test-dbsys-type*)))
    )
 )
 
-(define (table-name-normalizer n) (string-downcase (string-append (regexp-replace* "([a-z])([A-Z])" n "\\1-\\2") "%")))
 
+;;;; TEST DATABASE SCHEMA
+
+
+(define (table-name-normalizer n) (string-downcase (string-append (regexp-replace* "([a-z])([A-Z])" n "\\1-\\2") "%")))
 (define (column-name-normalizer n) (string-downcase (string-replace n "_" "-")))
+(define (join-name-normalizer n) (string-downcase n))
+                                     
+(define-test-suite test-schema
+  (let* ([schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f 
+                              #:db-system-type (dbsystem-name (connection-dbsystem *con*)))])
+    (test-case "schema loaded?" (check-eq? (length schema) 4))
+    
+    (test-case "schema columns ok?" (check-equal? (sort (get-schema-columns schema column-name-normalizer) 
+                                                         string<? #:key (lambda (k) (symbol->string (first k))))
+                                                  '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
+    (test-case "schema joins ok?" (check-eq? (get-schema-joins schema join-name-normalizer #t #f) null))
+    (test-case "primary key fields found?" (check-eq? (find-primary-key-fields schema) 'id))
+    (test-case "autoincrement key found?" (check-false (has-autoincrement-key? schema)))
+    ))
+
+
+;;;; TEST DATA OBJECT GENERATION
+
 
 (define-test-suite test-make-data-object
- (let* ([simple% (gen-data-class con "simple" 
-                                  #:schema-name "racquel_test"
+ (let* ([simple% (gen-data-class *con* "simple" 
+                                  #:schema-name *schema-name*
                                   #:generate-joins? #t
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer)]
@@ -104,7 +151,8 @@
    (test-case "simple class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info simple%)])
                 (check-eq? tbl-nm "simple")
-                (check-equal? col-defs '((id . "id") (x . "x") (name . "name") (description . "description")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '((description . "description") (id . "id") (name . "name") (x . "x")))
                 (check-eq? (length j-defs) 0)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key #f)
@@ -114,13 +162,19 @@
    
    (test-case "object class ok?" (check-equal? (object-class obj) simple%))
    
-   (test-case "savable field ok?" (check-equal? (savable-fields con simple%) '(id x name description)))
-   (test-case "where clause ok?" (check-equal? (key-where-clause con simple% (primary-key-fields simple%)) " where id=?"))
-   (test-case "insert sql ok?" (check-equal? (insert-sql con simple%) "insert simple (id, x, name, description) values (?, ?, ?, ?)"))
-   (test-case "update sql ok?" (check-equal? (update-sql con simple%) "update simple set id=?, x=?, name=?, description=? where id=?"))
-   (test-case "delete sql ok?" (check-equal? (delete-sql con simple%) "delete from simple where id=?"))
+   (test-case "savable field ok?" (check-equal? (sort (savable-fields *con* simple%) string<? #:key symbol->string) 
+                                                '(description id name x)))
+   (test-case "where clause ok?" (check-equal? (key-where-clause *con* simple% (primary-key-fields simple%)) 
+                                               (sql-placeholder " where id=?" *test-dbsys-type*)))
+   (test-case "insert sql ok?" (check-equal? (insert-sql *con* simple%) 
+                                             (sql-placeholder "insert into simple (description, id, name, x) values (?, ?, ?, ?)" *test-dbsys-type*)))
+   (test-case "update sql ok?" (check-equal? (update-sql *con* simple%) 
+                                             (sql-placeholder "update simple set description=?, id=?, name=?, x=? where id=?" *test-dbsys-type*)))
+   (test-case "delete sql ok?" (check-equal? (delete-sql *con* simple%) 
+                                             (sql-placeholder "delete from simple where id=?" *test-dbsys-type*)))
    (test-case "select sql ok?" 
-              (check-equal? (select-sql con simple% "where id=?") "select id, x, name, description from simple t where id=?"))
+              (check-equal? (select-sql *con* simple% "where id=?") 
+                            (sql-placeholder "select description, id, name, x from simple t where id=?" *test-dbsys-type*)))
   
    (test-case "columns set?"
               (set-column! id obj 23)
@@ -133,7 +187,7 @@
               (check-eq? (get-column x obj) 1.7)
    
    (test-case "object inserted?" 
-              (insert-data-object con obj)
+              (insert-data-object *con* obj)
               (check-not-eq? (get-field id obj) #f))
                  
    (test-case "object changed?" 
@@ -141,27 +195,31 @@
               (check-eq? (get-field name obj) "test2"))
    
    (test-case "object updated?"
-              (update-data-object con obj)
-              (check-equal? (query-value con "select id from simple where id=?" (get-field id obj)) 23)
-              (check-equal? (query-value con "select name from simple where id=?" (get-field id obj)) "test2")
-              (check-equal? (query-value con "select description from simple where id=?" (get-field id obj)) "this is a test")
-              (check-equal? (query-value con "select x from simple where id=?" (get-field id obj)) 1.7)
+              (update-data-object *con* obj)
+              (check-equal? (query-value *con* (sql-placeholder "select id from simple where id=?" *test-dbsys-type*) (get-field id obj)) 23)
+              (check-equal? (query-value *con* (sql-placeholder "select name from simple where id=?" *test-dbsys-type*) (get-field id obj)) "test2")
+              (check-equal? (query-value *con* (sql-placeholder "select description from simple where id=?" *test-dbsys-type*) (get-field id obj)) "this is a test")
+              (check-equal? (query-value *con* (sql-placeholder "select x from simple where id=?" *test-dbsys-type*) (get-field id obj)) 17/10)
               )  
    
    (test-case "object loaded?"
-              (let ([s (make-data-object con simple% (get-field id obj))])
+              (let ([s (make-data-object *con* simple% (get-field id obj))])
                 (check-equal? (get-field id s) 23)
                 (check-equal? (get-field name s) "test2")
                 (check-equal? (get-field description s) "this is a test")
-                (check-equal? (get-field x s) 1.7)))
+                (check-equal? (get-field x s) 17/10)))
    
    (test-case "object deleted?" 
-              (delete-data-object con obj)
-              (check-eq? (query-value con "select count(*) from simple where id=?" (get-field id obj)) 0)) 
+              (delete-data-object *con* obj)
+              (check-eq? (query-value *con* (sql-placeholder "select count(*) from simple where id=?" *test-dbsys-type*) (get-field id obj)) 0)) 
    ))
 
+
+;;;; TEST AUTOINCREMENT KEY
+
+
 (define-test-suite test-autoincrement-data-object
- (let* ([auto% (gen-data-class con "auto" #:schema-name "racquel_test")]
+ (let* ([auto% (gen-data-class *con* "auto" #:schema-name *schema-name*)]
         [obj (new auto%)])
    (test-case "auto class created?" (check-not-eq? auto% #f))
    (test-true "auto class is a data class?" (data-class? auto%))
@@ -173,7 +231,8 @@
    (test-case "auto class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
-                (check-equal? col-defs '((id . "id") (name . "name") (description . "description")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '((description . "description") (id . "id") (name . "name")))
                 (check-equal? j-defs null)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
@@ -183,13 +242,18 @@
    
    (test-case "object class ok?" (check-equal? (object-class obj) auto%))
    
-   (test-case "savable field ok?" (check-equal? (savable-fields con auto%) '(name description)))
-   (test-case "where clause ok?" (check-equal? (key-where-clause con auto% (primary-key-fields auto%)) " where id=?"))
-   (test-case "insert sql ok?" (check-equal? (insert-sql con auto%) "insert auto (name, description) values (?, ?)"))
-   (test-case "update sql ok?" (check-equal? (update-sql con auto%) "update auto set name=?, description=? where id=?"))
-   (test-case "delete sql ok?" (check-equal? (delete-sql con auto%) "delete from auto where id=?"))
+   (test-case "savable field ok?" (check-equal? (savable-fields *con* auto%) '(description name)))
+   (test-case "where clause ok?" (check-equal? (key-where-clause *con* auto% (primary-key-fields auto%)) 
+                                               (sql-placeholder " where id=?" *test-dbsys-type*)))
+   (test-case "insert sql ok?" (check-equal? (insert-sql *con* auto%) 
+                                             (sql-placeholder "insert into auto (description, name) values (?, ?)" *test-dbsys-type*)))
+   (test-case "update sql ok?" (check-equal? (update-sql *con* auto%) 
+                                             (sql-placeholder "update auto set description=?, name=? where id=?" *test-dbsys-type*)))
+   (test-case "delete sql ok?" (check-equal? (delete-sql *con* auto%) 
+                                             (sql-placeholder "delete from auto where id=?" *test-dbsys-type*)))
    (test-case "select sql ok?" 
-              (check-equal? (select-sql con auto% "where id=?") "select id, name, description from auto t where id=?"))
+              (check-equal? (select-sql *con* auto% "where id=?") 
+                            (sql-placeholder "select description, id, name from auto t where id=?" *test-dbsys-type*)))
   
    (test-case "columns set?"
               (set-column! name obj "test")
@@ -199,7 +263,7 @@
               (check-eq? (data-object-state obj) 'new))
    
    (test-case "object inserted?" 
-              (insert-data-object con obj)
+              (insert-data-object *con* obj)
               (check-not-eq? (get-field id obj) #f)
               (check-eq? (data-object-state obj) 'saved))
                  
@@ -208,24 +272,30 @@
               (check-eq? (get-field name obj) "test2"))
    
    (test-case "object updated?"
-              (update-data-object con obj)
-              (check-equal? (query-value con "select name from auto where id=?" (get-field id obj)) "test2"))  
+              (update-data-object *con* obj)
+              (check-equal? (query-value *con* (sql-placeholder "select name from auto where id=?" *test-dbsys-type*) 
+                                         (get-field id obj)) "test2"))  
    
    (test-case "object loaded?"
-              (let ([a (make-data-object con auto% (get-field id obj))])
+              (let ([a (make-data-object *con* auto% (get-field id obj))])
                 (check-equal? (get-field name a) "test2")
                 (check-eq? (data-object-state a) 'loaded)))
    
    (test-case "object selected?"
-              (let ([a (select-data-object con auto% (where (= name ?)) (get-field name obj))])
+              (let ([a (select-data-object *con* auto% (where (= name ?)) (get-field name obj))])
                 (check-equal? (get-field name a) "test2")
                 (check-eq? (data-object-state a) 'loaded)))
    
    (test-case "object deleted?" 
-              (delete-data-object con obj)
-              (check-eq? (query-value con "select count(*) from auto where id=?" (get-field id obj)) 0)
+              (delete-data-object *con* obj)
+              (check-eq? (query-value *con* (sql-placeholder "select count(*) from auto where id=?" *test-dbsys-type*) 
+                                      (get-field id obj)) 0)
               (check-eq? (data-object-state obj) 'deleted)) 
    ))
+
+
+;;;; TEST JOINS
+
 
 (define-test-suite test-joins
  (let* ([person% (data-class object% 
@@ -255,7 +325,8 @@
    (test-case "person class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info person%)])
                 (check-eq? tbl-nm "person")
-                (check-equal? col-defs '((id . "id") (first-name . "first_name") (last-name . "last_name") (age . "age")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '( (age . "age") (first-name . "first_name") (id . "id") (last-name . "last_name")))
                 (check-equal? (map car j-defs) '(addresses))
                 (check-equal? (data-join-foreign-key (first (map cdr j-defs))) 'id)
                 (check-equal? (data-join-class (first (map cdr j-defs))) 'address%)
@@ -268,7 +339,7 @@
                 ))
    
    (test-case "addresses not joined?" (check-eq? (get-field addresses person-obj) #f))
-   (test-case "addresses joined?" (check-true (is-a? (first (get-join addresses person-obj con)) address%)))
+   (test-case "addresses joined?" (check-true (is-a? (first (get-join addresses person-obj *con*)) address%)))
 
    (test-case "address class ok?" 
               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info address%)]) 
@@ -278,8 +349,9 @@
    (test-case "address class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
                 (check-eq? tbl-nm "address")
-                (check-equal? col-defs '((id . "id") (person-id . "person_id") (line . "line") (city . "city")
-                                         (state . "state") (zip-code . "zip_code")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '((city . "city") (id . "id") (line . "line") (person-id . "person_id") 
+                                (state . "state") (zip-code . "zip_code")))
                 (check-equal? (map car j-defs) '(person))
                 (check-equal? (data-join-foreign-key (first (map cdr j-defs))) 'person-id)
                 (check-equal? (data-join-class (first (map cdr j-defs))) person%)
@@ -292,17 +364,21 @@
                 ))
    
    (test-case "person not joined?" (check-eq? (get-field person address-obj) #f))
-   (test-case "person joined?" (check-true (is-a? (get-join person address-obj con) person%)))
+   (test-case "person joined?" (check-true (is-a? (get-join person address-obj *con*) person%)))
 ))
 
+
+;;;; TEST JOIN GENERATION
+
+
 (define-test-suite test-generate-join
- (let* ([address% (gen-data-class con "address" 
-                                   #:schema-name "racquel_test"
+ (let* ([address% (gen-data-class *con* "address" 
+                                   #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
                                    #:column-name-normalizer column-name-normalizer)]
         [obj (new address%)])
-   (test-case "generated class ok?" (check-equal? (gen-data-class con "address" #:print? #t
-                                                                   #:schema-name "racquel_test"
+   (test-case "generated class ok?" (check-equal? (gen-data-class *con* "address" #:print? #t
+                                                                   #:schema-name *schema-name*
                                                                    #:table-name-normalizer table-name-normalizer
                                                                    #:column-name-normalizer column-name-normalizer)
                                                   '(let ((address%
@@ -311,12 +387,12 @@
                                                            (table-name "address")
                                                            (external-name "address")
                                                            (column
+                                                            (city #f "city")
                                                             (id #f "id")
-                                                            (person-id #f "person_id")
-                                                            (zip-code #f "zip_code")
-                                                            (state #f "state")
                                                             (line #f "line")
-                                                            (city #f "city"))
+                                                            (person-id #f "person_id")
+                                                            (state #f "state")
+                                                            (zip-code #f "zip_code"))
                                                            (primary-key id #:autoincrement #t)
                                                            (join (person "person_id" "person" "id"))
                                                            (super-new)
@@ -332,8 +408,9 @@
    (test-case "address class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
                 (check-eq? tbl-nm "address")
-                (check-equal? col-defs '((id . "id") (person-id . "person_id") (zip-code . "zip_code")
-                                         (state . "state") (line . "line") (city . "city")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '((city . "city") (id . "id") (line . "line") (person-id . "person_id")
+                                (state . "state") (zip-code . "zip_code")))
                 (check-equal? (caar j-defs) 'person)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key 'id)
@@ -344,9 +421,13 @@
    (test-case "object class ok?" (check-equal? (object-class obj) address%))
 ))
 
+
+;;;; TEST REVERSE JOIN GENERATION
+
+
 (define-test-suite test-generate-reverse-join
- (let* ([person% (gen-data-class con "person" 
-                                 #:schema-name "racquel_test"
+ (let* ([person% (gen-data-class *con* "person" 
+                                 #:schema-name *schema-name*
                                  #:generate-reverse-joins? #t
                                  #:table-name-normalizer table-name-normalizer
                                  #:column-name-normalizer column-name-normalizer)]
@@ -361,7 +442,8 @@
    (test-case "person class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info person%)])
                 (check-eq? tbl-nm "person")
-                (check-equal? col-defs '((id . "id") (last-name . "last_name") (first-name . "first_name") (age . "age")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
+                              '((age . "age") (first-name . "first_name") (id . "id") (last-name . "last_name")))
                 (check-equal? (caar j-defs) 'address)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key #f)
@@ -372,46 +454,54 @@
    (test-case "object class ok?" (check-equal? (object-class obj) person%))
 ))
 
+
+;;;; TEST RQL PARSING
+
+
 (define-test-suite test-rql-parsing
-   (let* ([address% (gen-data-class con "address" 
-                                    #:schema-name "racquel_test"
+   (let* ([address% (gen-data-class *con* "address" 
+                                    #:schema-name *schema-name*
                                     #:table-name-normalizer table-name-normalizer
                                     #:column-name-normalizer column-name-normalizer)]
           [obj (new address%)])
-     (test-case "select sql ok?" (check-equal? (select-data-object con address% #:print? #t (where (= id 1))) 
-"select id, person_id, zip_code, state, line, city from address t where id = 1"))
+     (test-case "select sql ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= id 1))) 
+"select city, id, line, person_id, state, zip_code from address t where id = 1"))
      (test-case "rql select runs?" 
-                (check-true (is-a? (select-data-object con address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
+                (check-true (is-a? (select-data-object *con* address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
      (test-case "selected with rql?"
-                (let ([a (select-data-object con address% (where (= id 1)))])
+                (let ([a (select-data-object *con* address% (where (= id 1)))])
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
      (test-case "selected with sql?"
-                (let ([a (select-data-object con address% (string-append "where id = " "1"))])
+                (let ([a (select-data-object *con* address% (string-append "where id = " "1"))])
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
      (test-case "select join sql ok?" 
-                (check-equal? (select-data-object con address% #:print? #t (join person (= (person id) person_id)) (where (= id 1)))
-"select id, person_id, zip_code, state, line, city from address t join person on person.id = person_id where id = 1"))
+                (check-equal? (select-data-object *con* address% #:print? #t (join person (= (person id) person_id)) (where (= id 1)))
+"select city, id, line, person_id, state, zip_code from address t join person on person.id = person_id where id = 1"))
      
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (= city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city = ?"))
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (<> city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city <> ?"))
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (>= city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city >= ?"))
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (<= city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city <= ?"))
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (> city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city > ?"))
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (< city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city < ?"))                
-     (test-case "select like ok?" (check-equal? (select-data-object con address% #:print? #t (where (like city ?)))
-"select id, person_id, zip_code, state, line, city from address t where city like ?"))
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city = ?" *test-dbsys-type*)))
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<> city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city <> ?" *test-dbsys-type*)))
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (>= city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city >= ?" *test-dbsys-type*)))
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<= city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city <= ?" *test-dbsys-type*)))
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (> city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city > ?" *test-dbsys-type*)))
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (< city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city < ?" *test-dbsys-type*)))                
+     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (like city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city like ?" *test-dbsys-type*)))
      (test-case "select quote ok?" 
-                (check-equal? (select-data-object con address% #:print? #t (where (in id ,(make-list 3 "?"))))
-"select id, person_id, zip_code, state, line, city from address t where id in (?,?,?)"))
+                (check-equal? (select-data-object *con* address% #:print? #t (where (in id ,(make-list 3 "?"))))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where id in (?,?,?)" *test-dbsys-type*)))
      ))
+
+
+;;;; TEST MIXINS
+
 
 (define-test-suite test-mixins
   (let* ([test-class% (data-class object%
@@ -432,20 +522,25 @@
     
     (set-column! name json-extern-obj "new name")
     (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
-    (test-case "json externalized ok?" (check-equal? (send json-extern-obj externalize) 
-"{\"Test\":{\"Name\":\"new name\",\"Id\":1,\"Description\":\"Test\"}}")) 
+    (test-case "json externalized ok?" (check-equal? (string->jsexpr (send json-extern-obj externalize))
+(string->jsexpr"{\"Test\":{\"Id\":1,\"Description\":\"Test\",\"Name\":\"new name\"}}"))) 
     (send json-intern-obj internalize (send json-extern-obj externalize))
     (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
     
     (set-column! name xml-extern-obj "a new name")
     (test-case "column name set?" (check-equal? (get-column name xml-extern-obj) "a new name"))
     (test-case "xml externalized ok?" (check-equal? (send xml-extern-obj externalize) 
-"<Test><Id>1</Id><Name>a new name</Name><Description>Test</Description></Test>"))
+"<Test><Description>Test</Description><Id>1</Id><Name>a new name</Name></Test>"))
     (send xml-intern-obj internalize (send xml-extern-obj externalize))
     (test-case "xml internalized ok?" (check-equal? (get-column name xml-intern-obj) "a new name"))
   ))
 
+
+;;;; RUN ALL TESTS
+
+
 (run-tests test-define-data-object 'verbose)
+(run-tests test-schema 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-joins 'verbose)
@@ -453,4 +548,8 @@
 (run-tests test-rql-parsing 'verbose)
 (run-tests test-mixins 'verbose)
 
-(disconnect con)
+
+;;;; TEAR-DOWN
+
+
+(disconnect *con*)
