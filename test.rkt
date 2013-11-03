@@ -52,10 +52,10 @@
 (define-test-suite test-define-data-object
  (let* ([test-class% (data-class* object% (test-interface<%>)
                                  (table-name "test")
-                                 (column [id #f "id"] 
-                                         [name #f "name"] 
-                                         [description #f "description"])
-                                 (init-column [x "x"])
+                                 (column [id #f ("id" "Id")] 
+                                         [name #f ("name" "Name")] 
+                                         [description #f ("description" "Description")])
+                                 (init-column [x ("x" "X")])
                                  (join [object id object% id])
                                  (primary-key id)
                                  (define/public (test) (x + 1))
@@ -74,8 +74,8 @@
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) 
                             (data-class-info test-class%)])
                 (check-eq? tbl-nm "test")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '((description . "description") (id . "id") (name . "name") (x . "x")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((description "description" "Description") (id "id" "Id") (name "name" "Name") (x "x" "X")))
                 (check-eq? (length j-defs) 1)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key #f)
@@ -134,12 +134,19 @@
 ;;;; TEST DATA OBJECT GENERATION
 
 
+;;; Name externalizer. Returns mixed case.
+(define mixed-case-extern-regexp (regexp "-[a-z]"))
+(define (name-externalizer s) 
+  (string-append (string-upcase (substring s 0 1)) 
+                 (substring (regexp-replace* mixed-case-extern-regexp s (lambda (s) (substring (string-upcase s) 1 2))) 1)))
+
 (define-test-suite test-make-data-object
  (let* ([simple% (gen-data-class *con* "simple" 
                                   #:schema-name *schema-name*
                                   #:generate-joins? #t
                                   #:table-name-normalizer table-name-normalizer
-                                  #:column-name-normalizer column-name-normalizer)]
+                                  #:column-name-normalizer column-name-normalizer
+                                  #:table-name-externalizer name-externalizer)]
         [obj (new simple%)])
    (test-case "simple class created?" (check-not-eq? simple% #f))
    (test-true "simple class is a data class?" (data-class? simple%))
@@ -151,12 +158,12 @@
    (test-case "simple class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info simple%)])
                 (check-eq? tbl-nm "simple")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '((description . "description") (id . "id") (name . "name") (x . "x")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((description "description" "description") (id "id" "id") (name "name" "name") (x "x" "x")))
                 (check-eq? (length j-defs) 0)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key #f)
-                (check-eq? ext-nm "simple")
+                (check-eq? ext-nm "Simple")
                 (check-not-eq? st-key #f)
                 ))
    
@@ -231,8 +238,8 @@
    (test-case "auto class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info auto%)])
                 (check-eq? tbl-nm "auto")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '((description . "description") (id . "id") (name . "name")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((description "description" "description") (id "id""id") (name "name" "name")))
                 (check-equal? j-defs null)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
@@ -299,16 +306,15 @@
 
 (define-test-suite test-joins
  (let* ([person% (data-class object% 
-             (table-name "person") 
-             (external-name "Person") 
+             (table-name "person" "Person")  
              (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
              (primary-key id #:autoincrement #t)
              (join (addresses id 'address% person-id))
+             ;(join (addresses address% (where (= person-id ?) id)))
              (super-new)
              (inspect #f))]
         [address% (data-class object% 
-             (table-name "address") 
-             (external-name "Address") 
+             (table-name "address"  "Address")  
              (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
              (primary-key id #:autoincrement #t)
              (join (person person-id person% id 'one-to-one))
@@ -325,13 +331,14 @@
    (test-case "person class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info person%)])
                 (check-eq? tbl-nm "person")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '( (age . "age") (first-name . "first_name") (id . "id") (last-name . "last_name")))
-                (check-equal? (map car j-defs) '(addresses))
-                (check-equal? (data-join-foreign-key (first (map cdr j-defs))) 'id)
-                (check-equal? (data-join-class (first (map cdr j-defs))) 'address%)
-                (check-equal? (data-join-key (first (map cdr j-defs))) 'person-id)
-                (check-equal? (data-join-cardinality (first (map cdr j-defs))) 'one-to-many)
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((age "age" "age") (first-name "first_name" "first_name") (id "id" "id") 
+                                (last-name "last_name" "last_name")))
+                (check-equal? (map first j-defs) '(addresses))
+                (check-equal? (data-join-foreign-key (first (map second j-defs))) 'id)
+                (check-equal? (data-join-class (first (map second j-defs))) 'address%)
+                (check-equal? (data-join-key (first (map second j-defs))) 'person-id)
+                (check-equal? (data-join-cardinality (first (map second j-defs))) 'one-to-many)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Person")
@@ -349,14 +356,14 @@
    (test-case "address class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
                 (check-eq? tbl-nm "address")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '((city . "city") (id . "id") (line . "line") (person-id . "person_id") 
-                                (state . "state") (zip-code . "zip_code")))
-                (check-equal? (map car j-defs) '(person))
-                (check-equal? (data-join-foreign-key (first (map cdr j-defs))) 'person-id)
-                (check-equal? (data-join-class (first (map cdr j-defs))) person%)
-                (check-equal? (data-join-key (first (map cdr j-defs))) 'id)
-                (check-equal? (data-join-cardinality (first (map cdr j-defs))) 'one-to-one)
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((city "city" "city") (id "id" "id") (line "line" "line") (person-id "person_id" "person_id")
+                                (state "state" "state") (zip-code "zip_code" "zip_code")))
+                (check-equal? (map first j-defs) '(person))
+                (check-equal? (data-join-foreign-key (first (map second j-defs))) 'person-id)
+                (check-equal? (data-join-class (first (map second j-defs))) person%)
+                (check-equal? (data-join-key (first (map second j-defs))) 'id)
+                (check-equal? (data-join-cardinality (first (map second j-defs))) 'one-to-one)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Address")
@@ -375,17 +382,18 @@
  (let* ([address% (gen-data-class *con* "address" 
                                    #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
-                                   #:column-name-normalizer column-name-normalizer)]
+                                   #:column-name-normalizer column-name-normalizer
+                                   #:table-name-externalizer name-externalizer)]
         [obj (new address%)])
    (test-case "generated class ok?" (check-equal? (gen-data-class *con* "address" #:print? #t
                                                                    #:schema-name *schema-name*
                                                                    #:table-name-normalizer table-name-normalizer
-                                                                   #:column-name-normalizer column-name-normalizer)
+                                                                   #:column-name-normalizer column-name-normalizer
+                                                                   #:table-name-externalizer name-externalizer)
                                                   '(let ((address%
                                                           (data-class
                                                            object%
-                                                           (table-name "address")
-                                                           (external-name "address")
+                                                           (table-name "address" "Address")
                                                            (column
                                                             (city #f "city")
                                                             (id #f "id")
@@ -408,13 +416,13 @@
    (test-case "address class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info address%)])
                 (check-eq? tbl-nm "address")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '((city . "city") (id . "id") (line . "line") (person-id . "person_id")
-                                (state . "state") (zip-code . "zip_code")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((city "city" "city") (id "id" "id") (line "line" "line") (person-id "person_id" "person_id")
+                                (state "state" "state") (zip-code "zip_code" "zip_code")))
                 (check-equal? (caar j-defs) 'person)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key 'id)
-                (check-eq? ext-nm "address")
+                (check-eq? ext-nm "Address")
                 (check-not-eq? st-key #f)
                 ))
    
@@ -442,8 +450,8 @@
    (test-case "person class metadata set?" 
               (let-values ([(tbl-nm col-defs j-defs pkey auto-key ext-nm st-key) (data-class-info person%)])
                 (check-eq? tbl-nm "person")
-                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (car k))))
-                              '((age . "age") (first-name . "first_name") (id . "id") (last-name . "last_name")))
+                (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                              '((age "age") (first-name "first_name") (id "id") (last-name "last_name")))
                 (check-equal? (caar j-defs) 'address)
                 (check-eq? pkey 'id)
                 (check-eqv? auto-key #f)
@@ -505,10 +513,9 @@
 
 (define-test-suite test-mixins
   (let* ([test-class% (data-class object%
-                                 (table-name "test")
-                                 (external-name "Test")
-                                 (column [id 1 "Id"] 
-                                         [name "test" "Name"] 
+                                 (table-name "test" "Test")
+                                 (column [id 1 ("id" "Id")] 
+                                         [name "test" ("name" "Name")] 
                                          [description "Test" "Description"])
                                  (primary-key id)
                                  (inspect #f)
@@ -523,7 +530,7 @@
     (set-column! name json-extern-obj "new name")
     (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
     (test-case "json externalized ok?" (check-equal? (string->jsexpr (send json-extern-obj externalize))
-(string->jsexpr"{\"Test\":{\"Id\":1,\"Description\":\"Test\",\"Name\":\"new name\"}}"))) 
+(string->jsexpr"{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}"))) 
     (send json-intern-obj internalize (send json-extern-obj externalize))
     (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
     

@@ -15,13 +15,69 @@
          (all-from-out "keywords.rkt"))
 
 
+;;;; RQL 
+
+
+#| Model:
+(select (address% a)
+        (left-join state% (= abbr (a state)))
+        (and (like (person last-name) "A%")
+             (or (= (id #,(get-field id obj))
+                 (not (in city ("Chicago" "New York"))))
+             (between zip-code 10000 60999)))
+|#
+
+
+;;; Define RQL operators.
+(define-syntax rql-and [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " and " ) ")"))])
+(define-syntax rql-or [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " or " ) ")"))])
+(define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " (~a a) ... ")"))])
+(define-syntax rql-= [syntax-rules () ((_ a b) (string-append (~a a) " = " (~a b)))])
+(define-syntax rql-<> [syntax-rules () ((_ a b) (string-append (~a a) " <> " (~a b)))])
+(define-syntax rql->= [syntax-rules () ((_ a b) (string-append (~a a) " >= " (~a b)))])
+(define-syntax rql-<= [syntax-rules () ((_ a b) (string-append (~a a) " <= " (~a b)))])
+(define-syntax rql-> [syntax-rules () ((_ a b) (string-append (~a a) " > " (~a b)))])
+(define-syntax rql-< [syntax-rules () ((_ a b) (string-append (~a a) " < " (~a b)))])
+(define-syntax rql-like [syntax-rules () ((_ a b) (string-append (~a a) " like " (~a b)))])
+(define-syntax rql-in [syntax-rules () ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
+(define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
+(define-syntax rql-column [syntax-rules () ((_ a b) (string-append (~a a) "." (~a b)))])
+
+;;; Parse an RQL expression.
+(begin-for-syntax
+  (define-syntax-class rql-expr
+    #:literals (join where and or not = <> >= <= > < like in unquote)
+    (pattern and #:with (expr ...) #'(rql-and))
+    (pattern or #:with (expr ...) #'(rql-or))
+    (pattern not #:with (expr ...) #'(rql-not))
+    (pattern = #:with (expr ...) #'(rql-=))
+    (pattern <> #:with (expr ...) #'(rql-<>))
+    (pattern >= #:with (expr ...) #'(rql->=))
+    (pattern <= #:with (expr ...) #'(rql-<=))
+    (pattern > #:with (expr ...) #'(rql->))
+    (pattern < #:with (expr ...) #'(rql-<))
+    (pattern like #:with (expr ...) #'(rql-like))
+    (pattern in #:with (expr ...) #'(rql-in))
+    (pattern i:id #:with (expr ...) #'('i))
+    (pattern s:str #:with (expr ...) #'(s))
+    (pattern n:nat #:with (expr ...) #'(n))
+    (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
+    (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column 'p1 'p2)))
+    (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
+  (define-syntax-class rql-expr-list
+    (pattern (rql:rql-expr ...) #:with (expr ...) #'(rql.expr ... ...)))
+  (define-syntax-class join-expr 
+    (pattern (join table:id rql:rql-expr) #:with (expr ...) #'("join " (~a 'table) " on " rql.expr ... " ")))
+  (define-syntax-class where-expr 
+    (pattern (where rql:rql-expr) #:with (expr ...) #'("where " rql.expr ...))))
+
+
 ;;;; DATA CLASS DEFINITION
 
 
 #| Model:
 (data-class object% 
-            (table-name "TST_Person") 
-            (external-name "Person")
+            (table-name "TST_Person" "Person") 
             (init-column (id "id"))
             (column (name #f "name")
                     (description #f "description")
@@ -61,7 +117,7 @@
          
 ;;; Get the column name for a column field in a class.
 (define (get-column-name f cls)
-   (cdr (findf (lambda (c) (eq? f (car c))) (get-class-metadata columns cls))))
+   (second (findf (lambda (c) (eq? f (first c))) (get-class-metadata columns cls))))
 
 ;;; SQL where-clause for a key.
 (define (key-where-clause con cls key)
@@ -104,34 +160,36 @@
 ;;; Define a data class.
 (define-syntax (data-class stx)
   (syntax-parse stx 
-    [(data-class base-cls:id elem:data-class-element ...) 
+    [(_ base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
-         (define-member-name data-object-state-internal (get-field state-key m))
+         (define-member-name data-object-state (get-field state-key m))
          (class* base-cls (data-class<%>) elem.expr ... 
-           (field [data-object-state-internal 'new])
+           (field [data-object-state 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
-             (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (car k)))))
+             (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (first k)))))
              (set-field! joins m (append elem.jn-defs ...))
-             (unless (get-field external-name m) 
-               (set-field! external-name m (get-field table-name m)))
              (hash-set! *data-class-metadata* this% m))
            this))]))
 
 ;;; Define a data class with interfaces.
 (define-syntax (data-class* stx)
   (syntax-parse stx 
-    [(data-class base-cls:id (i-face:id ...) elem:data-class-element ...) 
+    [(_ base-cls:id (i-face:id ...) elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
-         (define-member-name data-object-state-internal (get-field state-key m))
+         (define-member-name data-object-state (get-field state-key m))
          (class* base-cls (data-class<%> i-face ...) elem.expr ... 
-           (field [data-object-state-internal 'new])
+           (field [data-object-state 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! columns m (append elem.col-defs ...))
              (set-field! joins m (append elem.jn-defs ...))
-             (unless (get-field external-name m) 
-               (set-field! external-name m (get-field table-name m)))
              (hash-set! *data-class-metadata* this% m))
            this))]))
+
+;;; Get a data column.
+(define-syntax-rule (get-column col obj) (get-field col obj))
+
+;;; Set a data column.
+(define-syntax-rule (set-column! col obj val) (set-field! col obj val))
 
 
 ;;; DATA CLASS GENERATION
@@ -165,6 +223,11 @@
 ;;; Find autoincrement key in the table schema.
 (define (has-autoincrement-key? schema) (vector? (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)))
   
+;;; Default name normalizer. Replaces underscores and mixed case with hyphens. Returns all lower case.
+(define mixed-case-norm-regexp (regexp "([a-z])([A-Z])"))
+(define (default-name-normalizer s) 
+  (string-downcase (string-replace (regexp-replace* mixed-case-norm-regexp s "\\1-\\2")  "_" "-")))
+
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
                         #:db-system-type (dbsys-type (dbsystem-name (connection-dbsystem con)))
@@ -172,10 +235,10 @@
                         #:generate-reverse-joins? (gen-rev-joins? #f)
                         #:schema-name (schema-nm #f)
                         #:inherits (base-cls 'object%)
-                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (string-downcase n) "%"))) 
-                        #:column-name-normalizer (col-nm-norm (lambda (n) (string-downcase n))) 
-                        #:join-name-normalizer (join-nm-norm (lambda (n) (string-downcase n))) 
-                        #:external-name-normalizer (ext-nm-norm (lambda (n) (string-downcase n)))
+                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (default-name-normalizer n) "%"))) 
+                        #:column-name-normalizer (col-nm-norm (lambda (n) (default-name-normalizer n))) 
+                        #:join-name-normalizer (join-nm-norm (lambda (n) (default-name-normalizer n))) 
+                        #:table-name-externalizer (tbl-nm-extern (lambda (n) (begin n)))
                         #:print? (prnt? #f)
                         . rest) 
   (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
@@ -184,8 +247,7 @@
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
-                                   (table-name #,tbl-nm)
-                                   (external-name #,(ext-nm-norm tbl-nm))
+                                   (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))
                                    #,(append '(column) (get-schema-columns schema col-nm-norm))
                                    #,(if (has-autoincrement-key? schema) (list 'primary-key pkey '#:autoincrement #t)
                                          (list 'primary-key pkey))
@@ -205,8 +267,45 @@
 (define (set-data-object! obj row)
   (map (lambda (f v) (dynamic-set-field! f obj v)) 
        (get-column-ids (object-class obj)) (vector->list row))
-  (define-member-name data-object-state-internal (get-class-metadata state-key (object-class obj)))
-  (set-field! data-object-state-internal obj 'loaded))
+  (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+  (set-field! data-object-state obj 'loaded))
+
+;;; Select a data object from the database.
+(define-syntax (select-data-object stx)
+  (syntax-parse stx
+    #:literals (join where)
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let* ([obj (new cls)]
+                [sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
+           (unless prnt? (set-data-object! obj (query-row con rest ...)))
+           (if prnt? sql obj)))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let* ([obj (new cls)]
+                [sql (select-sql con cls (string-append where-expr.expr ...))])
+           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
+           (if prnt? sql obj)))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:expr rest:expr ...)
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let* ([obj (new cls)]
+                [sql (select-sql con cls where-expr)])
+           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
+           (if prnt? sql obj)))]))
+
+;;; Select data objects from the database.
+(define-syntax (select-data-objects stx)
+  (syntax-parse stx
+    [(_ con:id cls:id where-expr:where-expr rest:expr ...)
+     #'(let* ([rows (query-rows con (select-sql con cls where-expr.expr ...) rest ...)]
+              [objs (make-list (length rows) (new cls))])
+         (map (lambda (o r) (set-data-object! o r)) objs rows)
+         objs)]
+    [(_ con:id cls:id where-expr:expr rest:expr ...)
+     #'(let* ([rows (query-rows con (select-sql con cls where-expr) rest ...)]
+              [objs (make-list (length rows) (new cls))])
+         (map (lambda (o r) (set-data-object! o r)) objs rows)
+         objs)]))
 
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey)
@@ -257,7 +356,7 @@
     ([_ id obj con] 
      #'(when (eq? (get-field id obj) #f)
          (let* ([cls (object-class obj)]
-                [jn-def (cdr (findf (lambda (f) (eq? 'id (car f))) (get-class-metadata joins (object-class obj))))]
+                [jn-def (second (findf (lambda (f) (eq? 'id (first f))) (get-class-metadata joins (object-class obj))))]
                 [jn-cls-expr (data-join-class jn-def)]
                 [jn-cls (cond
                           [(class? jn-cls-expr) jn-cls-expr]
@@ -270,103 +369,3 @@
                                                        (key-where-clause con jn-cls (data-join-key jn-def))
                                                        (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
      (get-field id obj)))))
-
-;;; Get a data column.
-; TODO: Track state
-(define-syntax-rule (get-column col obj) (get-field col obj))
-
-;;; Set a data column.
-(define-syntax-rule (set-column! col obj val) (set-field! col obj val))
-
-
-;;;; RQL 
-
-
-#| Model:
-(select (address% a)
-        (left-join state% (= abbr (a state)))
-        (and (like (person last-name) "A%")
-             (or (= (id #,(get-field id obj))
-                 (not (in city ("Chicago" "New York"))))
-             (between zip-code 10000 60999)))
-|#
-
-;;; Define RQL operators.
-(define-syntax rql-and [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " and " ) ")"))])
-(define-syntax rql-or [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " or " ) ")"))])
-(define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " (~a a) ... ")"))])
-(define-syntax rql-= [syntax-rules () ((_ a b) (string-append (~a a) " = " (~a b)))])
-(define-syntax rql-<> [syntax-rules () ((_ a b) (string-append (~a a) " <> " (~a b)))])
-(define-syntax rql->= [syntax-rules () ((_ a b) (string-append (~a a) " >= " (~a b)))])
-(define-syntax rql-<= [syntax-rules () ((_ a b) (string-append (~a a) " <= " (~a b)))])
-(define-syntax rql-> [syntax-rules () ((_ a b) (string-append (~a a) " > " (~a b)))])
-(define-syntax rql-< [syntax-rules () ((_ a b) (string-append (~a a) " < " (~a b)))])
-(define-syntax rql-like [syntax-rules () ((_ a b) (string-append (~a a) " like " (~a b)))])
-(define-syntax rql-in [syntax-rules () ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
-(define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
-(define-syntax rql-column [syntax-rules () ((_ a b) (string-append (~a a) "." (~a b)))])
-
-;;; Parse an RQL expression.
-(begin-for-syntax
-  (define-syntax-class rql-expr
-    #:literals (join where and or not = <> >= <= > < like in unquote)
-    (pattern and #:with (expr ...) #'(rql-and))
-    (pattern or #:with (expr ...) #'(rql-or))
-    (pattern not #:with (expr ...) #'(rql-not))
-    (pattern = #:with (expr ...) #'(rql-=))
-    (pattern <> #:with (expr ...) #'(rql-<>))
-    (pattern >= #:with (expr ...) #'(rql->=))
-    (pattern <= #:with (expr ...) #'(rql-<=))
-    (pattern > #:with (expr ...) #'(rql->))
-    (pattern < #:with (expr ...) #'(rql-<))
-    (pattern like #:with (expr ...) #'(rql-like))
-    (pattern in #:with (expr ...) #'(rql-in))
-    (pattern i:id #:with (expr ...) #'('i))
-    (pattern s:str #:with (expr ...) #'(s))
-    (pattern n:nat #:with (expr ...) #'(n))
-    (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
-    (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column 'p1 'p2)))
-    (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
-  (define-syntax-class rql-expr-list
-    (pattern (rql:rql-expr ...) #:with (expr ...) #'(rql.expr ... ...)))
-  (define-syntax-class join-expr 
-    (pattern (join table:id rql:rql-expr) #:with (expr ...) #'("join " (~a 'table) " on " rql.expr ... " ")))
-  (define-syntax-class where-expr 
-    (pattern (where rql:rql-expr) #:with (expr ...) #'("where " rql.expr ...))))
-
-;;; Select a data object from the database.
-(define-syntax (select-data-object stx)
-  (syntax-parse stx
-    #:literals (join where)
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
-     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let* ([obj (new cls)]
-                [sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
-           (unless prnt? (set-data-object! obj (query-row con rest ...)))
-           (if prnt? sql obj)))]
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
-     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let* ([obj (new cls)]
-                [sql (select-sql con cls (string-append where-expr.expr ...))])
-           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
-           (if prnt? sql obj)))]
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:expr rest:expr ...)
-     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let* ([obj (new cls)]
-                [sql (select-sql con cls where-expr)])
-           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
-           (if prnt? sql obj)))]))
-
-;;; Select data objects from the database.
-(define-syntax (select-data-objects stx)
-  (syntax-parse stx
-    [(_ con:id cls:id where-expr:where-expr rest:expr ...)
-     #'(let* ([rows (query-rows con (select-sql con cls where-expr.expr ...) rest ...)]
-              [objs (make-list (length rows) (new cls))])
-         (map (lambda (o r) (set-data-object! o r)) objs rows)
-         objs)]
-    [(_ con:id cls:id where-expr:expr rest:expr ...)
-     #'(let* ([rows (query-rows con (select-sql con cls where-expr) rest ...)]
-              [objs (make-list (length rows) (new cls))])
-         (map (lambda (o r) (set-data-object! o r)) objs rows)
-         objs)]))

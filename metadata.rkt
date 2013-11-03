@@ -61,8 +61,8 @@
 
 ;;; Get a list of column ids for a class.
 (define-syntax-rule (get-column-ids cls)
-  (map car (get-class-metadata columns cls)))
+  (map first (get-class-metadata columns cls)))
 
 ;;; Get a list of column names for a findf class.
 (define-syntax-rule (get-column-names cls)
-  (map cdr (get-class-metadata columns cls)))
+  (map second (get-class-metadata columns cls)))

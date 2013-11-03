@@ -10,7 +10,6 @@
 (define-syntax table-name (syntax-rules ()))
 (define-syntax init-column (syntax-rules ()))
 (define-syntax column (syntax-rules ()))
-(define-syntax external-name (syntax-rules ()))
 (define-syntax primary-key (syntax-rules ()))
 (define-syntax join (syntax-rules ()))
 (define-syntax where (syntax-rules ()))
