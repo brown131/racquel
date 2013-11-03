@@ -15,80 +15,7 @@
          (all-from-out "keywords.rkt"))
 
 
-;;;; RQL 
-
-
-#| Model:
-(select (address% a)
-        (left-join state% (= abbr (a state)))
-        (and (like (person last-name) "A%")
-             (or (= (id #,(get-field id obj))
-                 (not (in city ("Chicago" "New York"))))
-             (between zip-code 10000 60999)))
-|#
-
-
-;;; Define RQL operators.
-(define-syntax rql-and [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " and " ) ")"))])
-(define-syntax rql-or [syntax-rules () ((_ a ...) (string-append "(" (string-join (list (~a a) ...) " or " ) ")"))])
-(define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " (~a a) ... ")"))])
-(define-syntax rql-= [syntax-rules () ((_ a b) (string-append (~a a) " = " (~a b)))])
-(define-syntax rql-<> [syntax-rules () ((_ a b) (string-append (~a a) " <> " (~a b)))])
-(define-syntax rql->= [syntax-rules () ((_ a b) (string-append (~a a) " >= " (~a b)))])
-(define-syntax rql-<= [syntax-rules () ((_ a b) (string-append (~a a) " <= " (~a b)))])
-(define-syntax rql-> [syntax-rules () ((_ a b) (string-append (~a a) " > " (~a b)))])
-(define-syntax rql-< [syntax-rules () ((_ a b) (string-append (~a a) " < " (~a b)))])
-(define-syntax rql-like [syntax-rules () ((_ a b) (string-append (~a a) " like " (~a b)))])
-(define-syntax rql-in [syntax-rules () ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
-(define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
-(define-syntax rql-column [syntax-rules () ((_ a b) (string-append (~a a) "." (~a b)))])
-
-;;; Parse an RQL expression.
-(begin-for-syntax
-  (define-syntax-class rql-expr
-    #:literals (join where and or not = <> >= <= > < like in unquote)
-    (pattern and #:with (expr ...) #'(rql-and))
-    (pattern or #:with (expr ...) #'(rql-or))
-    (pattern not #:with (expr ...) #'(rql-not))
-    (pattern = #:with (expr ...) #'(rql-=))
-    (pattern <> #:with (expr ...) #'(rql-<>))
-    (pattern >= #:with (expr ...) #'(rql->=))
-    (pattern <= #:with (expr ...) #'(rql-<=))
-    (pattern > #:with (expr ...) #'(rql->))
-    (pattern < #:with (expr ...) #'(rql-<))
-    (pattern like #:with (expr ...) #'(rql-like))
-    (pattern in #:with (expr ...) #'(rql-in))
-    (pattern i:id #:with (expr ...) #'('i))
-    (pattern s:str #:with (expr ...) #'(s))
-    (pattern n:nat #:with (expr ...) #'(n))
-    (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
-    (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column 'p1 'p2)))
-    (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
-  (define-syntax-class rql-expr-list
-    (pattern (rql:rql-expr ...) #:with (expr ...) #'(rql.expr ... ...)))
-  (define-syntax-class join-expr 
-    (pattern (join table:id rql:rql-expr) #:with (expr ...) #'("join " (~a 'table) " on " rql.expr ... " ")))
-  (define-syntax-class where-expr 
-    (pattern (where rql:rql-expr) #:with (expr ...) #'("where " rql.expr ...))))
-
-
 ;;;; DATA CLASS DEFINITION
-
-
-#| Model:
-(data-class object% 
-            (table-name "TST_Person" "Person") 
-            (init-column (id "id"))
-            (column (name #f "name")
-                    (description #f "description")
-                    (address-id #f "address_id"))
-            (join (vehicles id vehicle% person-id)
-                  (address address-id 'address% id))
-            (primary-key id #:autoincrement #t)
-            (field (data #f))
-            (super-new)
-            (inspect #f))
-|#
    
 ;;; Return the state of a data object.
 (define (data-object-state obj)
@@ -163,7 +90,7 @@
     [(_ base-cls:id elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
          (define-member-name data-object-state (get-field state-key m))
-         (class* base-cls (data-class<%>) elem.expr ... 
+         (class* base-cls (data-class<%>) elem.expr ...
            (field [data-object-state 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (first k)))))
@@ -177,7 +104,7 @@
     [(_ base-cls:id (i-face:id ...) elem:data-class-element ...) 
      #'(let* ([m (new data-class-metadata%)])
          (define-member-name data-object-state (get-field state-key m))
-         (class* base-cls (data-class<%> i-face ...) elem.expr ... 
+         (class* base-cls (data-class<%> i-face ...) elem.expr ...
            (field [data-object-state 'new])
            (unless (hash-has-key? *data-class-metadata* this%)
              (set-field! columns m (append elem.col-defs ...))
@@ -190,6 +117,29 @@
 
 ;;; Set a data column.
 (define-syntax-rule (set-column! col obj val) (set-field! col obj val))
+
+;;; Get joined data objects. This will select the objects on first use.
+(define-syntax (get-join stx)
+  (syntax-case stx ()
+    ([_ jn-fld obj con] 
+     #'(when (eq? (get-field id obj) #f)
+         (let* ([cls (object-class obj)]
+                [jn-def (second (findf (lambda (f) (eq? 'jn-fld (first f))) (get-class-metadata joins (object-class obj))))]
+                [jn-cls-expr (data-join-class jn-def)]
+                [jn-cls (cond
+                          [(class? jn-cls-expr) jn-cls-expr]
+                          [(symbol? jn-cls-expr) 
+                           (findf (lambda (k) (string=? (~a k) (string-append "#<class:" (symbol->string jn-cls-expr) ">"))) 
+                                  (hash-keys *data-class-metadata*))])]
+                [jn-selector (eval (data-join-selector jn-def))])
+           (set-field! jn-fld obj (jn-selector con))
+           (when (and (eq? (data-join-cardinality jn-def) 'one-to-one) (> (get-field jn-fld obj) 0))
+                    (set-field! jn-fld obj (first (get-field jn-fld obj))))
+                                  ;(make-data-object con jn-cls (dynamic-get-field (data-join-foreign-key jn-def) obj))
+                                  ;(select-data-objects con jn-cls 
+                                  ;                     (key-where-clause con jn-cls (data-join-key jn-def))
+                                  ;                     (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
+     (get-field id obj))))))
 
 
 ;;; DATA CLASS GENERATION
@@ -349,23 +299,3 @@
     (apply query-exec con sql pkey)
     (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
     (set-field! data-object-state obj 'deleted)))
-
-;;; Get joined data objects. This will select the objects on first use.
-(define-syntax (get-join stx)
-  (syntax-case stx ()
-    ([_ id obj con] 
-     #'(when (eq? (get-field id obj) #f)
-         (let* ([cls (object-class obj)]
-                [jn-def (second (findf (lambda (f) (eq? 'id (first f))) (get-class-metadata joins (object-class obj))))]
-                [jn-cls-expr (data-join-class jn-def)]
-                [jn-cls (cond
-                          [(class? jn-cls-expr) jn-cls-expr]
-                          [(symbol? jn-cls-expr) 
-                           (findf (lambda (k) (string=? (~a k) (string-append "#<class:" (symbol->string jn-cls-expr) ">"))) 
-                                  (hash-keys *data-class-metadata*))])])
-           (set-field! id obj (if (eq? (data-join-cardinality jn-def) 'one-to-one) 
-                                  (make-data-object con jn-cls (dynamic-get-field (data-join-foreign-key jn-def) obj))
-                                  (select-data-objects con jn-cls 
-                                                       (key-where-clause con jn-cls (data-join-key jn-def))
-                                                       (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
-     (get-field id obj)))))

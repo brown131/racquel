@@ -7,12 +7,7 @@
 
 (require "util.rkt")
 
-(provide data-class-metadata% *data-class-metadata* data-class<%>
-         data-join data-join-foreign-key 
-         data-join-class data-join-key data-join-cardinality
-         get-class-metadata-object get-class-metadata set-class-metadata!
-         dynamic-get-class-metadata dynamic-set-class-metadata!
-         data-class-info get-column-ids get-column-names)
+(provide (all-defined-out))
 
 ;;; Define data class metadata struct.
 (define data-class-metadata% 
@@ -31,7 +26,7 @@
 (define *data-class-metadata* (make-weak-hash))
 
 ;;; Define data join struct.
-(define-struct data-join (foreign-key class key cardinality))
+(define-struct data-join (class cardinality selector) #:mutable)
 
 (define-syntax-rule (get-class-metadata-object cls)  
   (begin (unless (hash-has-key? *data-class-metadata* cls) 

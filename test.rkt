@@ -25,8 +25,8 @@
 
 ;;; Database system to test.
 (define *test-dbsys-type* 
-  ;'mysql
-  'postgresql
+  'mysql
+  ;'postgresql
   )
 
 ;;; Database connection for testing.
@@ -56,7 +56,7 @@
                                          [name #f ("name" "Name")] 
                                          [description #f ("description" "Description")])
                                  (init-column [x ("x" "X")])
-                                 (join [object id object% id])
+                                 ;(join [object id object% id])
                                  (primary-key id)
                                  (define/public (test) (x + 1))
                                  (inspect #f)
@@ -309,15 +309,14 @@
              (table-name "person" "Person")  
              (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
              (primary-key id #:autoincrement #t)
-             (join (addresses id 'address% person-id))
-             ;(join (addresses address% (where (= person-id ?) id)))
+             (join (addresses 'address% (where (= person-id ?) id)))
              (super-new)
              (inspect #f))]
         [address% (data-class object% 
              (table-name "address"  "Address")  
              (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
              (primary-key id #:autoincrement #t)
-             (join (person person-id person% id 'one-to-one))
+             (join (person person% #:cardinality 'one-to-one (where (= id ?) person-id)))
              (super-new)
              (inspect #f))]
         [person-obj (new person%)]
@@ -335,10 +334,9 @@
                               '((age "age" "age") (first-name "first_name" "first_name") (id "id" "id") 
                                 (last-name "last_name" "last_name")))
                 (check-equal? (map first j-defs) '(addresses))
-                (check-equal? (data-join-foreign-key (first (map second j-defs))) 'id)
                 (check-equal? (data-join-class (first (map second j-defs))) 'address%)
-                (check-equal? (data-join-key (first (map second j-defs))) 'person-id)
                 (check-equal? (data-join-cardinality (first (map second j-defs))) 'one-to-many)
+                (check-equal? (data-join-selector (first (map second j-defs))) #f)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Person")
@@ -360,10 +358,9 @@
                               '((city "city" "city") (id "id" "id") (line "line" "line") (person-id "person_id" "person_id")
                                 (state "state" "state") (zip-code "zip_code" "zip_code")))
                 (check-equal? (map first j-defs) '(person))
-                (check-equal? (data-join-foreign-key (first (map second j-defs))) 'person-id)
                 (check-equal? (data-join-class (first (map second j-defs))) person%)
-                (check-equal? (data-join-key (first (map second j-defs))) 'id)
                 (check-equal? (data-join-cardinality (first (map second j-defs))) 'one-to-one)
+                (check-equal? (data-join-selector (first (map second j-defs))) #f)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Address")
@@ -402,7 +399,7 @@
                                                             (state #f "state")
                                                             (zip-code #f "zip_code"))
                                                            (primary-key id #:autoincrement #t)
-                                                           (join (person "person_id" "person" "id"))
+                                                           ;(join (person "person_id" "person" "id"))
                                                            (super-new)
                                                            (inspect #f))))
                                                      address%)))
