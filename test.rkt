@@ -56,7 +56,7 @@
                                          [name #f ("name" "Name")] 
                                          [description #f ("description" "Description")])
                                  (init-column [x ("x" "X")])
-                                 ;(join [object id object% id])
+                                 (join [object object% #:cardinality 'one-to-one (where (= id ?)) 1])
                                  (primary-key id)
                                  (define/public (test) (x + 1))
                                  (inspect #f)
@@ -105,7 +105,7 @@
    (test-case "delete sql ok?" (check-equal? (delete-sql *con* test-class%) 
                                              (sql-placeholder "delete from test where id=?" *test-dbsys-type*)))
    (test-case "select sql ok?"  (check-equal? (select-sql *con* test-class% "where id=?") 
-                                              (sql-placeholder "select description, id, name, x from test t where id=?" *test-dbsys-type*)))
+                                              (sql-placeholder "select description, id, name, x from test where id=?" *test-dbsys-type*)))
    )
 )
 
@@ -125,7 +125,7 @@
     (test-case "schema columns ok?" (check-equal? (sort (get-schema-columns schema column-name-normalizer) 
                                                          string<? #:key (lambda (k) (symbol->string (first k))))
                                                   '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
-    (test-case "schema joins ok?" (check-eq? (get-schema-joins schema join-name-normalizer #t #f) null))
+    (test-case "schema joins ok?" (check-eq? (get-schema-joins schema join-name-normalizer column-name-normalizer #t #f) null))
     (test-case "primary key fields found?" (check-eq? (find-primary-key-fields schema) 'id))
     (test-case "autoincrement key found?" (check-false (has-autoincrement-key? schema)))
     ))
@@ -181,7 +181,7 @@
                                              (sql-placeholder "delete from simple where id=?" *test-dbsys-type*)))
    (test-case "select sql ok?" 
               (check-equal? (select-sql *con* simple% "where id=?") 
-                            (sql-placeholder "select description, id, name, x from simple t where id=?" *test-dbsys-type*)))
+                            (sql-placeholder "select description, id, name, x from simple where id=?" *test-dbsys-type*)))
   
    (test-case "columns set?"
               (set-column! id obj 23)
@@ -260,7 +260,7 @@
                                              (sql-placeholder "delete from auto where id=?" *test-dbsys-type*)))
    (test-case "select sql ok?" 
               (check-equal? (select-sql *con* auto% "where id=?") 
-                            (sql-placeholder "select description, id, name from auto t where id=?" *test-dbsys-type*)))
+                            (sql-placeholder "select description, id, name from auto where id=?" *test-dbsys-type*)))
   
    (test-case "columns set?"
               (set-column! name obj "test")
@@ -309,14 +309,14 @@
              (table-name "person" "Person")  
              (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
              (primary-key id #:autoincrement #t)
-             (join (addresses 'address% (where (= person-id ?) id)))
+             (join (addresses 'address% (where (= (address% person-id) ?)) id))
              (super-new)
              (inspect #f))]
         [address% (data-class object% 
              (table-name "address"  "Address")  
              (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
              (primary-key id #:autoincrement #t)
-             (join (person person% #:cardinality 'one-to-one (where (= id ?) person-id)))
+             (join (person person% #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
              (super-new)
              (inspect #f))]
         [person-obj (new person%)]
@@ -334,9 +334,8 @@
                               '((age "age" "age") (first-name "first_name" "first_name") (id "id" "id") 
                                 (last-name "last_name" "last_name")))
                 (check-equal? (map first j-defs) '(addresses))
-                (check-equal? (data-join-class (first (map second j-defs))) 'address%)
-                (check-equal? (data-join-cardinality (first (map second j-defs))) 'one-to-many)
-                (check-equal? (data-join-selector (first (map second j-defs))) #f)
+                (check-equal? (first (map second j-defs)) 'address%)
+                (check-equal? (first (map third j-defs)) 'one-to-many)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Person")
@@ -358,9 +357,8 @@
                               '((city "city" "city") (id "id" "id") (line "line" "line") (person-id "person_id" "person_id")
                                 (state "state" "state") (zip-code "zip_code" "zip_code")))
                 (check-equal? (map first j-defs) '(person))
-                (check-equal? (data-join-class (first (map second j-defs))) person%)
-                (check-equal? (data-join-cardinality (first (map second j-defs))) 'one-to-one)
-                (check-equal? (data-join-selector (first (map second j-defs))) #f)
+                (check-equal? (first (map second j-defs)) person%)
+                (check-equal? (first (map third j-defs)) 'one-to-one)
                 (check-eq? pkey 'id)
                 (check-eq? auto-key 'id)
                 (check-eq? ext-nm "Address")
@@ -399,7 +397,7 @@
                                                             (state #f "state")
                                                             (zip-code #f "zip_code"))
                                                            (primary-key id #:autoincrement #t)
-                                                           ;(join (person "person_id" "person" "id"))
+                                                           (join (person "person%" #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
                                                            (super-new)
                                                            (inspect #f))))
                                                      address%)))
@@ -470,7 +468,7 @@
                                     #:column-name-normalizer column-name-normalizer)]
           [obj (new address%)])
      (test-case "select sql ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= id 1))) 
-"select city, id, line, person_id, state, zip_code from address t where id = 1"))
+"select city, id, line, person_id, state, zip_code from address where id = 1"))
      (test-case "rql select runs?" 
                 (check-true (is-a? (select-data-object *con* address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
      (test-case "selected with rql?"
@@ -482,26 +480,26 @@
                   (check-equal? (get-field city a) "Chicago")
                   (check-eq? (data-object-state a) 'loaded)))
      (test-case "select join sql ok?" 
-                (check-equal? (select-data-object *con* address% #:print? #t (join person (= (person id) person_id)) (where (= id 1)))
-"select city, id, line, person_id, state, zip_code from address t join person on person.id = person_id where id = 1"))
+                (check-equal? (select-data-object *con* address% #:print? #t (join person (= (person% id) person_id)) (where (= id 1)))
+"select city, id, line, person_id, state, zip_code from address join person on person.id = person_id where id = 1"))
      
-     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city = ?" *test-dbsys-type*)))
-     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<> city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city <> ?" *test-dbsys-type*)))
-     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (>= city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city >= ?" *test-dbsys-type*)))
-     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<= city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city <= ?" *test-dbsys-type*)))
-     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (> city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city > ?" *test-dbsys-type*)))
-     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (< city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city < ?" *test-dbsys-type*)))                
+     (test-case "select = ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city = ?" *test-dbsys-type*)))
+     (test-case "select <> ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<> city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city <> ?" *test-dbsys-type*)))
+     (test-case "select >= ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (>= city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city >= ?" *test-dbsys-type*)))
+     (test-case "select <= ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<= city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city <= ?" *test-dbsys-type*)))
+     (test-case "select > ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (> city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city > ?" *test-dbsys-type*)))
+     (test-case "select < ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (< city ?)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city < ?" *test-dbsys-type*)))                
      (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (like city ?)))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where city like ?" *test-dbsys-type*)))
-     (test-case "select quote ok?" 
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where city like ?" *test-dbsys-type*)))
+     (test-case "select in ok?" 
                 (check-equal? (select-data-object *con* address% #:print? #t (where (in id ,(make-list 3 "?"))))
-(sql-placeholder "select city, id, line, person_id, state, zip_code from address t where id in (?,?,?)" *test-dbsys-type*)))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where id in (?,?,?)" *test-dbsys-type*)))
      ))
 
 

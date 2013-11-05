@@ -5,6 +5,8 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
+(require "metadata.rkt")
+
 (provide (all-defined-out))
  
 (define-syntax table-name (syntax-rules ()))
@@ -30,4 +32,5 @@
 (define-syntax rql-like [syntax-rules () ((_ a b) (string-append (~a a) " like " (~a b)))])
 (define-syntax rql-in [syntax-rules () ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
 (define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
-(define-syntax rql-column [syntax-rules () ((_ a b) (string-append (~a a) "." (~a b)))])
+(define-syntax rql-column-pair [syntax-rules () ((_ a b) (string-append (get-class-metadata table-name (get-class a)) 
+                                                                        "." (get-column-name b (get-class a))))])

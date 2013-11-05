@@ -6,7 +6,7 @@
 ;;;; Copyright (c) Scott Brown 2013
 
 (require syntax/parse
-         (for-template db "keywords.rkt" "metadata.rkt" "schema.rkt" "util.rkt" racket))
+         (for-template db "keywords.rkt" "metadata.rkt" "util.rkt" racket))
 
 (provide (all-defined-out))
 
@@ -42,7 +42,7 @@
   (pattern s:str #:with (expr ...) #'(s))
   (pattern n:nat #:with (expr ...) #'(n))
   (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
-  (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column 'p1 'p2)))
+  (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column-pair 'p1 'p2)))
   (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
 
 (define-syntax-class rql-expr-list
@@ -118,63 +118,61 @@
            #:with expr #'((icol xcol) val) 
            #:attr col-def #'(list 'xcol col-nm ext-nm)))
 
+#|
+(define-syntax (test stx) (syntax-parse stx
+    [(test i:id)
+       (with-syntax ([get-join (datum->syntax stx (string->symbol (format "get-join-~a" (syntax->datum #'i))))])
+         #'(define (get-join x) (+ x 2)))]))
+|#
+
 (define-syntax-class join-def
   #:description "join definition"
-  (pattern (jcol:id jcls:expr where-expr:where-expr rest:expr ...) 
+  (pattern (jcol:id jcls:expr (~optional (~seq #:cardinality card:expr) #:defaults ([card #''one-to-many])) where:where-expr rest:expr ...) 
            #:with expr #'(jcol #f) 
-           #:attr j-col #'jcol
-           #:attr j-def #'(list 'jcol (data-join jcls 'one-to-many 
-                  (lambda (con) 
-                   (let* ([dbsys-type (dbsystem-name (connection-dbsystem con))]
-                          [col-nms (sort (get-column-names jcls) string<?)]
-                          [rows (query-rows con (string-append "select " (string-join col-nms ", ")
-                                                               " from " (get-class-metadata table-name jcls) " t "
-                                                               (sql-placeholder where-expr dbsys-type)) rest ...)]
-                          [objs (make-list (length rows) (new jcls))])
-                     (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
-                                             (get-column-ids (object-class o)) (vector->list r))
-                            (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
-                            (set-field! data-object-state o 'loaded)) objs rows)
-                     objs))))))
-
-#|  (pattern (jcol:id jcls:id (~optional (~seq #:cardinality card:expr)) where-expr:expr rest:expr ...) 
-           #:with expr #'(jcol #f) 
-           #:attr j-col #'jcol
-           #:attr j-def #'(list 'jcol (data-join jcls card (lambda (con) (set-data-object! con con cls where-expr rest ...))))))|#
+           #:attr j-row #'((eq? jn-fld 'jcol) (query-rows con (select-sql con jn-cls (string-append where.expr ...)) rest ...))
+           #:attr j-def #'(list 'jcol jcls card)))
 
 (define-syntax-class data-class-element
   #:description "data class element" 
   #:literals (table-name init-column column join primary-key)
-  #:attributes (expr col-defs jn-defs)
+  #:attributes (expr col-defs jn-rows jn-defs)
   (pattern (table-name tbl-nm:str) 
            #:with expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m tbl-nm))
            #:attr col-defs #'null 
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (table-name tbl-nm:str extern-nm:str) 
            #:with expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m extern-nm))
            #:attr col-defs #'null 
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (init-column cl-def:init-column-def ...) 
            #:with expr #'(init-field cl-def.expr ...)
            #:attr col-defs #'(list cl-def.col-def ...)
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (column cl-def:column-def ...) 
            #:with expr #'(field cl-def.expr ...) 
            #:attr col-defs #'(list cl-def.col-def ...) 
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (join jn-def:join-def ...) 
            #:with expr #'(field jn-def.expr ...)
            #:attr col-defs #'null 
+           #:attr jn-rows #'(cond jn-def.j-row ...)
            #:attr jn-defs #'(list jn-def.j-def ...))
   (pattern (primary-key pkey:id #:autoincrement flag:boolean) 
            #:with expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m 'pkey)))
            #:attr col-defs #'null 
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:id) 
            #:with expr #'(set-field! primary-key m 'pkey) 
            #:attr col-defs #'null 
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (x:expr ...)            
            #:with expr #'(x ...) 
            #:attr col-defs #'null 
+           #:attr jn-rows #'null 
            #:attr jn-defs #'null))

@@ -25,9 +25,8 @@
 ;;; Set autoincrement id.
 (define (set-autoincrement-id! con obj)
   (when (get-class-metadata autoincrement-key (object-class obj))
-    (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
-      (dynamic-set-field! (get-class-metadata autoincrement-key (object-class obj)) obj
-                          (query-value con (sql-autoincrement dbsys-type))))))
+    (dynamic-set-field! (get-class-metadata autoincrement-key (object-class obj)) obj
+                        (query-value con (sql-autoincrement (dbsystem-type con))))))
 
 ;;; Primary key fields
 (define (primary-key-fields cls)
@@ -41,48 +40,33 @@
 (define (savable-fields con cls)
   (sort (foldl (lambda (f l) 
            (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-column-ids cls)) string<? #:key symbol->string))
-         
-;;; Get the column name for a column field in a class.
-(define (get-column-name f cls)
-   (second (findf (lambda (c) (eq? f (first c))) (get-class-metadata columns cls))))
 
 ;;; SQL where-clause for a key.
 (define (key-where-clause con cls key)
-  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
-    (string-append " where " (sql-placeholder (string-join (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
-                                                                (if (list? key) key (list key))) " and ") dbsys-type))))
+  (string-append " where " (sql-placeholder (string-join (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
+                                                              (if (list? key) key (list key))) " and ") (dbsystem-type con))))
 
 ;;; Insert SQL.
 (define (insert-sql con cls)
-  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))]
-        [col-nms (map (lambda (f) (get-column-name f cls)) (savable-fields con cls))])
+  (let ([col-nms (map (lambda (f) (get-column-name f cls)) (savable-fields con cls))])
     (string-append "insert into " (get-class-metadata table-name cls)
                    " (" (string-join col-nms ", ") ")"
-                   " values (" (sql-placeholder (string-join (make-list (length col-nms) "?") ", ") dbsys-type) ")")))
+                   " values (" (sql-placeholder (string-join (make-list (length col-nms) "?") ", ") (dbsystem-type con)) ")")))
 
 ;;; Update SQL.
 (define (update-sql con cls)
-  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))]
-        [key (primary-key-fields cls)]
+  (let ([key (primary-key-fields cls)]
         [values (sort (foldr (lambda (f l) (cons (string-append (get-column-name f cls) "=?") l)) 
                        null (savable-fields con cls)) string<?)])
     (sql-placeholder (string-append "update " (get-class-metadata table-name cls)
                                     " set " (string-join values ", ")
                                     " where " (string-join (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
-                                                                (if (list? key) key (list key))) " and ")) dbsys-type)))
+                                                                (if (list? key) key (list key))) " and ")) (dbsystem-type con))))
 
 ;;; Delete SQL.
 (define (delete-sql con cls)
   (string-append "delete from " (get-class-metadata table-name cls)
                  (key-where-clause con cls (primary-key-fields cls))))
-
-;;; Select SQL.
-(define (select-sql con cls where-clause)
-  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))]
-        [col-nms (sort (get-column-names cls) string<?)])
-    (string-append "select " (string-join col-nms ", ")
-                   " from " (get-class-metadata table-name cls) " t "
-                   (sql-placeholder where-clause dbsys-type))))
 
 ;;; Define a data class.
 (define-syntax (data-class stx)
@@ -96,6 +80,15 @@
              (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (first k)))))
              (set-field! joins m (append elem.jn-defs ...))
              (hash-set! *data-class-metadata* this% m))
+           (define/public (set-data-join! con jn-fld jn-cls)
+             (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
+                    [rows (append elem.jn-rows ...)]
+                    [objs (make-list (length rows) (new jn-cls))])
+               (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
+                                       (get-column-ids (object-class o)) (vector->list r))
+                      (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
+                      (set-field! data-object-state o 'loaded)) objs rows)
+               objs))
            this))]))
 
 ;;; Define a data class with interfaces.
@@ -110,6 +103,15 @@
              (set-field! columns m (append elem.col-defs ...))
              (set-field! joins m (append elem.jn-defs ...))
              (hash-set! *data-class-metadata* this% m))
+           (define/public (set-data-join! con jn-fld jn-cls)
+             (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
+                    [rows (append elem.jn-rows ...)]
+                    [objs (make-list (length rows) (new jn-cls))])
+               (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
+                                       (get-column-ids (object-class o)) (vector->list r))
+                      (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
+                      (set-field! data-object-state o 'loaded)) objs rows)
+              rows)); objs))
            this))]))
 
 ;;; Get a data column.
@@ -122,24 +124,17 @@
 (define-syntax (get-join stx)
   (syntax-case stx ()
     ([_ jn-fld obj con] 
-     #'(when (eq? (get-field id obj) #f)
-         (let* ([cls (object-class obj)]
-                [jn-def (second (findf (lambda (f) (eq? 'jn-fld (first f))) (get-class-metadata joins (object-class obj))))]
-                [jn-cls-expr (data-join-class jn-def)]
-                [jn-cls (cond
-                          [(class? jn-cls-expr) jn-cls-expr]
-                          [(symbol? jn-cls-expr) 
-                           (findf (lambda (k) (string=? (~a k) (string-append "#<class:" (symbol->string jn-cls-expr) ">"))) 
-                                  (hash-keys *data-class-metadata*))])]
-                [jn-selector (eval (data-join-selector jn-def))])
-           (set-field! jn-fld obj (jn-selector con))
-           (when (and (eq? (data-join-cardinality jn-def) 'one-to-one) (> (get-field jn-fld obj) 0))
-                    (set-field! jn-fld obj (first (get-field jn-fld obj))))
-                                  ;(make-data-object con jn-cls (dynamic-get-field (data-join-foreign-key jn-def) obj))
-                                  ;(select-data-objects con jn-cls 
-                                  ;                     (key-where-clause con jn-cls (data-join-key jn-def))
-                                  ;                     (dynamic-get-field (data-join-foreign-key jn-def) obj)))))
-     (get-field id obj))))))
+     #'(begin
+         (when (eq? (get-field jn-fld obj) #f)
+           (let* ([jn-def (get-join-definition jn-fld (object-class obj))]
+                  [jn-cls-expr (second jn-def)]
+                  [jn-cls (cond [(class? jn-cls-expr) jn-cls-expr]
+                                [(symbol? jn-cls-expr) (get-class jn-cls-expr)])])             
+             (set-field! jn-fld obj (send obj set-data-join! con 'jn-fld jn-cls))
+             (when (and (equal? (third jn-def) 'one-to-one) (> (length (get-field jn-fld obj)) 0))
+               (set-field! jn-fld obj (first (get-field jn-fld obj))))))
+         (get-field jn-fld obj)))))
+
 
 
 ;;; DATA CLASS GENERATION
@@ -156,11 +151,16 @@
           string<? #:key (lambda (k) (symbol->string (first k))))))
 
 ;;; Get joins from the schema.
-(define (get-schema-joins schema join-nm-norm gen-joins? gen-rev-joins?)
+(define (get-schema-joins schema join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)
   (if (or gen-joins? gen-rev-joins?) 
-      (foldl (lambda (f l) (if (or (equal? (vector-ref f 1) "F") (equal? (vector-ref f 1) "R"))
+      (foldl (lambda (f l) (let ([jn-cls (get-table-class (vector-ref f 4))])
+                             (if (or (equal? (vector-ref f 1) "F") (equal? (vector-ref f 1) "R"))
                                (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
-                                           (vector-ref f 0) (vector-ref f 4) (vector-ref f 5)) l) l))
+                                           (symbol->string (get-class-name jn-cls))
+                                           '#:cardinality (if (equal? (vector-ref f 1) "P") ''one-to-one ''one-to-many)
+                                           `(where (= (,(get-class-name jn-cls) ,(string->symbol (vector-ref f 5))) ?)) 
+                                           (string->symbol (col-nm-norm (vector-ref f 0))))
+                               l) l)))
              null schema) null))
 
 ;;; Find primary key fields in a table schema.
@@ -180,7 +180,7 @@
 
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
-                        #:db-system-type (dbsys-type (dbsystem-name (connection-dbsystem con)))
+                        #:db-system-type (dbsys-type (dbsystem-type con))
                         #:generate-joins? (gen-joins? #t)
                         #:generate-reverse-joins? (gen-rev-joins? #f)
                         #:schema-name (schema-nm #f)
@@ -192,9 +192,9 @@
                         #:print? (prnt? #f)
                         . rest) 
   (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
-         [jns (get-schema-joins schema join-nm-norm gen-joins? gen-rev-joins?)]
-         [pkey (find-primary-key-fields schema)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
+         [pkey (find-primary-key-fields schema)]
+         [jns (get-schema-joins schema join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))
