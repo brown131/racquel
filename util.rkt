@@ -26,3 +26,17 @@
     (string-append "select " (string-join col-nms ", ") 
                    " from " (get-class-metadata table-name cls) " "
                    (sql-placeholder where-clause (dbsystem-type con)))))
+
+; Create a new multidimensional hash table.
+(define (make-multi-hash) (make-hash))
+
+; Set a value given a non-empty sequence of keys.
+(define (multi-hash-set! hash-tbl value . keys)
+  (if (null? (cdr keys)) (hash-set! hash-tbl (car keys) value)
+      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-set! (hash-ref hash-tbl (car keys)) value (cdr keys)) 
+          (let ([h (make-multi-hash)]) (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
+          
+; Retrieve a value given a non-empty sequence of keys.
+(define (multi-hash-ref hash-tbl . keys) 
+  (if (null? (cdr keys)) (if (hash-has-key? hash-tbl (car keys)) (hash-ref hash-tbl (car keys)) #f)
+      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
