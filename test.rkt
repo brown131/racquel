@@ -4,7 +4,7 @@
 ;;;; test - Test module for the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
-(require rackunit rackunit/text-ui db json racquel "metadata.rkt" "schema.rkt")
+(require rackunit rackunit/text-ui db json racquel "metadata.rkt" "schema.rkt" "util.rkt")
 
 (require/expose racquel (savable-fields 
                          key-where-clause
@@ -12,8 +12,6 @@
                          insert-sql 
                          update-sql 
                          delete-sql 
-                         select-sql
-                         object-class
                          get-schema-columns
                          get-schema-joins
                          find-primary-key-fields
@@ -118,14 +116,15 @@
 (define (join-name-normalizer n) (string-downcase n))
                                      
 (define-test-suite test-schema
-  (let* ([schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f 
-                              #:db-system-type (dbsystem-name (connection-dbsystem *con*)))])
+  (let* ([dbsys-type (dbsystem-name (connection-dbsystem *con*))]
+         [schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f #:db-system-type dbsys-type)])
     (test-case "schema loaded?" (check-eq? (length schema) 4))
     
     (test-case "schema columns ok?" (check-equal? (sort (get-schema-columns schema column-name-normalizer) 
                                                          string<? #:key (lambda (k) (symbol->string (first k))))
                                                   '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
-    (test-case "schema joins ok?" (check-eq? (get-schema-joins schema join-name-normalizer column-name-normalizer #t #f) null))
+    (test-case "schema joins ok?" (check-eq? (get-schema-joins *con* *schema-name* schema dbsys-type 
+                                                               join-name-normalizer column-name-normalizer #t #f) null))
     (test-case "primary key fields found?" (check-eq? (find-primary-key-fields schema) 'id))
     (test-case "autoincrement key found?" (check-false (has-autoincrement-key? schema)))
     ))
@@ -397,7 +396,7 @@
                                                             (state #f "state")
                                                             (zip-code #f "zip_code"))
                                                            (primary-key id #:autoincrement #t)
-                                                           (join (person "person%" #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
+                                                           (join (person 'person% #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
                                                            (super-new)
                                                            (inspect #f))))
                                                      address%)))

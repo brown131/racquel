@@ -151,17 +151,22 @@
           string<? #:key (lambda (k) (symbol->string (first k))))))
 
 ;;; Get joins from the schema.
-(define (get-schema-joins schema join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)
-  (if (or gen-joins? gen-rev-joins?) 
-      (foldl (lambda (f l) (let ([jn-cls (get-table-class (vector-ref f 4))])
-                             (if (or (equal? (vector-ref f 1) "F") (equal? (vector-ref f 1) "R"))
-                               (cons (list (string->symbol (join-nm-norm (vector-ref f 4))) 
-                                            #`'#,(get-class-name jn-cls)
-                                            #'#:cardinality (if (equal? (vector-ref f 1) "P") #''one-to-one #''one-to-many)
-                                            #`(where (= (#,(get-class-name jn-cls) #,(string->symbol (vector-ref f 5))) ?)) 
-                                           (string->symbol (col-nm-norm (vector-ref f 0))))
-                               l) l)))
-             null schema) null))
+;;; TODO: NEEDS TO SUPPORT MULTI-PART KEYS
+(define (get-schema-joins con schema-nm schema dbsys-type join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)
+  (let ([jn-cardinality (lambda (jn-tbl-nm jn-key) 
+                          (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
+                                 [row (findf (lambda (r) (equal? (vector-ref r 0) jn-key)) jn-schema)])
+                                 (if (equal? (vector-ref row 1) "P") #''one-to-one #''one-to-many)))])
+    (if (or gen-joins? gen-rev-joins?) 
+        (foldl (lambda (r l) (let ([jn-cls (get-table-class (vector-ref r 4))])
+                               (if (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R"))
+                                   (cons (list (string->symbol (join-nm-norm (vector-ref r 4))) 
+                                               #`'#,(get-class-name jn-cls)
+                                               #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
+                                               #`(where (= (#,(get-class-name jn-cls) #,(string->symbol (vector-ref r 5))) ?)) 
+                                               (string->symbol (col-nm-norm (vector-ref r 0))))
+                                         l) l)))
+               null schema) null)))
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema)
@@ -194,7 +199,7 @@
   (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
          [pkey (find-primary-key-fields schema)]
-         [jns (get-schema-joins schema join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)]
+         [jns (get-schema-joins con schema-nm schema dbsys-type join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))

@@ -9,6 +9,9 @@
 
 (provide (all-defined-out))
 
+;;; Define a global table holding data class metadata.
+(define *data-class-metadata* (make-weak-hash))
+
 ;;; Define data class metadata struct.
 (define data-class-metadata% 
   (class object% 
@@ -21,9 +24,6 @@
            [state-key (generate-member-key)])
     (super-new)
     (inspect #f)))
-
-;;; Define a global table holding data class metadata.
-(define *data-class-metadata* (make-weak-hash))
 
 ;;; Get metadata for a class.
 (define-syntax-rule (get-class-metadata-object cls)

@@ -6,16 +6,7 @@
 
 (require db)
 
-(provide sql-placeholder sql-autoincrement load-schema)
-   
-;;; SQL schema by database system type.
-(define (load-schema con schema-nm tbl-nm #:reverse-join? (rev-jn? #f) #:db-system-type dbsys-type)
-  (cond [(eq? dbsys-type 'mysql) (load-mysql-schema con schema-nm tbl-nm rev-jn?)]
-        [(eq? dbsys-type 'oracle) (load-oracle-schema con schema-nm tbl-nm rev-jn?)]
-        [(eq? dbsys-type 'postgresql) (load-postgresql-schema con schema-nm tbl-nm rev-jn?)]
-        [(eq? dbsys-type 'sqlite3) (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)]
-        [(eq? dbsys-type 'sqlserver) (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)]
-        [else (load-default-schema con schema-nm tbl-nm rev-jn?)]))
+(provide (all-defined-out))
 
 ;;; Set placeholders in a SQL string by database system type.
 (define (sql-placeholder sql dbsys-type (i 1)) 
@@ -28,6 +19,7 @@
 (define (sql-autoincrement dbsys-type) 
     (cond [(eq? dbsys-type 'mysql) "select last_insert_id()"]
           [(eq? dbsys-type 'postgresql) "select currval('auto_id_seq')"]
+          [(eq? dbsys-type 'sqlserver) "select @@identity"]
           [else (error "autocrement not defined for this database")]))
 
 ;;; Load MySQL schema.
@@ -150,7 +142,6 @@ where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
     (set! schema-sql (string-append schema-sql " order by constraint_type, ordinal_position, cols.column_name"))
     (query-rows con schema-sql)))
-
 
 ;;; Load SQLite3 schema.
 (define (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)
