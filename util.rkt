@@ -9,9 +9,9 @@
 (provide (all-defined-out))
 
 ; Create a multi-dimensional hash table.
-(define (make-multi-hash) (make-hash))
+(define (make-multi-hash #:weak? (wk? #f)) (if wk? (make-weak-hash) (make-hash)))
 
-;;; Define a global table holding data class schema.
+;;; Define a global hash table holding data class schema.
 (define *data-class-schema* (make-multi-hash))
 
 ;;; Define type checker for a data class.
@@ -37,7 +37,7 @@
 (define (multi-hash-set! hash-tbl value . keys)
   (if (null? (cdr keys)) (hash-set! hash-tbl (car keys) value)
       (if (hash-has-key? hash-tbl (car keys)) (multi-hash-set! (hash-ref hash-tbl (car keys)) value (cdr keys)) 
-          (let ([h (make-multi-hash)]) (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
+          (let ([h (make-multi-hash #:weak? (hash-weak? hash-tbl))]) (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
           
 ; Retrieve a value given a sequence of keys.
 (define (multi-hash-ref hash-tbl . keys) 

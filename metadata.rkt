@@ -9,8 +9,8 @@
 
 (provide (all-defined-out))
 
-;;; Define a global table holding data class metadata.
-(define *data-class-metadata* (make-weak-hash))
+;;; Define a global hash table holding data class metadata.
+(define *data-class-metadata* (make-hash))
 
 ;;; Define data class metadata struct.
 (define data-class-metadata% 

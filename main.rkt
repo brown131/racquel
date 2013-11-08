@@ -218,6 +218,23 @@
 ;;;; PERSISTENCE
 
 
+;;; Define a global table holding data objects.
+(define *data-objects* (make-multi-hash #:weak? #t))
+
+;;; Create a data object from a database row.
+(define (create-data-object con cls row #:primary-key (pkey #f))
+  (begin
+    (unless pkey (let ([pkey-flds (primary-key-fields cls)]
+                       [cols (list->vector (sort (get-column-names cls) string<?))])
+                   (set! pkey null)
+                   (vector-map (lambda (r c) (when (memf (lambda (k) (equal? k c)) pkey-flds) (cons r pkey))) row cols)
+                   (when (eq? (length pkey) 1) (set! pkey (first pkey))))) 
+    (if (multi-hash-has-key? *data-objects* con cls pkey) (multi-hash-ref *data-objects* con cls pkey)
+        (let* ([obj (new cls)])
+          (set-data-object! obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
+          (multi-hash-set! *data-objects* obj con cls pkey)
+          obj))))
+
 ;;; Set the data in a data object.
 (define (set-data-object! obj row)
   (map (lambda (f v) (dynamic-set-field! f obj v)) 
@@ -231,22 +248,16 @@
     #:literals (join where)
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let* ([obj (new cls)]
-                [sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
-           (unless prnt? (set-data-object! obj (query-row con rest ...)))
-           (if prnt? sql obj)))]
+       #'(let ([sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
+           (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let* ([obj (new cls)]
-                [sql (select-sql con cls (string-append where-expr.expr ...))])
-           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
-           (if prnt? sql obj)))]
+       #'(let ([sql (select-sql con cls (string-append where-expr.expr ...))])
+           (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let* ([obj (new cls)]
-                [sql (select-sql con cls where-expr)])
-           (unless prnt? (set-data-object! obj (query-row con sql rest ...)))
-           (if prnt? sql obj)))]))
+       #'(let ([sql (select-sql con cls where-expr)])
+           (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]))
 
 ;;; Select data objects from the database.
 (define-syntax (select-data-objects stx)
@@ -263,11 +274,8 @@
          objs)]))
 
 ;;; Load a data object from the database by primary key.
-(define-syntax-rule (make-data-object con cls pkey)
-  (let* ([obj (new cls)])
-    (set-data-object! obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
-    obj
-    ))
+(define-syntax-rule (make-data-object con cls pkey) 
+  (create-data-object con cls (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
 
 ;;; Save a data object.
 (define-syntax-rule (save-data-object con obj) 
