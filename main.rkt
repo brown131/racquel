@@ -221,6 +221,13 @@
 ;;; Define a global table holding data objects.
 (define *data-objects* (make-multi-hash #:weak? #t))
 
+;;; Set the data in a data object.
+(define (set-data-object! obj row)
+  (map (lambda (f v) (dynamic-set-field! f obj v)) 
+       (get-column-ids (object-class obj)) (vector->list row))
+  (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+  (set-field! data-object-state obj 'loaded))
+
 ;;; Create a data object from a database row.
 (define (create-data-object con cls row #:primary-key (pkey #f))
   (begin
@@ -234,13 +241,6 @@
           (set-data-object! obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
           (multi-hash-set! *data-objects* obj con cls pkey)
           obj))))
-
-;;; Set the data in a data object.
-(define (set-data-object! obj row)
-  (map (lambda (f v) (dynamic-set-field! f obj v)) 
-       (get-column-ids (object-class obj)) (vector->list row))
-  (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
-  (set-field! data-object-state obj 'loaded))
 
 ;;; Select a data object from the database.
 (define-syntax (select-data-object stx)
@@ -264,13 +264,13 @@
   (syntax-parse stx
     [(_ con:id cls:id where-expr:where-expr rest:expr ...)
      #'(let* ([rows (query-rows con (select-sql con cls where-expr.expr ...) rest ...)]
-              [objs (make-list (length rows) (new cls))])
-         (map (lambda (o r) (set-data-object! o r)) objs rows)
+              [objs null])
+         (foldl (lambda (o r) (cons (create-data-object con cls r) o)) objs rows)
          objs)]
     [(_ con:id cls:id where-expr:expr rest:expr ...)
      #'(let* ([rows (query-rows con (select-sql con cls where-expr) rest ...)]
-              [objs (make-list (length rows) (new cls))])
-         (map (lambda (o r) (set-data-object! o r)) objs rows)
+              [objs null])
+         (foldl (lambda (o r) (cons (create-data-object con cls r) o)) objs rows)
          objs)]))
 
 ;;; Load a data object from the database by primary key.
