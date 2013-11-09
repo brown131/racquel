@@ -466,8 +466,9 @@
                                     #:table-name-normalizer table-name-normalizer
                                     #:column-name-normalizer column-name-normalizer)]
           [obj (new address%)])
-     (test-case "select sql ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= id 1))) 
-"select city, id, line, person_id, state, zip_code from address where id = 1"))
+     (test-case "select sql ok?" (check-equal? (select-data-object *con* address% #:print? #t 
+                                                                   (where (and (= id ?) (= city ?))) 1 "Chicago") 
+"select city, id, line, person_id, state, zip_code from address where (id = ? and city = ?)"))
      (test-case "rql select runs?" 
                 (check-true (is-a? (select-data-object *con* address% (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
      (test-case "selected with rql?"

@@ -17,6 +17,7 @@
 
 ;;;; DATA CLASS DEFINITION
    
+
 ;;; Return the state of a data object.
 (define (data-object-state obj)
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
@@ -24,13 +25,18 @@
      
 ;;; Set autoincrement id.
 (define (set-autoincrement-id! con obj)
-  (when (get-class-metadata autoincrement-key (object-class obj))
-    (dynamic-set-field! (get-class-metadata autoincrement-key (object-class obj)) obj
-                        (query-value con (sql-autoincrement (dbsystem-type con))))))
-
+  (let ([cls (object-class obj)])
+    (when (get-class-metadata autoincrement-key cls)
+      (dynamic-set-field! (get-class-metadata autoincrement-key cls) obj
+                          (query-value con (sql-autoincrement (dbsystem-type con)))))))
+     
 ;;; Primary key fields
 (define (primary-key-fields cls)
   (let ([pkey (get-class-metadata primary-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
+
+;;; Get the primary key from an object.
+(define (get-primary-key obj)
+ (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields (object-class obj))))
 
 ;;; Autoincrement key fields
 (define (autoincrement-key-fields cls)
@@ -228,17 +234,19 @@
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
   (set-field! data-object-state obj 'loaded))
 
+;;; Create a primary key from a database row.
+(define (create-primary-key cls row)
+  (let* ([cols (sort (get-column-names cls) string<?)]
+         [pkey (foldl (lambda (r c l) (if (memf (lambda (k) (equal? k c)) (primary-key-fields cls)) (cons r l) l)) 
+                      null (vector->list row) cols)])
+    (when (eq? (length pkey) 1) (set! pkey (first pkey)))))
+
 ;;; Create a data object from a database row.
-(define (create-data-object con cls row #:primary-key (pkey #f))
-  (begin
-    (unless pkey (let ([pkey-flds (primary-key-fields cls)]
-                       [cols (list->vector (sort (get-column-names cls) string<?))])
-                   (set! pkey null)
-                   (vector-map (lambda (r c) (when (memf (lambda (k) (equal? k c)) pkey-flds) (cons r pkey))) row cols)
-                   (when (eq? (length pkey) 1) (set! pkey (first pkey))))) 
+(define (create-data-object con cls row #:primary-key (primary-key #f))
+  (let ([pkey (if primary-key primary-key (create-primary-key cls row))])
     (if (multi-hash-has-key? *data-objects* con cls pkey) (multi-hash-ref *data-objects* con cls pkey)
         (let* ([obj (new cls)])
-          (set-data-object! obj (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey))
+          (set-data-object! obj row)
           (multi-hash-set! *data-objects* obj con cls pkey)
           obj))))
 
@@ -275,7 +283,8 @@
 
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey) 
-  (create-data-object con cls (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
+  (create-data-object con cls 
+    (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
 
 ;;; Save a data object.
 (define-syntax-rule (save-data-object con obj) 
@@ -284,24 +293,23 @@
 
 ;;; Insert a data object
 (define-syntax-rule (insert-data-object con obj) 
-  (let ([sql (insert-sql con (object-class obj))]
-        [flds (map (lambda (f) (dynamic-get-field f obj)) 
-                   (savable-fields con (object-class obj)))])
+  (let* ([cls (object-class obj)]
+         [sql (insert-sql con cls)]
+         [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))])
     (apply query-exec con sql flds)
     (set-autoincrement-id! con obj)
-    (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+    (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'saved)
-    ))
+    (multi-hash-set! *data-objects* obj con cls (get-primary-key obj))))
 
 ;;; Update a data object.
 (define-syntax-rule (update-data-object con obj) 
-  (let ([sql (update-sql con (object-class obj))]
-        [flds (map (lambda (f) (dynamic-get-field f obj)) 
-                   (savable-fields con (object-class obj)))]
-        [pkey (map (lambda (f) (dynamic-get-field f obj)) 
-                   (primary-key-fields (object-class obj)))])
+  (let* ([cls (object-class obj)]
+         [sql (update-sql con cls)]
+         [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))]
+         [pkey (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields cls))])
     (apply query-exec con sql (append flds pkey))
-    (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+    (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'saved)))
 
 ;;; Delete a data object.
