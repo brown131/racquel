@@ -6,7 +6,7 @@
 ;;;; Copyright (c) Scott Brown 2013
 
 (require db json "keywords.rkt" "metadata.rkt" "mixin.rkt" "schema.rkt" "util.rkt"
-         (for-syntax syntax/parse "stxclass.rkt"))
+         (for-syntax racket/syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
          make-data-object select-data-object select-data-objects save-data-object 
@@ -77,48 +77,58 @@
 ;;; Define a data class.
 (define-syntax (data-class stx)
   (syntax-parse stx 
-    [(_ base-cls:id elem:data-class-element ...) 
-     #'(let* ([m (new data-class-metadata%)])
-         (define-member-name data-object-state (get-field state-key m))
-         (class* base-cls (data-class<%>) elem.expr ...
-           (field [data-object-state 'new])
-           (unless (hash-has-key? *data-class-metadata* this%)
+    [(_ base-cls:id elem:data-class-element ...)
+     (with-syntax ([cls-id (generate-temporary #'class-id-)])
+       #'(let* ([m (new data-class-metadata%)])
+           (unless (hash-has-key? *data-class-metadata* 'cls-id)
+             elem.meta-expr ...
              (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (first k)))))
              (set-field! joins m (append elem.jn-defs ...))
-             (hash-set! *data-class-metadata* this% m))
-           (define/public (set-data-join! con jn-fld jn-cls)
-             (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
-                    [rows (append elem.jn-rows ...)]
-                    [objs (make-list (length rows) (new jn-cls))])
-               (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
-                                       (get-column-ids (object-class o)) (vector->list r))
-                      (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
-                      (set-field! data-object-state o 'loaded)) objs rows)
-               objs))
-           this))]))
+             (hash-set! *data-class-metadata* 'cls-id m))
+           (define-member-name cls-id (get-field class-id-key m))
+           (define-member-name data-object-state (get-field state-key m))
+           (class* base-cls (data-class<%>) 
+             elem.cls-expr ...
+             (field [cls-id #f]
+                    [data-object-state 'new])
+             (define/public (set-data-join! con jn-fld jn-cls)
+               (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
+                      [rows (append elem.jn-rows ...)]
+                      [objs (make-list (length rows) (new jn-cls))])
+                 (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
+                                         (get-column-ids (object-class o)) (vector->list r))
+                        (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
+                        (set-field! data-object-state o 'loaded)) objs rows)
+                 objs))
+             this)))]))
 
 ;;; Define a data class with interfaces.
 (define-syntax (data-class* stx)
   (syntax-parse stx 
     [(_ base-cls:id (i-face:id ...) elem:data-class-element ...) 
-     #'(let* ([m (new data-class-metadata%)])
-         (define-member-name data-object-state (get-field state-key m))
-         (class* base-cls (data-class<%> i-face ...) elem.expr ...
-           (field [data-object-state 'new])
-           (unless (hash-has-key? *data-class-metadata* this%)
-             (set-field! columns m (append elem.col-defs ...))
+     (with-syntax ([cls-id (generate-temporary #'class-id-)])
+       #'(let* ([m (new data-class-metadata%)])
+           (unless (hash-has-key? *data-class-metadata* 'cls-id)
+             elem.meta-expr ...
+             (set-field! columns m (sort (append elem.col-defs ...) string<? #:key (lambda (k) (symbol->string (first k)))))
              (set-field! joins m (append elem.jn-defs ...))
-             (hash-set! *data-class-metadata* this% m))
-           (define/public (set-data-join! con jn-fld jn-cls)
-             (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
-                    [rows (append elem.jn-rows ...)]
-                    [objs (make-list (length rows) (new jn-cls))])
-               (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
-                                       (get-column-ids (object-class o)) (vector->list r))
-                      (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
-                      (set-field! data-object-state o 'loaded)) objs rows)
-              rows)); objs))
-           this))]))
+             (hash-set! *data-class-metadata* 'cls-id m))
+           (define-member-name cls-id (get-field class-id-key m))
+           (define-member-name data-object-state (get-field state-key m))
+           (class* base-cls (data-class<%> i-face ...) 
+             elem.cls-expr ...
+             (field [cls-id #f]
+                    [data-object-state 'new])
+             (define/public (set-data-join! con jn-fld jn-cls)
+               (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
+                      [rows (append elem.jn-rows ...)]
+                      [objs (make-list (length rows) (new jn-cls))])
+                 (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
+                                         (get-column-ids (object-class o)) (vector->list r))
+                        (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
+                        (set-field! data-object-state o 'loaded)) objs rows)
+                 objs))
+             this)))]))
 
 ;;; Get a data column.
 (define-syntax-rule (get-column col obj) (get-field col obj))
@@ -142,7 +152,6 @@
          (get-field jn-fld obj)))))
 
 
-
 ;;; DATA CLASS GENERATION
 
 
@@ -158,20 +167,21 @@
 
 ;;; Get joins from the schema.
 ;;; TODO: NEEDS TO SUPPORT MULTI-PART KEYS
-(define (get-schema-joins con schema-nm schema dbsys-type join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)
+(define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)
   (let ([jn-cardinality (lambda (jn-tbl-nm jn-key) 
                           (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
                                  [row (findf (lambda (r) (equal? (vector-ref r 0) jn-key)) jn-schema)])
                                  (if (equal? (vector-ref row 1) "P") #''one-to-one #''one-to-many)))])
     (if (or gen-joins? gen-rev-joins?) 
-        (foldl (lambda (r l) (let ([jn-cls (get-table-class (vector-ref r 4))])
-                               (if (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R"))
-                                   (cons (list (string->symbol (join-nm-norm (vector-ref r 4))) 
-                                               #`'#,(get-class-name jn-cls)
-                                               #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
-                                               #`(where (= (#,(get-class-name jn-cls) #,(string->symbol (vector-ref r 5))) ?)) 
-                                               (string->symbol (col-nm-norm (vector-ref r 0))))
-                                         l) l)))
+        (foldl (lambda (r l) (if (and (not (sql-null? (vector-ref r 4))) 
+                                      (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R")))
+                                      (let* ([jn-cls (string->symbol (tbl-nm-norm (vector-ref r 4)))])
+                                        (cons (list (string->symbol (join-nm-norm (vector-ref r 4))) 
+                                                    #`'#,jn-cls
+                                                    #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
+                                                    #`(where (= (#,jn-cls #,(string->symbol (vector-ref r 5))) ?)) 
+                                                    (string->symbol (col-nm-norm (vector-ref r 0))))
+                                              l)) l))
                null schema) null)))
 
 ;;; Find primary key fields in a table schema.
@@ -205,7 +215,7 @@
   (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
          [pkey (find-primary-key-fields schema)]
-         [jns (get-schema-joins con schema-nm schema dbsys-type join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)]
+         [jns (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))

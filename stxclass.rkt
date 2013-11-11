@@ -135,44 +135,52 @@
 (define-syntax-class data-class-element
   #:description "data class element" 
   #:literals (table-name init-column column join primary-key)
-  #:attributes (expr col-defs jn-rows jn-defs)
+  #:attributes (cls-expr meta-expr col-defs jn-rows jn-defs)
   (pattern (table-name tbl-nm:str) 
-           #:with expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m tbl-nm))
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m tbl-nm))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (table-name tbl-nm:str extern-nm:str) 
-           #:with expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m extern-nm))
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m extern-nm))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (init-column cl-def:init-column-def ...) 
-           #:with expr #'(init-field cl-def.expr ...)
+           #:attr cls-expr #'(init-field cl-def.expr ...)
+           #:attr meta-expr #'#f
            #:attr col-defs #'(list cl-def.col-def ...)
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (column cl-def:column-def ...) 
-           #:with expr #'(field cl-def.expr ...) 
+           #:attr cls-expr #'(field cl-def.expr ...) 
+           #:attr meta-expr #'#f
            #:attr col-defs #'(list cl-def.col-def ...) 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (join jn-def:join-def ...) 
-           #:with expr #'(field jn-def.expr ...)
+           #:attr cls-expr #'(field jn-def.expr ...)
+           #:attr meta-expr #'#f
            #:attr col-defs #'null 
            #:attr jn-rows #'(cond jn-def.j-row ...)
            #:attr jn-defs #'(list jn-def.j-def ...))
   (pattern (primary-key pkey:id #:autoincrement flag:boolean) 
-           #:with expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m 'pkey)))
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m 'pkey)))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:id) 
-           #:with expr #'(set-field! primary-key m 'pkey) 
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(set-field! primary-key m 'pkey) 
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (x:expr ...)            
-           #:with expr #'(x ...) 
+           #:attr cls-expr #'(x ...) 
+           #:attr meta-expr #'#f
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null))
