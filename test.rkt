@@ -578,10 +578,6 @@
     (set-column! name json-extern-obj "new name")
     (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
     
-;    (test-case "json-extern-obj" (check-equal? json-extern-obj 11))
-;    (test-case "metadata" (check-equal? *data-class-metadata* 11))
-;    (test-case "test ok?" (check-equal? (send json-extern-obj test) 11))
-    
     (test-case "json externalized ok?" (check-equal? (string->jsexpr (send json-extern-obj externalize))
 (string->jsexpr"{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}"))) 
     (send json-intern-obj internalize (send json-extern-obj externalize))

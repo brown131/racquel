@@ -100,7 +100,11 @@
                         (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
                         (set-field! data-object-state o 'loaded)) objs rows)
                  objs))
-             (set-field! class (hash-ref *data-class-metadata* 'cls-id) this%))))]))
+             (define/private (base-data-class cls)
+               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
+                 (if (data-class? cls) (if sup-cls (base-data-class sup-cls) cls) cls)))
+             (unless (get-field class (hash-ref *data-class-metadata* 'cls-id))
+               (set-field! class (hash-ref *data-class-metadata* 'cls-id) (base-data-class this%))))))]))
 
 ;;; Define a data class with interfaces.
 (define-syntax (data-class* stx)
@@ -128,7 +132,11 @@
                         (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
                         (set-field! data-object-state o 'loaded)) objs rows)
                  objs))
-             (set-field! class (hash-ref *data-class-metadata* 'cls-id) this%))))]))
+             (define/private (base-data-class cls)
+               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
+                 (if (data-class? cls) (if sup-cls (base-data-class sup-cls) cls) cls)))            
+             (unless (get-field class (hash-ref *data-class-metadata* 'cls-id))
+               (set-field! class (hash-ref *data-class-metadata* 'cls-id) (base-data-class this%))))))]))
 
 ;;; Get a data column.
 (define-syntax-rule (get-column col obj) (get-field col obj))
