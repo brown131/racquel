@@ -371,6 +371,11 @@
                  ))
     
     (test-case "addresses not joined?" (check-eq? (get-field addresses person-obj) #f))
+    (test-case "person object class ok?" (check-eq? (object-class person-obj) person%))
+    (test-case "person object ok?" (check-equal? (get-join-definition addresses (object-class person-obj)) 
+                                              '(addresses address% one-to-many)))
+    (test-case "person object ok?" (check-equal? (get-class (second (get-join-definition addresses (object-class person-obj)))) 
+                                                 address%)) 
     (test-case "addresses joined?" (check-true (is-a? (first (get-join addresses person-obj *con*)) address%)))
     
     (test-case "address class ok?" 
@@ -505,7 +510,7 @@
                                    #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
                                    #:column-name-normalizer column-name-normalizer)]
-         ;[p (new person%)]
+         [p (new person%)]
          [obj (new address%)])
     (test-case "address class metadata added?" (check-eq? (length (hash->list *data-class-metadata*)) 2))
     (test-case "address class metadata ok?" (check-eq? (get-class-metadata table-name address%) "address"))
@@ -524,7 +529,7 @@
                (let ([a (select-data-object *con* address% (string-append "where id = " "1"))])
                  (check-equal? (get-field city a) "Chicago")
                  (check-eq? (data-object-state a) 'loaded)))
-    
+
     (test-case "select join sql ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t 
                                                  (join person (= (person% id) person_id)) (where (= id 1)))
@@ -572,6 +577,11 @@
     
     (set-column! name json-extern-obj "new name")
     (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
+    
+;    (test-case "json-extern-obj" (check-equal? json-extern-obj 11))
+;    (test-case "metadata" (check-equal? *data-class-metadata* 11))
+;    (test-case "test ok?" (check-equal? (send json-extern-obj test) 11))
+    
     (test-case "json externalized ok?" (check-equal? (string->jsexpr (send json-extern-obj externalize))
 (string->jsexpr"{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}"))) 
     (send json-intern-obj internalize (send json-extern-obj externalize))

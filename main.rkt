@@ -100,7 +100,7 @@
                         (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
                         (set-field! data-object-state o 'loaded)) objs rows)
                  objs))
-             this)))]))
+             (set-field! class (hash-ref *data-class-metadata* 'cls-id) this%))))]))
 
 ;;; Define a data class with interfaces.
 (define-syntax (data-class* stx)
@@ -128,7 +128,7 @@
                         (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
                         (set-field! data-object-state o 'loaded)) objs rows)
                  objs))
-             this)))]))
+             (set-field! class (hash-ref *data-class-metadata* 'cls-id) this%))))]))
 
 ;;; Get a data column.
 (define-syntax-rule (get-column col obj) (get-field col obj))
