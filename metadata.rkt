@@ -32,25 +32,20 @@
   (if (class? cls)
       (let ([md (findf (lambda (v) (equal? (get-field class v) cls)) (hash-values *data-class-metadata*))])
         (if md md
-          (let ([md-pair (findf (lambda (p) (if (get-field class (cdr p)) #f                                        
+          (let ([md-pair (findf (lambda (p) (if (get-field class (cdr p)) #f                            
                                                 (eval-syntax #`(with-handlers ([exn:fail? (lambda (e) #f)])
                                                                  (define-member-name #,(car p) (get-field class-id-key #,(cdr p)))
                                                                  (class-field-accessor #,cls #,(car p)))))) (hash->list *data-class-metadata*))])
             (if md-pair (begin (set-field! class (cdr md-pair) cls) (cdr md-pair)) #f))))
       (raise-argument-error 'get-class-metadata-object "argument ~a is not a class" cls)))
 
-(define (test cls-name)
-  (foldl (lambda (v l) (let ([cls (get-field class v)])
-                       (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
-                                 (cons (cons cls-name cls-nm) l)) (cons #f l)))) 
-         null (hash-values *data-class-metadata*)))
-
 ;;; Get a class from the metadata by name or symbol.
 (define-syntax-rule (get-class cls-name)
-  (get-field class (findf (lambda (v) (let ([cls (get-field class v)])
-                                        (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
-                                                  (eq? cls-nm (if (string? cls-name) (string->symbol cls-name) cls-name))) #f))) 
-                          (hash-values *data-class-metadata*))))
+  (if (class? cls-name) cls-name
+      (get-field class (findf (lambda (v) (let ([cls (get-field class v)])
+                                            (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
+                                                      (eq? cls-nm (if (string? cls-name) (string->symbol cls-name) cls-name))) #f))) 
+                              (hash-values *data-class-metadata*)))))
 
 ;;; Get a class from the metadata by name or symbol.
 (define-syntax-rule (get-class-name cls)

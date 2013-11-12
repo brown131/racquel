@@ -333,7 +333,7 @@
              (table-name "person" "Person")  
              (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
              (primary-key id #:autoincrement #t)
-             (join (addresses 'address% (where (= (address% person-id) ?)) id))
+             (join (addresses 'address% (where (= ('address% person-id) ?)) id))
              (super-new)
              (inspect #f))]
         [address% (data-class object% 
@@ -510,7 +510,6 @@
                                    #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
                                    #:column-name-normalizer column-name-normalizer)]
-         [p (new person%)]
          [obj (new address%)])
     (test-case "address class metadata added?" (check-eq? (length (hash->list *data-class-metadata*)) 2))
     (test-case "address class metadata ok?" (check-eq? (get-class-metadata table-name address%) "address"))

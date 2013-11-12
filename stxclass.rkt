@@ -42,7 +42,7 @@
   (pattern s:str #:with (expr ...) #'(s))
   (pattern n:nat #:with (expr ...) #'(n))
   (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
-  (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column-pair 'p1 'p2)))
+  (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column-pair p1 'p2)))
   (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
 
 (define-syntax-class rql-expr-list
