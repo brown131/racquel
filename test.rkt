@@ -122,16 +122,37 @@
 (define-test-suite test-schema
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
   (let* ([dbsys-type (dbsystem-name (connection-dbsystem *con*))]
-         [schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f #:db-system-type dbsys-type)])
-    (test-case "schema loaded?" (check-eq? (length schema) 4))
+         [simple-schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f #:db-system-type dbsys-type)]
+         [address-schema (load-schema *con* *schema-name* "address" #:reverse-join? #f #:db-system-type dbsys-type)])
+    (test-case "simple schema loaded?" (check-eq? (length simple-schema) 4))
+    (test-case "simple schema columns ok?" 
+               (check-equal? (sort (get-schema-columns simple-schema column-name-normalizer) 
+                                   string<? #:key (lambda (k) (symbol->string (first k))))
+                             '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
+    (test-case "simple schema joins ok?" 
+               (check-eq? (get-schema-joins *con* *schema-name* simple-schema dbsys-type table-name-normalizer
+                                            join-name-normalizer column-name-normalizer) null))
+    (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema) 'id))
+    (test-case "simple autoincrement key found?" (check-false (has-autoincrement-key? simple-schema)))
     
-    (test-case "schema columns ok?" (check-equal? (sort (get-schema-columns schema column-name-normalizer) 
-                                                         string<? #:key (lambda (k) (symbol->string (first k))))
-                                                  '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
-    (test-case "schema joins ok?" (check-eq? (get-schema-joins *con* *schema-name* schema dbsys-type table-name-normalizer
-                                                               join-name-normalizer column-name-normalizer) null))
-    (test-case "primary key fields found?" (check-eq? (find-primary-key-fields schema) 'id))
-    (test-case "autoincrement key found?" (check-false (has-autoincrement-key? schema)))
+    (test-case "address schema loaded?" (check-eq? (length address-schema) 6))
+    (test-case "address schema columns ok?" 
+               (check-equal? (sort (get-schema-columns address-schema column-name-normalizer) 
+                                   string<? #:key (lambda (k) (symbol->string (first k))))
+                             '((city #f "city") (id #f "id") (line #f "line")
+                               (person-id #f "person_id") (state #f "state") (zip-code #f "zip_code"))))
+    (test-case "address schema join name ok?" 
+               (check-eq? (first (first (get-schema-joins *con* *schema-name* address-schema dbsys-type table-name-normalizer join-name-normalizer column-name-normalizer))) 
+                          'person))
+    (test-case "address schema join cardinality ok?" 
+               (check-eq? (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type table-name-normalizer join-name-normalizer column-name-normalizer))) racquel-namespace)
+                          'one-to-one))
+    (test-case "address schema join cardinality ok?" 
+               (check-eq? (fifth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type 
+                                                                       table-name-normalizer join-name-normalizer column-name-normalizer)))
+                          #'(where (= (person% id) ?))))
+    (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema) 'id))
+    (test-case "address autoincrement key found?" (check-true (has-autoincrement-key? address-schema)))
     ))
 
 

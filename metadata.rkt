@@ -27,6 +27,10 @@
     (super-new)
     (inspect #f)))
 
+;;; Define namespace anchor.
+(define-namespace-anchor racquel-namespace-anchor)
+(define racquel-namespace (namespace-anchor->namespace racquel-namespace-anchor))
+
 ;;; Get metadata for a class.
 (define (get-class-metadata-object cls)
   (if (class? cls)
@@ -35,7 +39,7 @@
           (let ([md-pair (findf (lambda (p) (if (get-field class (cdr p)) #f                            
                                                 (eval-syntax #`(with-handlers ([exn:fail? (lambda (e) #f)])
                                                                  (define-member-name #,(car p) (get-field class-id-key #,(cdr p)))
-                                                                 (class-field-accessor #,cls #,(car p)))))) (hash->list *data-class-metadata*))])
+                                                                 (class-field-accessor #,cls #,(car p))) racquel-namespace))) (hash->list *data-class-metadata*))])
             (if md-pair (begin (set-field! class (cdr md-pair) cls) (cdr md-pair)) #f))))
       (raise-argument-error 'get-class-metadata-object "argument ~a is not a class" cls)))
 
