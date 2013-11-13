@@ -174,23 +174,35 @@
           string<? #:key (lambda (k) (symbol->string (first k))))))
 
 ;;; Get joins from the schema.
-;;; TODO: NEEDS TO SUPPORT MULTI-PART KEYS
-(define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)
+;;; Schema Vector: 0 = Column Name, 1 = Constraint Type, 2 = Ordinal Position, 3 = Auto-Increment, 
+;;;                4 = Join Table Name, 5 = Join Column Name, 6 = Constraint Name
+;;; Join List: 1st = Join Name, 2nd = Join Class, 3rd = Cardinality, 4th = Where Clause
+;;; TODO: NEEDS TO SUPPORT MULTI-PART KEYS AND MULTIPLE KEYS TO THE SAME TABLE.
+(define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
   (let ([jn-cardinality (lambda (jn-tbl-nm jn-key) 
-                          (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
+                          (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
                                  [row (findf (lambda (r) (equal? (vector-ref r 0) jn-key)) jn-schema)])
-                                 (if (equal? (vector-ref row 1) "P") #''one-to-one #''one-to-many)))])
-    (if (or gen-joins? gen-rev-joins?) 
-        (foldl (lambda (r l) (if (and (not (sql-null? (vector-ref r 4))) 
-                                      (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R")))
-                                      (let* ([jn-cls (string->symbol (tbl-nm-norm (vector-ref r 4)))])
-                                        (cons (list (string->symbol (join-nm-norm (vector-ref r 4))) 
-                                                    #`'#,jn-cls
-                                                    #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
-                                                    #`(where (= (#,jn-cls #,(string->symbol (vector-ref r 5))) ?)) 
-                                                    (string->symbol (col-nm-norm (vector-ref r 0))))
-                                              l)) l))
-               null schema) null)))
+                            (if (equal? (vector-ref row 1) "P") #''one-to-one #''one-to-many)))]
+        [joins (make-hash)])
+    (map (lambda (r l) (when (and (not (sql-null? (vector-ref r 4))) 
+                                  (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R")))
+                         (let* ([jn-cls (string->symbol (tbl-nm-norm (vector-ref r 4)))])
+                           (if (hash-has-key (vector-ref r 6))
+                               (let ([where (fourth (hash-ref joins (vector-ref r 6)))])
+                                 ; BUGGED!!!!
+                                 (unless (eq? (second where) 'and) (append (second where) 'add))
+                                 (append (second where) #`(= (jn-cls #,(string->symbol (vector-ref r 5))) ?))
+                                 (hash-set! joins (list (string->symbol (join-nm-norm (vector-ref r 4) jn-cardinality)) 
+                                            #`'#,jn-cls
+                                            #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
+                                            where)))
+                               (hash-set! joins (vector-ref r 6)
+                                      (list (string->symbol (join-nm-norm (vector-ref r 4) jn-cardinality)) 
+                                            #`'#,jn-cls
+                                            #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
+                                            #`(where (= (#,jn-cls #,(string->symbol (vector-ref r 5))) ?)) 
+                                            (string->symbol (col-nm-norm (vector-ref r 0)))))))))                               
+         schema)))
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema)
@@ -216,14 +228,15 @@
                         #:inherits (base-cls 'object%)
                         #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (default-name-normalizer n) "%"))) 
                         #:column-name-normalizer (col-nm-norm (lambda (n) (default-name-normalizer n))) 
-                        #:join-name-normalizer (join-nm-norm (lambda (n) (default-name-normalizer n))) 
+                        #:join-name-normalizer (join-nm-norm (lambda (n (c 'one-to-many)) (default-name-normalizer n))) 
                         #:table-name-externalizer (tbl-nm-extern (lambda (n) (begin n)))
                         #:print? (prnt? #f)
                         . rest) 
   (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
          [pkey (find-primary-key-fields schema)]
-         [jns (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm gen-joins? gen-rev-joins?)]
+         [jns (if (or gen-joins? gen-rev-joins?) 
+                   (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm) null)]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))

@@ -129,7 +129,7 @@
                                                          string<? #:key (lambda (k) (symbol->string (first k))))
                                                   '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
     (test-case "schema joins ok?" (check-eq? (get-schema-joins *con* *schema-name* schema dbsys-type table-name-normalizer
-                                                               join-name-normalizer column-name-normalizer #t #f) null))
+                                                               join-name-normalizer column-name-normalizer) null))
     (test-case "primary key fields found?" (check-eq? (find-primary-key-fields schema) 'id))
     (test-case "autoincrement key found?" (check-false (has-autoincrement-key? schema)))
     ))
@@ -516,7 +516,7 @@
 
     (test-case "select sql ok?" (check-equal? (select-data-object *con* address% #:print? #t 
                                                                   (where (and (= id ?) (= city ?))) 1 "Chicago") 
-"select city, id, line, person_id, state, zip_code from address where (id = ? and city = ?)"))
+(sql-placeholder "select city, id, line, person_id, state, zip_code from address where (id = ? and city = ?)" *test-dbsys-type*)))
     (test-case "rql select runs?" 
                (check-true (is-a? (select-data-object *con* address% 
                                                       (where (and (= id ?) (= city ?))) 1 "Chicago") address%)))
@@ -589,6 +589,15 @@
     (send xml-intern-obj internalize (send xml-extern-obj externalize))
     (test-case "xml internalized ok?" (check-equal? (get-column name xml-intern-obj) "a new name"))
   ))
+
+
+;;;; TEST MULTI-PART KEYS
+
+
+;;;; TEST MULTIPLE KEYS IN SAME TABLE
+
+ 
+;;;; TEST INHERITANCE
 
 
 ;;;; RUN ALL TESTS
