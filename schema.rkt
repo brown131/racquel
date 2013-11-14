@@ -22,6 +22,15 @@
           [(eq? dbsys-type 'sqlserver) "select @@identity"]
           [else (error "autocrement not defined for this database")]))
 
+;;; Schema accessors.
+(define-syntax-rule (schema-auto-increment row) (vector-ref row 3))
+(define-syntax-rule (schema-column row) (vector-ref row 0))
+(define-syntax-rule (schema-constraint row) (vector-ref row 6))
+(define-syntax-rule (schema-constraint-type row) (vector-ref row 1))
+(define-syntax-rule (schema-join-column row) (vector-ref row 5))
+(define-syntax-rule (schema-join-table row) (vector-ref row 4))
+(define-syntax-rule (schema-ordinal-position row) (vector-ref row 2))
+
 ;;; Load MySQL schema.
 (define (load-mysql-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name, substring(cons.constraint_type, 1, 1) as constraint_type, fkey.ordinal_position, 

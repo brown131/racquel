@@ -7,13 +7,14 @@
 (require rackunit rackunit/text-ui racket/trace db json racquel "metadata.rkt" "schema.rkt" "util.rkt")
 
 (require/expose racquel (savable-fields 
-                         key-where-clause
+                         key-where-clause-sql
                          primary-key-fields
                          insert-sql 
                          update-sql 
                          delete-sql 
                          get-schema-columns
                          get-schema-joins
+                         get-schema-joins2
                          find-primary-key-fields
                          create-data-object
                          has-autoincrement-key?))
@@ -99,7 +100,7 @@
     
     (test-case "savable field ok?" (check-equal? (savable-fields *con* test-class%) '(description id name x)))
     (test-case "primary key fields ok?" (check-equal? (primary-key-fields test-class%) '(id)))
-    (test-case "where clause ok?" (check-equal? (key-where-clause *con* test-class% (primary-key-fields test-class%)) 
+    (test-case "where clause ok?" (check-equal? (key-where-clause-sql *con* test-class% (primary-key-fields test-class%)) 
                                                 (sql-placeholder" where id=?" *test-dbsys-type*)))
     (test-case "insert sql ok?" (check-equal? (insert-sql *con* test-class%) 
                                               (sql-placeholder "insert into test (description, id, name, x) values (?, ?, ?, ?)" *test-dbsys-type*)))
@@ -145,15 +146,41 @@
                (check-eq? (first (first (get-schema-joins *con* *schema-name* address-schema dbsys-type table-name-normalizer join-name-normalizer column-name-normalizer))) 
                           'person))
     (test-case "address schema join cardinality ok?" 
-               (check-eq? (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type table-name-normalizer join-name-normalizer column-name-normalizer))) racquel-namespace)
-                          'one-to-one))
+               (check-equal? (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type 
+                                                                           table-name-normalizer join-name-normalizer column-name-normalizer))) racquel-namespace)
+                             'one-to-one))
     (test-case "address schema join cardinality ok?" 
-               (check-eq? (fifth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type 
-                                                                       table-name-normalizer join-name-normalizer column-name-normalizer)))
-                          #'(where (= (person% id) ?))))
+               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type 
+                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
+                             '(where (= ('person% id) ?))))
     (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema) 'id))
     (test-case "address autoincrement key found?" (check-true (has-autoincrement-key? address-schema)))
-    ))
+    
+    (let ([test-schema (list (vector "id" "P" 1 1 sql-null sql-null "PK")
+                             (vector "join1_id" "F" 1 sql-null "Joined" "id" "FK_Join1")
+                             (vector "join1_str" "F" 2 sql-null "Joined" "str" "FK_Join1")
+                             (vector "join2_id" "F" 1 sql-null "Joined" "id" "FK_Join2")
+                             (vector "join2_str" "F" 2 sql-null "Joined" "str" "FK_Join2")
+                             (vector "simple_id" "F" 1 sql-null "Employer" "id" "FK_Employer")
+                             (vector "id" "R" 1 sql-null "Address" "person_id" "FK_Person"))])
+      (test-case "test schema 1st join cardinality ok?" 
+               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
+                             '(where (= ('address% person_id) ?))))
+      (test-case "test schema 2nd join cardinality ok?" 
+               (check-equal? (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
+                             '(where (= ('employer% id) ?))))
+      (test-case "test schema 3rd join cardinality ok?" 
+               (check-equal? (syntax->datum #`#,(fifth (third (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
+                             '(where (= ('joined% id) ?))))
+      (test-case "test schema 4th join cardinality ok?" 
+               (check-equal? (syntax->datum #`#,(fifth (fourth (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
+                             '(where (= ('joined% id) ?))))
+      
+    )))
 
 
 ;;;; TEST DATA OBJECT GENERATION
@@ -211,7 +238,7 @@
    
     (test-case "savable field ok?" (check-equal? (sort (savable-fields *con* simple%) string<? #:key symbol->string) 
                                                  '(description id name x)))
-    (test-case "where clause ok?" (check-equal? (key-where-clause *con* simple% (primary-key-fields simple%)) 
+    (test-case "where clause ok?" (check-equal? (key-where-clause-sql *con* simple% (primary-key-fields simple%)) 
                                                 (sql-placeholder " where id=?" *test-dbsys-type*)))
     (test-case "insert sql ok?" (check-equal? (insert-sql *con* simple%) 
                                               (sql-placeholder "insert into simple (description, id, name, x) values (?, ?, ?, ?)" *test-dbsys-type*)))
@@ -294,7 +321,7 @@
       (test-case "object class ok?" (check-equal? (object-class obj) auto%))
       
       (test-case "savable field ok?" (check-equal? (savable-fields *con* auto%) '(description name)))
-      (test-case "where clause ok?" (check-equal? (key-where-clause *con* auto% (primary-key-fields auto%)) 
+      (test-case "where clause ok?" (check-equal? (key-where-clause-sql *con* auto% (primary-key-fields auto%)) 
                                                   (sql-placeholder " where id=?" *test-dbsys-type*)))
       (test-case "insert sql ok?" (check-equal? (insert-sql *con* auto%) 
                                                 (sql-placeholder "insert into auto (description, name) values (?, ?)" *test-dbsys-type*)))
@@ -452,7 +479,7 @@
                                                              (state #f "state")
                                                              (zip-code #f "zip_code"))
                                                             (primary-key id #:autoincrement #t)
-                                                            (join (person 'person% #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
+                                                            (join (person 'person% #:cardinality 'one-to-one (where (= ('person% id) ?)) person-id))
                                                             (super-new)
                                                             (inspect #f))))
                                                       address%)))

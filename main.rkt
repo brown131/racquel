@@ -48,7 +48,7 @@
            (if (member f (autoincrement-key-fields cls)) l (cons f l))) null (get-column-ids cls)) string<? #:key symbol->string))
 
 ;;; SQL where-clause for a key.
-(define (key-where-clause con cls key)
+(define (key-where-clause-sql con cls key)
   (string-append " where " (sql-placeholder (string-join (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
                                                               (if (list? key) key (list key))) " and ") (dbsystem-type con))))
 
@@ -72,7 +72,7 @@
 ;;; Delete SQL.
 (define (delete-sql con cls)
   (string-append "delete from " (get-class-metadata table-name cls)
-                 (key-where-clause con cls (primary-key-fields cls))))
+                 (key-where-clause-sql con cls (primary-key-fields cls))))
 
 ;;; Define a data class.
 (define-syntax (data-class stx)
@@ -163,74 +163,64 @@
 ;;; DATA CLASS GENERATION
 
 
-;;; Define namespace anchor.
-;(define-namespace-anchor ns-anchor)
-;(define ns (namespace-anchor->namespace ns-anchor))
-
 ;;; Get columns from the schema.
 (define (get-schema-columns schema col-nm-norm)
-  (let ([col-nms (foldl (lambda (f l) (if (member (vector-ref f 0) l) l (cons (vector-ref f 0) l))) null schema)])
+  (let ([col-nms (foldl (lambda (f l) (if (member (schema-column f) l) l (cons (schema-column f) l))) null schema)])
     (sort (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms) 
           string<? #:key (lambda (k) (symbol->string (first k))))))
 
-;;; Determine the cardinality of a join based on schema metadata.
-(define (join-cardinality con schema-nm  dbsys-type jn-tbl-nm jn-key) 
-  (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
-         [row (findf (lambda (r) (equal? (vector-ref r 0) jn-key)) jn-schema)])
-    (if (equal? (vector-ref row 1) "P") #''one-to-one #''one-to-many)))
+;;; Get the cardinality of a join based on schema metadata.
+(define (join-cardinality con schema-nm dbsys-type jn-tbl-nm jn-key) 
+  #''one-to-one)
+;  (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
+ ;        [row (findf (lambda (r) (equal? (schema-column r) jn-key)) jn-schema)])
+  ;  (if (equal? (schema-constraint-type row) "P") #''one-to-one #''one-to-many)))
+
+;;; RQL where-clause syntax for a key.
+(define (key-where-clause-rql jn-cls jn-columns tbl-nm-norm)
+   #`(where (= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol (first jn-columns))) ?)) 
+  )
 
 ;;; Get joins from the schema.
-;;; Schema Vector: 0 = Column Name, 1 = Constraint Type, 2 = Ordinal Position, 3 = Auto-Increment, 
-;;;                4 = Join Table Name, 5 = Join Column Name, 6 = Constraint Name
-;;; Join List: 1st = Join Name, 2nd = Join Class, 3rd = Cardinality, 4th = Where Clause
+;;; Join Definition: 1st = Join Name, 2nd = Join Class, 3rd = Cardinality, 4th = Where Clause
 ;;; TODO: NEEDS TO SUPPORT MULTI-PART KEYS AND MULTIPLE KEYS TO THE SAME TABLE.
-(define (get-schema-joins2 con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
-  (let ([jn-cardinality (lambda (jn-tbl-nm jn-key) 
-                          (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
-                                 [row (findf (lambda (r) (equal? (vector-ref r 0) jn-key)) jn-schema)])
-                            (if (equal? (vector-ref row 1) "P") #''one-to-one #''one-to-many)))]
-        [joins (make-hash)])
-    (map (lambda (r l) (when (and (not (sql-null? (vector-ref r 4))) 
-                                  (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R")))
-                         (let* ([jn-cls (string->symbol (tbl-nm-norm (vector-ref r 4)))])
-                           (if (hash-has-key? (vector-ref r 6))
-                               (let ([where (fourth (hash-ref joins (vector-ref r 6)))])
-                                 ; BUGGED!!!!
-                                 (unless (eq? (second where) 'and) (append (second where) 'add))
-                                 (append (second where) #`(= (jn-cls #,(string->symbol (vector-ref r 5))) ?))
-                                 (hash-set! joins (list (string->symbol (join-nm-norm (vector-ref r 4) jn-cardinality)) 
-                                            #`'#,jn-cls
-                                            #'#:cardinality (join-cardinality con schema-nm dbsys-type (vector-ref r 4) (vector-ref r 5))
-                                            where)))
-                               (hash-set! joins (vector-ref r 6)
-                                      (list (string->symbol (join-nm-norm (vector-ref r 4) jn-cardinality)) 
-                                            #`'#,jn-cls
-                                            #'#:cardinality (jn-cardinality (vector-ref r 4) (vector-ref r 5))
-                                            #`(where (= (#,jn-cls #,(string->symbol (vector-ref r 5))) ?)) 
-                                            (string->symbol (col-nm-norm (vector-ref r 0)))))))))                               
-         schema)))
-
 (define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
-  (foldl (lambda (r l) (if (and (not (sql-null? (vector-ref r 4))) 
-                                (or (equal? (vector-ref r 1) "F") (equal? (vector-ref r 1) "R")))
-                           (let* ([jn-cls (string->symbol (tbl-nm-norm (vector-ref r 4)))])
-                             (cons (list (string->symbol (join-nm-norm (vector-ref r 4))) 
+  (let ([schema-jns (foldl (lambda (r l) 
+                             (if (and (not (sql-null? (schema-join-table r))) 
+                                      (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
+                                 (let ([jn-def (findf (lambda (m) (string=? (schema-join-table r) (first m))) l)]) 
+                                   (if jn-def (cons (append (take jn-def 2) (list (append (last jn-def) (list (schema-join-column r)))))
+                                                    (remove (first jn-def) l (lambda (a b) (string=? a (first b)))))
+                                       (cons (list (schema-join-table r)
+                                                   (schema-column r) 
+                                                   (list (schema-join-column r))) l))) l)) null schema)])
+    (map (lambda (j) (list (string->symbol (join-nm-norm (first j))) 
+                           #`'#,(string->symbol (tbl-nm-norm (first j)))
+                           #'#:cardinality (join-cardinality con schema-nm dbsys-type (first j) (second j)) 
+                           (key-where-clause-rql (first j) (last j) tbl-nm-norm)
+                           (string->symbol (col-nm-norm (second j))))) schema-jns)))
+
+(define (get-schema-joins2 con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
+  (foldl (lambda (r l) (if (and (not (sql-null? (schema-join-table r))) 
+                                (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
+                           (let* ([jn-cls (string->symbol (tbl-nm-norm (schema-join-table r)))])
+                             (cons (list (string->symbol (join-nm-norm (schema-join-table r))) 
                                          #`'#,jn-cls
-                                         #'#:cardinality (join-cardinality con schema-nm dbsys-type (vector-ref r 4) (vector-ref r 5))
-                                         #`(where (= (#,jn-cls #,(string->symbol (vector-ref r 5))) ?)) 
-                                         (string->symbol (col-nm-norm (vector-ref r 0))))
+                                         #'#:cardinality (join-cardinality con schema-nm dbsys-type (schema-join-table r) (schema-join-column r))
+                                         #`(where (= ('#,jn-cls #,(string->symbol (schema-join-column r))) ?)) 
+                                         (string->symbol (col-nm-norm (schema-column r))))
                                    l)) l))
          null schema))
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema)
-  (let ([pkey (map (lambda (v) (string->symbol (vector-ref v 0)) )
-                   (filter (lambda (f) (if (string? (vector-ref f 1)) (string=? (vector-ref f 1) "P") #f))
+  (let ([pkey (map (lambda (v) (string->symbol (schema-column v)) )
+                   (filter (lambda (f) (if (string? (schema-constraint-type f)) (string=? (schema-constraint-type f) "P") #f))
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
     
 ;;; Find autoincrement key in the table schema.
-(define (has-autoincrement-key? schema) (vector? (findf (lambda (f) (eq? (vector-ref f 3) 1)) schema)))
+(define (has-autoincrement-key? schema) (vector? (findf (lambda (f) (eq? (schema-auto-increment f) 1)) schema)))
   
 ;;; Default name normalizer. Replaces underscores and mixed case with hyphens. Returns all lower case.
 (define mixed-case-norm-regexp (regexp "([a-z])([A-Z])"))
@@ -333,7 +323,7 @@
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey) 
   (create-data-object con cls 
-    (query-row con (select-sql con cls (key-where-clause con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
+    (query-row con (select-sql con cls (key-where-clause-sql con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
 
 ;;; Save a data object.
 (define-syntax-rule (save-data-object con obj) 
