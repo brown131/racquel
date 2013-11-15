@@ -11,8 +11,11 @@
                          primary-key-fields
                          insert-sql 
                          update-sql 
-                         delete-sql 
+                         delete-sql
+                         join-cardinality
                          get-schema-columns
+                         key-where-clause-rql
+                         get-join-schema
                          get-schema-joins
                          get-schema-joins2
                          find-primary-key-fields
@@ -122,17 +125,16 @@
                                      
 (define-test-suite test-schema
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
-  (let* ([dbsys-type (dbsystem-name (connection-dbsystem *con*))]
-         [simple-schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f #:db-system-type dbsys-type)]
-         [address-schema (load-schema *con* *schema-name* "address" #:reverse-join? #f #:db-system-type dbsys-type)])
+  (let* ([simple-schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f #:db-system-type *test-dbsys-type*)]
+         [address-schema (load-schema *con* *schema-name* "address" #:reverse-join? #f #:db-system-type *test-dbsys-type*)])
     (test-case "simple schema loaded?" (check-eq? (length simple-schema) 4))
     (test-case "simple schema columns ok?" 
                (check-equal? (sort (get-schema-columns simple-schema column-name-normalizer) 
                                    string<? #:key (lambda (k) (symbol->string (first k))))
                              '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
     (test-case "simple schema joins ok?" 
-               (check-eq? (get-schema-joins *con* *schema-name* simple-schema dbsys-type table-name-normalizer
-                                            join-name-normalizer column-name-normalizer) null))
+               (check-equal? (get-schema-joins *con* *schema-name* simple-schema *test-dbsys-type* table-name-normalizer
+                                               join-name-normalizer column-name-normalizer) null))
     (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema) 'id))
     (test-case "simple autoincrement key found?" (check-false (has-autoincrement-key? simple-schema)))
     
@@ -142,15 +144,21 @@
                                    string<? #:key (lambda (k) (symbol->string (first k))))
                              '((city #f "city") (id #f "id") (line #f "line")
                                (person-id #f "person_id") (state #f "state") (zip-code #f "zip_code"))))
+    (test-case "address join schema ok?" 
+               (check-equal? (get-join-schema (load-schema *con* *schema-name* "address" #:db-system-type *test-dbsys-type*))
+                             '(("fk_person_id_address" "person" "id" "person_id" ("id")))))
+    (test-case "address join cardinality ok?" 
+               (check-equal? (eval-syntax (join-cardinality *con* *schema-name* *test-dbsys-type* "person" "id"))
+                             'one-to-one))
     (test-case "address schema join name ok?" 
-               (check-eq? (first (first (get-schema-joins *con* *schema-name* address-schema dbsys-type table-name-normalizer join-name-normalizer column-name-normalizer))) 
+               (check-eq? (first (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* table-name-normalizer join-name-normalizer column-name-normalizer))) 
                           'person))
     (test-case "address schema join cardinality ok?" 
-               (check-equal? (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type 
+               (check-equal? (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
                                                                            table-name-normalizer join-name-normalizer column-name-normalizer))) racquel-namespace)
                              'one-to-one))
     (test-case "address schema join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema dbsys-type 
+               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
                              '(where (= ('person% id) ?))))
     (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema) 'id))
@@ -163,23 +171,38 @@
                              (vector "join2_str" "F" 2 sql-null "Joined" "str" "FK_Join2")
                              (vector "simple_id" "F" 1 sql-null "Employer" "id" "FK_Employer")
                              (vector "id" "R" 1 sql-null "Address" "person_id" "FK_Person"))])
+      (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Employer")
+      (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Joined")
+      
+      (test-case "address join schema ok?" 
+                 (check-equal? (get-join-schema test-schema) '(("FK_Person" "Address" "person_id" "id" ("person_id"))
+                                                               ("FK_Employer" "Employer" "id" "simple_id" ("id"))
+                                                               ("FK_Join2" "Joined" "id" "join2_id" ("id" "str"))
+                                                               ("FK_Join1" "Joined" "id" "join1_id" ("id" "str")))))
+    
+      (test-case "key-where-clause-rql" )(check-equal?
+                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer))
+                                          '(where (= ('joined% id) ?)))     
+      (test-case "key-where-clause-rql" )(check-equal?
+                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id" "str") table-name-normalizer))
+                                          '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
+
       (test-case "test schema 1st join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
                              '(where (= ('address% person_id) ?))))
       (test-case "test schema 2nd join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+               (check-equal? (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
                              '(where (= ('employer% id) ?))))
       (test-case "test schema 3rd join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (third (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+               (check-equal? (syntax->datum #`#,(fifth (third (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (= ('joined% id) ?))))
+                             '(where (and (= ('joined% id) ?) (= ('joined% str) ?)))))
       (test-case "test schema 4th join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (fourth (get-schema-joins *con* *schema-name* test-schema dbsys-type 
+               (check-equal? (syntax->datum #`#,(fifth (fourth (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (= ('joined% id) ?))))
-      
+                             '(where (and (= ('joined% id) ?) (= ('joined% str) ?)))))
     )))
 
 

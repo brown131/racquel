@@ -102,6 +102,7 @@
       (raise-argument-error 'get-column-id "argument ~a is not a class" cls)))
 
 ;;; Get a join definition.
+;;; Join Definition: 1st = Join Name, 2nd = Join Class, 3rd = Cardinality, 4th = Where Clause
 (define-syntax-rule (get-join-definition jn-fld cls)
   (if (class? cls) (findf (lambda (f) (eq? 'jn-fld (first f))) (get-class-metadata joins cls))
       (raise-argument-error 'get-join-definition "argument ~a is not a class" cls)))

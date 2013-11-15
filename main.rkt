@@ -171,46 +171,37 @@
 
 ;;; Get the cardinality of a join based on schema metadata.
 (define (join-cardinality con schema-nm dbsys-type jn-tbl-nm jn-key) 
-  #''one-to-one)
-;  (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
- ;        [row (findf (lambda (r) (equal? (schema-column r) jn-key)) jn-schema)])
-  ;  (if (equal? (schema-constraint-type row) "P") #''one-to-one #''one-to-many)))
+  (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
+         [row (findf (lambda (r) (equal? (schema-column r) (if (list? jn-key) (first jn-key) jn-key))) jn-schema)])
+    (unless row (error 'join-cardinality "row not found for join table: ~a key: ~a" jn-tbl-nm jn-key))
+    (if (equal? (schema-constraint-type row) "P") #''one-to-one #''one-to-many)))
 
 ;;; RQL where-clause syntax for a key.
 (define (key-where-clause-rql jn-cls jn-columns tbl-nm-norm)
-   #`(where (= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol (first jn-columns))) ?)) 
-  )
+  (let ([jns (map (lambda (j) #`(= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol j)) ?)) jn-columns)])
+    (if (eq? (length jn-columns) 1) #`(where #,@jns) #`(where (and #,@jns)))))
+ 
+;;; Join information from the schema.
+(define (get-join-schema schema)
+  (foldl (lambda (r l) 
+           (if (and (not (sql-null? (schema-join-table r))) 
+                    (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
+               (let ([jn-def (findf (lambda (m) (string=? (schema-constraint r) (first m))) l)]) 
+                 (if jn-def (cons (append (take jn-def 4) (list (append (last jn-def) (list (schema-join-column r)))))
+                                  (remove (first jn-def) l (lambda (a b) (string=? a (first b)))))
+                     (cons (list (schema-constraint r)
+                                 (schema-join-table r)
+                                 (schema-join-column r) 
+                                 (schema-column r) 
+                                 (list (schema-join-column r))) l))) l)) null schema))
 
 ;;; Get joins from the schema.
-;;; Join Definition: 1st = Join Name, 2nd = Join Class, 3rd = Cardinality, 4th = Where Clause
-;;; TODO: NEEDS TO SUPPORT MULTI-PART KEYS AND MULTIPLE KEYS TO THE SAME TABLE.
 (define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
-  (let ([schema-jns (foldl (lambda (r l) 
-                             (if (and (not (sql-null? (schema-join-table r))) 
-                                      (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
-                                 (let ([jn-def (findf (lambda (m) (string=? (schema-join-table r) (first m))) l)]) 
-                                   (if jn-def (cons (append (take jn-def 2) (list (append (last jn-def) (list (schema-join-column r)))))
-                                                    (remove (first jn-def) l (lambda (a b) (string=? a (first b)))))
-                                       (cons (list (schema-join-table r)
-                                                   (schema-column r) 
-                                                   (list (schema-join-column r))) l))) l)) null schema)])
-    (map (lambda (j) (list (string->symbol (join-nm-norm (first j))) 
-                           #`'#,(string->symbol (tbl-nm-norm (first j)))
-                           #'#:cardinality (join-cardinality con schema-nm dbsys-type (first j) (second j)) 
-                           (key-where-clause-rql (first j) (last j) tbl-nm-norm)
-                           (string->symbol (col-nm-norm (second j))))) schema-jns)))
-
-(define (get-schema-joins2 con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
-  (foldl (lambda (r l) (if (and (not (sql-null? (schema-join-table r))) 
-                                (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
-                           (let* ([jn-cls (string->symbol (tbl-nm-norm (schema-join-table r)))])
-                             (cons (list (string->symbol (join-nm-norm (schema-join-table r))) 
-                                         #`'#,jn-cls
-                                         #'#:cardinality (join-cardinality con schema-nm dbsys-type (schema-join-table r) (schema-join-column r))
-                                         #`(where (= ('#,jn-cls #,(string->symbol (schema-join-column r))) ?)) 
-                                         (string->symbol (col-nm-norm (schema-column r))))
-                                   l)) l))
-         null schema))
+  (map (lambda (j) (list (string->symbol (join-nm-norm (second j))) 
+                         #`'#,(string->symbol (tbl-nm-norm (second j)))
+                         #'#:cardinality (join-cardinality con schema-nm dbsys-type (second j) (third j)) 
+                         (key-where-clause-rql (second j) (last j) tbl-nm-norm)
+                         (string->symbol (col-nm-norm (fourth j))))) (get-join-schema schema)))
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema)
