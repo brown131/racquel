@@ -27,9 +27,9 @@
 
 ;;; Database system to test.
 (define *test-dbsys-type* 
-  'mysql
+  ;'mysql
   ;'postgresql
-  ;'sqlite3
+  'sqlite3
   )
 
 ;;; Database connection for testing.
@@ -298,7 +298,7 @@
                (check-equal? (query-value *con* (sql-placeholder "select id from simple where id=?" *test-dbsys-type*) (get-field id obj)) 23)
                (check-equal? (query-value *con* (sql-placeholder "select name from simple where id=?" *test-dbsys-type*) (get-field id obj)) "test2")
                (check-equal? (query-value *con* (sql-placeholder "select description from simple where id=?" *test-dbsys-type*) (get-field id obj)) "this is a test")
-               (check-equal? (query-value *con* (sql-placeholder "select x from simple where id=?" *test-dbsys-type*) (get-field id obj)) 17/10)
+               (check-equal? (query-value *con* (sql-placeholder "select x from simple where id=?" *test-dbsys-type*) (get-field id obj)) 1.7)
                )  
    
     (test-case "object loaded?"
@@ -306,7 +306,7 @@
                  (check-equal? (get-field id s) 23)
                  (check-equal? (get-field name s) "test2")
                  (check-equal? (get-field description s) "this is a test")
-                 (check-equal? (get-field x s) 17/10)))
+                 (check-equal? (get-field x s) 1.7)))
    
     (test-case "object deleted?" 
                (delete-data-object *con* obj)

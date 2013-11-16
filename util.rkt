@@ -8,6 +8,15 @@
 
 (provide (all-defined-out))
 
+
+;;; ODBC database system type. Values are: 'sqlserver, 'oracle, or 'db2.
+(define *odbc-dbsystem-type* 'sqlserver)
+
+;;; Database system type.
+(define-syntax-rule (dbsystem-type con) 
+  (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
+    (if (equal? dbsys-type 'odbc) *odbc-dbsystem-type* dbsys-type)))
+
 ; Create a multi-dimensional hash table.
 (define (make-multi-hash #:weak? (wk? #f)) (if wk? (make-weak-hash) (make-hash)))
 
@@ -22,9 +31,6 @@
 
 ;;; Class of an object
 (define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
-
-;;; Database system type.
-(define-syntax-rule (dbsystem-type con) (dbsystem-name (connection-dbsystem con)))
 
 ;;; Select SQL.
 (define (select-sql con cls where-clause)

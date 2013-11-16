@@ -8,12 +8,11 @@
 (require db json "keywords.rkt" "metadata.rkt" "mixin.rkt" "schema.rkt" "util.rkt"
          (for-syntax racket/syntax syntax/parse "stxclass.rkt"))
  
-(provide data-class data-class* data-class? data-class-info data-object-state gen-data-class 
-         make-data-object select-data-object select-data-objects save-data-object 
+(provide *odbc-dbsystem-type* data-class data-class* data-class? data-class-info data-object-state 
+         gen-data-class make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
          get-join get-column set-column! json-data-class-mixin xml-data-class-mixin
          (all-from-out "keywords.rkt"))
-
 
 ;;;; DATA CLASS DEFINITION
    
