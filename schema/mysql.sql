@@ -6,7 +6,7 @@ create table simple (
   id int(11) not null,
   `name` varchar(30) default null,
   description varchar(500) default null,
-  x double not null,
+  x decimal(10,2) not null,
   primary key (id)
 ) engine=InnoDB auto_increment=1 default charset=latin1;
 
@@ -17,13 +17,13 @@ create table auto (
   primary key (id)
 ) engine=InnoDB auto_increment=1 default charset=latin1;
 
-create table if not exists multipartKey (
+create table if not exists multipartkey (
   simple_id int(11) not null,
   auto_id int(11) not null,
   primary key (simple_id, auto_id),
-  key k_simple_id_multipartKey (simple_id),
-  constraint fk_simple_id_multipartKey foreign key (simple_id) references simple (id),
-  constraint fk_auto_id_multipartKey foreign key (auto_id) references auto (id)
+  key multipartkey_simple_id_key (simple_id),
+  constraint multipartKey_simple_id_fkey foreign key (simple_id) references simple (id),
+  constraint multipartkey_auto_id_fkey foreign key (auto_id) references auto (id)
 ) engine=InnoDB default charset=latin1;
 
 create table if not exists person (
@@ -42,8 +42,8 @@ create table if not exists address (
   state varchar(30) default null,
   zip_code varchar(30) default null,
   primary key (id),
-  key fk_person_id_address (person_id),
-  constraint fk_person_id_address foreign key (person_id) references person (id)
+  key address_person_id_key (person_id),
+  constraint address_person_id_fkey foreign key (person_id) references person (id)
 ) engine=InnoDB default charset=latin1;
   
 /* DML */

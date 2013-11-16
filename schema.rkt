@@ -131,7 +131,7 @@ left join information_schema.referential_constraints as refs
 left join information_schema.key_column_usage as fkey
   on fkey.constraint_schema = refs.unique_constraint_schema
   and fkey.constraint_name = refs.unique_constraint_name
-where cols.table_name='" tbl-nm "'")])
+where cols.column_default <> 'UNIQUE' and cols.table_name='" tbl-nm "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
@@ -154,8 +154,13 @@ where fkey.table_name='" tbl-nm "'")))
 
 ;;; Load SQLite3 schema.
 (define (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "pragma table_info(" tbl-nm ");")])
-    (query-rows con schema-sql)))
+  (let ([tbl-pragma (query-rows con (string-append "pragma table_info(" tbl-nm ");"))]
+        [fk-pragma (query-rows con (string-append "pragma foreign_key_list(" tbl-nm ");"))])
+    (map (lambda (t) (let ([row (make-vector 7)])
+                       (vector-set! row 0 (vector-ref t 1))
+                       (vector-set! row 1 (if (eq? (vector-ref t 5) 1) "P" sql-null))
+                       (vector-set! row 0 (vector-ref t 1))
+                       )) tbl-pragma)))
 
 ;;; Load SQL Server schema.
 (define (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)

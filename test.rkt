@@ -17,7 +17,6 @@
                          key-where-clause-rql
                          get-join-schema
                          get-schema-joins
-                         get-schema-joins2
                          find-primary-key-fields
                          create-data-object
                          has-autoincrement-key?))
@@ -30,6 +29,7 @@
 (define *test-dbsys-type* 
   'mysql
   ;'postgresql
+  ;'sqlite3
   )
 
 ;;; Database connection for testing.
@@ -38,6 +38,8 @@
          (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test" #:password "test")]
         [(eq? *test-dbsys-type* 'postgresql) 
          (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" #:password "test")]
+        [(eq? *test-dbsys-type* 'sqlite3) 
+         (sqlite3-connect #:database "schema/racquel_test.sqlite")]        
         ))
 
 ;;; Schema name for testing.
@@ -146,7 +148,7 @@
                                (person-id #f "person_id") (state #f "state") (zip-code #f "zip_code"))))
     (test-case "address join schema ok?" 
                (check-equal? (get-join-schema (load-schema *con* *schema-name* "address" #:db-system-type *test-dbsys-type*))
-                             '(("fk_person_id_address" "person" "id" "person_id" ("id")))))
+                             '(("address_person_id_fkey" "person" "id" "person_id" ("id")))))
     (test-case "address join cardinality ok?" 
                (check-equal? (eval-syntax (join-cardinality *con* *schema-name* *test-dbsys-type* "person" "id"))
                              'one-to-one))
@@ -180,10 +182,10 @@
                                                                ("FK_Join2" "Joined" "id" "join2_id" ("id" "str"))
                                                                ("FK_Join1" "Joined" "id" "join1_id" ("id" "str")))))
     
-      (test-case "key-where-clause-rql" )(check-equal?
+      (test-case "key-where-clause-rql ok?" )(check-equal?
                                          (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer))
                                           '(where (= ('joined% id) ?)))     
-      (test-case "key-where-clause-rql" )(check-equal?
+      (test-case "key-where-clause-rql ok?" )(check-equal?
                                          (syntax->datum #`#,(key-where-clause-rql "Joined" '("id" "str") table-name-normalizer))
                                           '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
 
