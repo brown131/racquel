@@ -27,9 +27,10 @@
 
 ;;; Database system to test.
 (define *test-dbsys-type* 
-  ;'mysql
+  'mysql
   ;'postgresql
-  'sqlite3
+  ;'sqlite3
+  ;'sqlserver
   )
 
 ;;; Database connection for testing.
@@ -40,6 +41,9 @@
          (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" #:password "test")]
         [(eq? *test-dbsys-type* 'sqlite3) 
          (sqlite3-connect #:database "schema/racquel_test.sqlite")]        
+        [(eq? *test-dbsys-type* 'sqlserver) 
+         ; #:server "mike" #:port 1433 
+         (odbc-connect #:dsn "racquel_test" #:user "test" #:password "test")]
         ))
 
 ;;; Schema name for testing.

@@ -140,8 +140,8 @@ where fkey.table_name='" tbl-nm "'")))
 
 ;;; Load SQL Server schema.
 (define (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type, keycols.ordinal_position, 
-  case when columnproperty(object_id(table_name), column_nam, 'isidentity')=1 then 1 end,
+  (let ([schema-sql (string-append "select cols.column_name, substring(cons.constraint_type,1,1), keycols.ordinal_position, 
+  case when columnproperty(object_id(cols.table_name), cols.column_name, 'isidentity')=1 then 1 end,
   fkey.table_name, fkey.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
@@ -162,7 +162,7 @@ where cols.table_name='" tbl-nm "'")])
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
 select fkey.column_name, 'R', fkey.ordinal_position, 
-   case when columnproperty(object_id(table_name), column_nam, 'isidentity')=1 then 1 end, 
+   case when columnproperty(object_id(cols.table_name), cols.column_name, 'isidentity')=1 then 1 end, 
    cols.table_name, cols.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as fkey
