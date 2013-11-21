@@ -27,11 +27,16 @@
 
 ;;; Database system to test.
 (define *test-dbsys-type* 
-  'mysql
+  ;'mysql
   ;'postgresql
   ;'sqlite3
   ;'sqlserver
+  'oracle
+  ;'db2
   )
+
+(when (equal? *test-dbsys-type* 'oracle) (set-odbc-dbsystem-type! *test-dbsys-type*))
+(when (equal? *test-dbsys-type* 'db2) (set-odbc-dbsystem-type! *test-dbsys-type*))
 
 ;;; Database connection for testing.
 (define *con* 
@@ -42,17 +47,21 @@
         [(eq? *test-dbsys-type* 'sqlite3) 
          (sqlite3-connect #:database "schema/racquel_test.sqlite")]        
         [(eq? *test-dbsys-type* 'sqlserver) 
-         ; #:server "mike" #:port 1433 
          (odbc-connect #:dsn "racquel_test" #:user "test" #:password "test")]
+        [(eq? *test-dbsys-type* 'oracle) 
+         (odbc-connect #:dsn "racquel_test_oracle" #:user "test" #:password "test")]
+        [(eq? *test-dbsys-type* 'db2) 
+         (odbc-connect #:dsn "racquel_test_db2" #:user "test" #:password "test")]
         ))
 
 ;;; Schema name for testing.
 (define *schema-name* 
   (cond [(eq? *test-dbsys-type* 'mysql) "racquel_test"]
         [(eq? *test-dbsys-type* 'postgresql) "public"]
+        [(eq? *test-dbsys-type* 'sqlserver) "dbo"]
+        [(eq? *test-dbsys-type* 'oracle) "RACQUEL_TEST"]
         ))
-
-
+  
 ;;;; TEST DATA OBJECT DEFINITION
 
 
@@ -283,11 +292,11 @@
                (set-column! id obj 23)
                (set-column! name obj "test")
                (set-column! description obj "this is a test")
-               (set-column! x obj 1.7)
+               (set-column! x obj 1.70)
                (check-eq? (get-column id obj) 23)
                (check-eq? (get-column name obj) "test")
                (check-eq? (get-column description obj) "this is a test")
-               (check-eq? (get-column x obj) 1.7))
+               (check-eq? (get-column x obj) 1.70))
    
     (test-case "object inserted?" 
                (insert-data-object *con* obj)

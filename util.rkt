@@ -17,6 +17,8 @@
   (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
     (if (equal? dbsys-type 'odbc) *odbc-dbsystem-type* dbsys-type)))
 
+(define (set-odbc-dbsystem-type! odbc-dbsys-type) (set! *odbc-dbsystem-type* odbc-dbsys-type))
+
 ; Create a multi-dimensional hash table.
 (define (make-multi-hash #:weak? (wk? #f)) (if wk? (make-weak-hash) (make-hash)))
 
