@@ -176,15 +176,15 @@ left join information_schema.table_constraints as cons
    and cons.table_schema=fkey.table_schema
 where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
-    (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, column_name"))
+    (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, cols.column_name"))
     (query-rows con schema-sql)))
 
 ;;; Load Oracle schema
 (define (load-oracle-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type
+  (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type,
    cc.position, null, rcons.table_name, rcc.column_name, cons.constraint_name
 from all_tab_cols cols
-join all_cons_columns cc
+left outer join all_cons_columns cc
    on cols.owner=cc.owner
    and cols.table_name=cc.table_name
    and cols.column_name=cc.column_name
@@ -199,8 +199,8 @@ left outer join all_cons_columns rcc
    on rcons.constraint_name=rcc.constraint_name
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
-where cols.table_name='" tbl-nm "'")])
-    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.owner='" schema-nm "'")))
+where cols.table_name='" (string-upcase tbl-nm) "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql)))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
 select rcc.column_name, 'R', cc.position, 
@@ -221,12 +221,17 @@ left outer join all_cons_columns rcc
    on rcons.constraint_name=rcc.constraint_name
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
-where rcons.table_name='" tbl-nm "'")))
-      (when schema-nm (set! schema-sql (string-append schema-sql " and rcols.owner='" schema-nm "'"))))
-    (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, column_name"))
-    (query-rows con schema-sql)))
+where rcons.table_name='" (string-upcase tbl-nm) "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql))))
+    (set! schema-sql (string-append schema-sql " order by constraint_name, cc.position, cols.column_name"))
+    (let ([rows (query-rows con schema-sql)])
+      (when (eq? (length rows) 0) (error 'load-oracle-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))
+      (map (lambda (r) (vector-set! r 0 (string-downcase (vector-ref r 0)))) rows)
+      (foldl (lambda (r l) (if (findf (lambda (r1) (equal? (vector-ref r1 0) (vector-ref r 0))) l) l 
+                               (cons r l))) null rows)
+    )))
 
-;;; Load default schema.
+;;; Load generic schema.
 (define (load-default-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name as col_name, cons.constraint_type, keycols.ordinal_position, null,
   fkey.table_name, fkey.column_name, cons.constraint_name
