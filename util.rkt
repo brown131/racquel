@@ -68,3 +68,6 @@
                            [(eq? dbsys-type 'sqlserver) (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)])  
                      con schema-nm tbl-nm))                                
   (multi-hash-ref *data-class-schema* con schema-nm tbl-nm))
+
+;;; True if string t contains string s.
+;(define (string-contains t s) 

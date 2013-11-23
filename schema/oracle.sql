@@ -72,6 +72,8 @@ create table address (
 	zip_code varchar2(30), 
 	constraint address_pk primary key (id) enable
 );
+alter table address add constraint address_person_id_fkey foreign key (person_id)
+	  references  person (id) on delete cascade enable;
 grant all privileges on table address to test;
 create or replace trigger address_id_trg
 before insert on address              

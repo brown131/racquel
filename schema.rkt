@@ -4,7 +4,7 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db)
+(require db (lib "string.ss" "srfi" "13"))
 
 (provide (all-defined-out))
 
@@ -21,9 +21,10 @@
           [(eq? dbsys-type 'postgresql) "select currval('auto_id_seq')"] ;; Needs the sequence name
           [(eq? dbsys-type 'sqlite3) "select last_insert_rowid()"]
           [(eq? dbsys-type 'sqlserver) "select @@identity"]
-          [(eq? dbsys-type 'oracle) "select auto_id_seq.currval"]  ;; Needs the sequence name
+          ;; Needs the sequence name
+          [(eq? dbsys-type 'oracle) "select auto_id_seq.currval from dual"]
           [(eq? dbsys-type 'db2) "select identity_val_local() as lastid from sysibm.sysdummy1"]
-          [else (error "autocrement not defined for this database")]))
+          [else (error 'sql-autoincrement "auto-increment not defined for database system ~a" dbsys-type)]))
 
 ;;; Schema accessors.
 (define-syntax-rule (schema-auto-increment row) (vector-ref row 3))
@@ -182,8 +183,13 @@ where fkey.table_name='" tbl-nm "'")))
 ;;; Load Oracle schema
 (define (load-oracle-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type,
-   cc.position, null, rcons.table_name, rcc.column_name, cons.constraint_name
+   cc.position, trigger_body, rcons.table_name, rcc.column_name, cons.constraint_name
 from all_tab_cols cols
+left outer join all_triggers trgs
+   on cols.owner=trgs.owner
+   and cols.table_name=trgs.table_name 
+   and trgs.triggering_event='INSERT'
+   and status='ENABLED'
 left outer join all_cons_columns cc
    on cols.owner=cc.owner
    and cols.table_name=cc.table_name
@@ -199,13 +205,18 @@ left outer join all_cons_columns rcc
    on rcons.constraint_name=rcc.constraint_name
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
-where cols.table_name='" (string-upcase tbl-nm) "'")])
+where cols.table_name='" (string-upcase tbl-nm) "' and cols.owner='" (string-upcase schema-nm)  "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql)))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
 select rcc.column_name, 'R', cc.position, 
-   case when cols.extra='auto_increment' then 1 end, cols.table_name, cols.column_name, cons.constraint_name
+   trigger_body, cols.table_name, cols.column_name, cons.constraint_name
 from all_tab_cols cols
+left outer join all_triggers trgs
+   on cols.owner=trgs.owner
+   and cols.table_name=trgs.table_name 
+   and trgs.triggering_event='INSERT'
+   and status='ENABLED'
 join all_cons_columns cc
    on cols.owner=cc.owner
    and cols.table_name=cc.table_name
@@ -222,17 +233,22 @@ left outer join all_cons_columns rcc
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
 where rcons.table_name='" (string-upcase tbl-nm) "'")))
-      (when schema-nm (set! schema-sql (string-append schema-sql))))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.owner='" (string-upcase schema-nm)))))
     (set! schema-sql (string-append schema-sql " order by constraint_name, cc.position, cols.column_name"))
     (let ([rows (query-rows con schema-sql)])
-      (when (eq? (length rows) 0) (error 'load-oracle-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))
-      (map (lambda (r) (vector-set! r 0 (string-downcase (vector-ref r 0)))) rows)
-      (foldl (lambda (r l) (if (findf (lambda (r1) (equal? (vector-ref r1 0) (vector-ref r 0))) l) l 
-                               (cons r l))) null rows)
+      (when (eq? (length rows) 0) (error 'load-oracle-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))      
+      (foldl (lambda (r l) 
+               (if (findf (lambda (rl) (equal? (vector-ref rl 0) (vector-ref r 0))) l) l (cons r l))) null 
+             (map (lambda (r) 
+                    (for/vector ([i (in-range 0 (vector-length r))])
+                       (let ([val (vector-ref r i)])
+                         (if (and (member i '(0 4 5 6)) (string? val)) (string-downcase val)
+                             (if (and (eq? i 3) (string? val)) (if (string-contains-ci val "NEXTVAL") 1 sql-null)
+                                 val))))) rows))
     )))
 
-;;; Load generic schema.
-(define (load-default-schema con schema-nm tbl-nm rev-jn?)
+;;; Load DB/2 schema.
+(define (load-db2-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name as col_name, cons.constraint_type, keycols.ordinal_position, null,
   fkey.table_name, fkey.column_name, cons.constraint_name
 from information_schema.columns as cols

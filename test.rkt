@@ -59,7 +59,7 @@
   (cond [(eq? *test-dbsys-type* 'mysql) "racquel_test"]
         [(eq? *test-dbsys-type* 'postgresql) "public"]
         [(eq? *test-dbsys-type* 'sqlserver) "dbo"]
-        [(eq? *test-dbsys-type* 'oracle) "RACQUEL_TEST"]
+        [(eq? *test-dbsys-type* 'oracle) "TEST"]
         ))
   
 ;;;; TEST DATA OBJECT DEFINITION
@@ -158,9 +158,10 @@
                (check-equal? (sort (get-schema-columns address-schema column-name-normalizer) 
                                    string<? #:key (lambda (k) (symbol->string (first k))))
                              '((city #f "city") (id #f "id") (line #f "line")
-                               (person-id #f "person_id") (state #f "state") (zip-code #f "zip_code"))))
+                               (person-id #f "person_id")(state #f "state") (zip-code #f "zip_code"))))
+    ;(test-case "schema?" (check-eq? address-schema 1))
     (test-case "address join schema ok?" 
-               (check-equal? (get-join-schema (load-schema *con* *schema-name* "address" #:db-system-type *test-dbsys-type*))
+               (check-equal? (get-join-schema address-schema)
                              '(("address_person_id_fkey" "person" "id" "person_id" ("id")))))
     (test-case "address join cardinality ok?" 
                (check-equal? (eval-syntax (join-cardinality *con* *schema-name* *test-dbsys-type* "person" "id"))
@@ -323,7 +324,7 @@
    
     (test-case "object deleted?" 
                (delete-data-object *con* obj)
-               (check-eq? (query-value *con* (sql-placeholder "select count(*) from simple where id=?" *test-dbsys-type*) (get-field id obj)) 0)) 
+               (check-true (= (query-value *con* (sql-placeholder "select count(*) from simple where id=?" *test-dbsys-type*) (get-field id obj)) 0)))
     ))
 
 
@@ -404,8 +405,8 @@
       
       (test-case "object deleted?" 
                  (delete-data-object *con* obj)
-                 (check-eq? (query-value *con* (sql-placeholder "select count(*) from auto where id=?" *test-dbsys-type*) 
-                                         (get-field id obj)) 0)
+                 (check-true (= (query-value *con* (sql-placeholder "select count(*) from auto where id=?" *test-dbsys-type*) 
+                                         (get-field id obj)) 0))
                  (check-eq? (data-object-state obj) 'deleted)) 
       )))
 
