@@ -250,8 +250,8 @@ where rcons.table_name='" (string-upcase tbl-nm) "'")))
                     (for/vector ([i (in-range 0 (vector-length r))])
                        (let ([val (vector-ref r i)])
                          (if (and (member i '(0 4 5 6)) (string? val)) (string-downcase val)
-                             (if (and (eq? i 3) (string? val)) (if (regexp-match #rx"(?i:NEXTVAL)" val) 1 sql-null)
-                                 val))))) rows))
+                             (if (and (eq? i 3) (string? val)) (let ([match (regexp-match #px"([a-zA-Z0-9_$#]+)\\.(?i:nextval)" val)])
+                                                            (if match (second match) sql-null)) val))))) rows))
     )))
 
 ;;; Load DB/2 schema.
