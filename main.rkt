@@ -21,25 +21,26 @@
 (define (data-object-state obj)
   (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
   (get-field data-object-state obj))
-     
-;;; Set autoincrement id.
-(define (set-autoincrement-id! con obj)
-  (let ([cls (object-class obj)])
-    (when (get-class-metadata autoincrement-key cls)
-      (dynamic-set-field! (get-class-metadata autoincrement-key cls) obj
-                          (query-value con (sql-autoincrement (dbsystem-type con)))))))
-     
+       
 ;;; Primary key fields
 (define (primary-key-fields cls)
   (let ([pkey (get-class-metadata primary-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
+   
+;;; Set auto-increment id.
+(define (set-autoincrement-id! con obj)
+  (let* ([cls (object-class obj)]
+         [auto-key (get-class-metadata autoincrement-key cls)])
+    (when auto-key
+      (dynamic-set-field! (get-class-metadata primary-key cls) obj
+                          (query-value con (sql-autoincrement (dbsystem-type con) auto-key))))))
 
 ;;; Get the primary key from an object.
 (define (get-primary-key obj)
  (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields (object-class obj))))
 
-;;; Autoincrement key fields
+;;; Auto-increment key fields
 (define (autoincrement-key-fields cls)
-  (let ([pkey (get-class-metadata autoincrement-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
+  (if (get-class-metadata autoincrement-key cls) (primary-key-fields cls) null))
     
 ;;; Columns without the autoincrement key
 (define (savable-fields con cls)
@@ -209,8 +210,11 @@
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
     
-;;; Find autoincrement key in the table schema.
-(define (has-autoincrement-key? schema) (vector? (findf (lambda (f) (eq? (schema-auto-increment f) 1)) schema)))
+;;; Get the autoincrement key from the table schema.
+(define (get-autoincrement-key schema dbsys-type) (let ([row (findf (lambda (f) (cond [(eq? dbsys-type 'postgresql) (string? (schema-autoincrement f))]
+                                                                                      [(eq? dbsys-type 'oracle) (string? (schema-autoincrement f))]
+                                                                                      [else (eq? (schema-autoincrement f) 1)])) schema)])
+                                                    (if row (if (string? (schema-autoincrement row)) (schema-autoincrement row) #t) #f)))
   
 ;;; Default name normalizer. Replaces underscores and mixed case with hyphens. Returns all lower case.
 (define mixed-case-norm-regexp (regexp "([a-z])([A-Z])"))
@@ -235,12 +239,12 @@
          [pkey (find-primary-key-fields schema)]
          [jns (if (or gen-joins? gen-rev-joins?)
                   (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm) null)]
+         [auto-key (get-autoincrement-key schema dbsys-type)]
          [stx #`(let ([#,cls-nm
                        (data-class #,base-cls
                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))
                                    #,(append '(column) (get-schema-columns schema col-nm-norm))
-                                   #,(if (has-autoincrement-key? schema) (list 'primary-key pkey '#:autoincrement #t)
-                                         (list 'primary-key pkey))
+                                   #,(if auto-key (list 'primary-key pkey '#:autoincrement auto-key) (list 'primary-key pkey))
                                    #,(if (and gen-joins? (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
                                    (super-new)
                                    (inspect #f)

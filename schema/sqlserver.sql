@@ -6,7 +6,7 @@ create table simple (
   id int primary key not null,
   [name] varchar(30) default null,
   description varchar(500) default null,
-  x decimal(10,2) not null
+  x int not null
 )
 
 create table [auto] (

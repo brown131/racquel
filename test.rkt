@@ -19,7 +19,7 @@
                          get-schema-joins
                          find-primary-key-fields
                          create-data-object
-                         has-autoincrement-key?))
+                         get-autoincrement-key))
  
 
 ;;;; SETUP
@@ -30,8 +30,8 @@
   ;'mysql
   ;'postgresql
   ;'sqlite3
-  ;'sqlserver
-  'oracle
+  'sqlserver
+  ;'oracle
   ;'db2
   )
 
@@ -151,8 +151,9 @@
                (check-equal? (get-schema-joins *con* *schema-name* simple-schema *test-dbsys-type* table-name-normalizer
                                                join-name-normalizer column-name-normalizer) null))
     (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema) 'id))
-    (test-case "simple autoincrement key found?" (check-false (has-autoincrement-key? simple-schema)))
+    (test-case "simple autoincrement key found?" (check-false (get-autoincrement-key simple-schema *test-dbsys-type*)))
     
+    ;(test-case "address schema" (check-eq? address-schema 111))
     (test-case "address schema loaded?" (check-eq? (length address-schema) 6))
     (test-case "address schema columns ok?" 
                (check-equal? (sort (get-schema-columns address-schema column-name-normalizer) 
@@ -178,7 +179,10 @@
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
                              '(where (= ('person% id) ?))))
     (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema) 'id))
-    (test-case "address autoincrement key found?" (check-true (has-autoincrement-key? address-schema)))
+    (test-case "address autoincrement key found?" 
+               (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) "address_id_seq")]
+                     [(eq? *test-dbsys-type* 'oracle) (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) "address_id_seq")]
+                     [else (check-true (get-autoincrement-key address-schema *test-dbsys-type*))]))
     
     (let ([test-schema (list (vector "id" "P" 1 1 sql-null sql-null "PK")
                              (vector "join1_id" "F" 1 sql-null "Joined" "id" "FK_Join1")
@@ -186,12 +190,12 @@
                              (vector "join2_id" "F" 1 sql-null "Joined" "id" "FK_Join2")
                              (vector "join2_str" "F" 2 sql-null "Joined" "str" "FK_Join2")
                              (vector "simple_id" "F" 1 sql-null "Employer" "id" "FK_Employer")
-                             (vector "id" "R" 1 sql-null "Address" "person_id" "FK_Person"))])
+                             (vector "id" "R" 1 sql-null "address" "person_id" "FK_Person"))])
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Employer")
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Joined")
       
       (test-case "address join schema ok?" 
-                 (check-equal? (get-join-schema test-schema) '(("FK_Person" "Address" "person_id" "id" ("person_id"))
+                 (check-equal? (get-join-schema test-schema) '(("FK_Person" "address" "person_id" "id" ("person_id"))
                                                                ("FK_Employer" "Employer" "id" "simple_id" ("id"))
                                                                ("FK_Join2" "Joined" "id" "join2_id" ("id" "str"))
                                                                ("FK_Join1" "Joined" "id" "join1_id" ("id" "str")))))
@@ -289,15 +293,17 @@
                (check-equal? (select-sql *con* simple% "where id=?") 
                              (sql-placeholder "select description, id, name, x from simple where id=?" *test-dbsys-type*)))
   
+    (define x-val (if (eq? *test-dbsys-type* 'sqlserver) 15 1.5))
+    
     (test-case "columns set?"
                (set-column! id obj 23)
                (set-column! name obj "test")
                (set-column! description obj "this is a test")
-               (set-column! x obj 1.70)
+               (set-column! x obj x-val)
                (check-eq? (get-column id obj) 23)
                (check-eq? (get-column name obj) "test")
                (check-eq? (get-column description obj) "this is a test")
-               (check-eq? (get-column x obj) 1.70))
+               (check-eq? (get-column x obj) x-val))
    
     (test-case "object inserted?" 
                (insert-data-object *con* obj)
@@ -312,7 +318,7 @@
                (check-equal? (query-value *con* (sql-placeholder "select id from simple where id=?" *test-dbsys-type*) (get-field id obj)) 23)
                (check-equal? (query-value *con* (sql-placeholder "select name from simple where id=?" *test-dbsys-type*) (get-field id obj)) "test2")
                (check-equal? (query-value *con* (sql-placeholder "select description from simple where id=?" *test-dbsys-type*) (get-field id obj)) "this is a test")
-               (check-equal? (query-value *con* (sql-placeholder "select x from simple where id=?" *test-dbsys-type*) (get-field id obj)) 1.7)
+               (check-true (= (query-value *con* (sql-placeholder "select x from simple where id=?" *test-dbsys-type*) (get-field id obj)) x-val))
                )  
    
     (test-case "object loaded?"
@@ -320,7 +326,7 @@
                  (check-equal? (get-field id s) 23)
                  (check-equal? (get-field name s) "test2")
                  (check-equal? (get-field description s) "this is a test")
-                 (check-equal? (get-field x s) 1.7)))
+                 (check-true (= (get-field x s) x-val))))
    
     (test-case "object deleted?" 
                (delete-data-object *con* obj)
@@ -350,7 +356,9 @@
                                '((description "description" "description") (id "id""id") (name "name" "name")))
                  (check-equal? j-defs null)
                  (check-eq? pkey 'id)
-                 (check-eq? auto-key 'id)
+                 (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? auto-key "auto_id_seq")]
+                       [(eq? *test-dbsys-type* 'oracle) (check-equal? auto-key "auto_id_seq")]
+                       [else (check-true auto-key)])
                  (check-eq? ext-nm "auto")
                  (check-not-eq? st-key #f)
                  ))
@@ -416,20 +424,36 @@
 
 (define-test-suite test-joins
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
-  (let* ([person% (data-class object% 
-             (table-name "person" "Person")  
-             (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
-             (primary-key id #:autoincrement #t)
-             (join (addresses 'address% (where (= ('address% person-id) ?)) id))
-             (super-new)
-             (inspect #f))]
-        [address% (data-class object% 
-             (table-name "address"  "Address")  
-             (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
-             (primary-key id #:autoincrement #t)
-             (join (person person% #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
-             (super-new)
-             (inspect #f))]
+  (let* ([person% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
+                      (data-class object% 
+                                  (table-name "person" "Person")  
+                                  (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
+                                  (primary-key id #:autoincrement "auto_id_seq")
+                                  (join (addresses 'address% (where (= ('address% person-id) ?)) id))
+                                  (super-new)
+                                  (inspect #f))
+                      (data-class object% 
+                                  (table-name "person" "Person")  
+                                  (column (id 1 "id") (first-name #f "first_name") (last-name #f "last_name") (age #f "age"))
+                                  (primary-key id #:autoincrement #t)
+                                  (join (addresses 'address% (where (= ('address% person-id) ?)) id))
+                                  (super-new)
+                                  (inspect #f)))]
+        [address% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
+                      (data-class object% 
+                                  (table-name "address"  "Address")  
+                                  (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
+                                  (primary-key id #:autoincrement "address_id_seq")
+                                  (join (person person% #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
+                                  (super-new)
+                                  (inspect #f))
+                      (data-class object% 
+                                  (table-name "address"  "Address")  
+                                  (column (id 1 "id") (person-id 1 "person_id") (line #f "line") (city #f "city") (state #f "state") (zip-code #f "zip_code"))
+                                  (primary-key id #:autoincrement #t)
+                                  (join (person person% #:cardinality 'one-to-one (where (= (person% id) ?)) person-id))
+                                  (super-new)
+                                  (inspect #f)))]
         [person-obj (new person%)]
         [address-obj (new address%)])
 
@@ -452,7 +476,9 @@
                  (check-equal? (first (map second j-defs)) 'address%)
                  (check-equal? (first (map third j-defs)) 'one-to-many)
                  (check-eq? pkey 'id)
-                 (check-eq? auto-key 'id)
+                 (check-eq? auto-key (cond [(eq? *test-dbsys-type* 'postgresql) "auto_id_seq"]
+                                           [(eq? *test-dbsys-type* 'oracle) "auto_id_seq"]
+                                           [else #t]))
                  (check-eq? ext-nm "Person")
                  (check-not-eq? st-key #f)
                  ))
@@ -480,7 +506,9 @@
                  (check-equal? (first (map second j-defs)) person%)
                  (check-equal? (first (map third j-defs)) 'one-to-one)
                  (check-eq? pkey 'id)
-                 (check-eq? auto-key 'id)
+                 (check-eq? auto-key (cond [(eq? *test-dbsys-type* 'postgresql) "address_id_seq"]
+                                           [(eq? *test-dbsys-type* 'oracle) "address_id_seq"]
+                                           [else #t]))
                  (check-eq? ext-nm "Address")
                  (check-not-eq? st-key #f)
                  ))
@@ -501,27 +529,45 @@
                                    #:column-name-normalizer column-name-normalizer
                                    #:table-name-externalizer name-externalizer)]
          [obj (new address%)])   
-    (test-case "generated class ok?" (check-equal? (gen-data-class *con* "address" #:print? #t
-                                                                   #:schema-name *schema-name*
-                                                                   #:table-name-normalizer table-name-normalizer
-                                                                   #:column-name-normalizer column-name-normalizer
-                                                                   #:table-name-externalizer name-externalizer)
-                                                   '(let ((address%
-                                                           (data-class
-                                                            object%
-                                                            (table-name "address" "Address")
-                                                            (column
-                                                             (city #f "city")
-                                                             (id #f "id")
-                                                             (line #f "line")
-                                                             (person-id #f "person_id")
-                                                             (state #f "state")
-                                                             (zip-code #f "zip_code"))
-                                                            (primary-key id #:autoincrement #t)
-                                                            (join (person 'person% #:cardinality 'one-to-one (where (= ('person% id) ?)) person-id))
-                                                            (super-new)
-                                                            (inspect #f))))
-                                                      address%)))
+    (test-case "generated class ok?" 
+               (check-equal? (gen-data-class *con* "address" #:print? #t
+                                             #:schema-name *schema-name*
+                                             #:table-name-normalizer table-name-normalizer
+                                             #:column-name-normalizer column-name-normalizer
+                                             #:table-name-externalizer name-externalizer)
+                             (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
+                                 '(let ((address%
+                                         (data-class
+                                          object%
+                                          (table-name "address" "Address")
+                                          (column
+                                           (city #f "city")
+                                           (id #f "id")
+                                           (line #f "line")
+                                           (person-id #f "person_id")
+                                           (state #f "state")
+                                           (zip-code #f "zip_code"))
+                                          (primary-key id #:autoincrement "address_id_seq")
+                                          (join (person 'person% #:cardinality 'one-to-one (where (= ('person% id) ?)) person-id))
+                                          (super-new)
+                                          (inspect #f))))
+                                    address%)
+                                 '(let ((address%
+                                         (data-class
+                                          object%
+                                          (table-name "address" "Address")
+                                          (column
+                                           (city #f "city")
+                                           (id #f "id")
+                                           (line #f "line")
+                                           (person-id #f "person_id")
+                                           (state #f "state")
+                                           (zip-code #f "zip_code"))
+                                          (primary-key id #:autoincrement #t)
+                                          (join (person 'person% #:cardinality 'one-to-one (where (= ('person% id) ?)) person-id))
+                                          (super-new)
+                                          (inspect #f))))
+                                    address%))))
     (test-case "address class created?" (check-not-eq? address% #f))
     (test-true "address class is a data class?" (data-class? address%))
     (test-case "address object created?" (check-not-eq? obj #f))
@@ -540,7 +586,9 @@
                                                       (state "state" "state") (zip-code "zip_code" "zip_code")))
                  (check-equal? (caar j-defs) 'person)
                  (check-eq? pkey 'id)
-                 (check-eqv? auto-key 'id)
+                 (check-eq? auto-key (cond [(eq? *test-dbsys-type* 'postgresql) "address_id_seq"]
+                                           [(eq? *test-dbsys-type* 'oracle) "address_id_seq"]
+                                           [else #t]))
                  (check-eq? ext-nm "Address")
                  (check-not-eq? st-key #f)
                  ))

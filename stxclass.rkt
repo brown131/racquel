@@ -166,9 +166,9 @@
            #:attr col-defs #'null 
            #:attr jn-rows #'(cond jn-def.j-row ...)
            #:attr jn-defs #'(list jn-def.j-def ...))
-  (pattern (primary-key pkey:id #:autoincrement flag:boolean) 
+  (pattern (primary-key pkey:id #:autoincrement flag:expr) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m 'pkey)))
+           #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m flag)))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)

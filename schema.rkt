@@ -4,7 +4,7 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db (lib "string.ss" "srfi" "13"))
+(require db)
 
 (provide (all-defined-out))
 
@@ -15,19 +15,18 @@
         (if (equal? sql new-sql) sql (sql-placeholder new-sql dbsys-type (+ i 1))))
       sql))
 
-;;; Set autoincrement value retrieval SQL string by database system type.
-(define (sql-autoincrement dbsys-type) 
+;;; Set auto-increment value retrieval SQL string by database system type.
+(define (sql-autoincrement dbsys-type (seq #f)) 
     (cond [(eq? dbsys-type 'mysql) "select last_insert_id()"]
-          [(eq? dbsys-type 'postgresql) "select currval('auto_id_seq')"] ;; Needs the sequence name
+          [(eq? dbsys-type 'postgresql) (string-append "select currval('" seq "')")]
           [(eq? dbsys-type 'sqlite3) "select last_insert_rowid()"]
           [(eq? dbsys-type 'sqlserver) "select @@identity"]
-          ;; Needs the sequence name
-          [(eq? dbsys-type 'oracle) "select auto_id_seq.currval from dual"]
+          [(eq? dbsys-type 'oracle) (string-append "select " seq ".currval from dual")]
           [(eq? dbsys-type 'db2) "select identity_val_local() as lastid from sysibm.sysdummy1"]
           [else (error 'sql-autoincrement "auto-increment not defined for database system ~a" dbsys-type)]))
 
 ;;; Schema accessors.
-(define-syntax-rule (schema-auto-increment row) (vector-ref row 3))
+(define-syntax-rule (schema-autoincrement row) (vector-ref row 3))
 (define-syntax-rule (schema-column row) (vector-ref row 0))
 (define-syntax-rule (schema-constraint row) (vector-ref row 6))
 (define-syntax-rule (schema-constraint-type row) (vector-ref row 1))
@@ -73,7 +72,7 @@ where fkey.referenced_table_name='" tbl-nm "'"))
 ;;; Load PostgreSQL schema.
 (define (load-postgresql-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name, substring(cons.constraint_type, 1, 1) as constraint_type, keycols.ordinal_position, 
-  case when substring(cols.column_default, 1, 7) = 'nextval' then 1 end, fkey.table_name, fkey.column_name, cons.constraint_name
+  cols.column_default, fkey.table_name, fkey.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
   on keycols.column_name=cols.column_name
@@ -88,12 +87,12 @@ left join information_schema.referential_constraints as refs
 left join information_schema.key_column_usage as fkey
   on fkey.constraint_schema = refs.unique_constraint_schema
   and fkey.constraint_name = refs.unique_constraint_name
-where cols.column_default <> 'UNIQUE' and cols.table_name='" tbl-nm "'")])
+where (cons.constraint_type is null or cons.constraint_type <> 'UNIQUE') and cols.table_name='" tbl-nm "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
 select fkey.column_name, 'R', fkey.ordinal_position, 
-   case when substring(cols.column_default from 1 for 6) = 'nextval' then 1 end, cols.table_name, cols.column_name, cons.constraint_name
+  cols.column_default, cols.table_name, cols.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as fkey
    on fkey.column_name=cols.column_name
@@ -107,7 +106,15 @@ left join information_schema.table_constraints as cons
 where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
     (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, cols.column_name"))
-    (query-rows con schema-sql)))
+    (let ([rows (query-rows con schema-sql)])
+      (when (eq? (length rows) 0) (error 'load-postgres-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))      
+      (foldl (lambda (r l) (if (findf (lambda (rl) (equal? (vector-ref rl 0) (vector-ref r 0))) l) l (cons r l))) null 
+             (map (lambda (r) 
+                    (for/vector ([i (in-range 0 (vector-length r))])
+                      (let ([val (vector-ref r i)])
+                        (if (and (eq? i 3) (string? val)) (let ([match (regexp-match #px"(?i:nextval)\\(\\s*'(\\w+)'" val)])
+                                                            (if match (second match) sql-null)) val)))) rows))
+      )))
 
 ;;; Load SQLite3 schema.
 (define (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)
@@ -243,7 +250,7 @@ where rcons.table_name='" (string-upcase tbl-nm) "'")))
                     (for/vector ([i (in-range 0 (vector-length r))])
                        (let ([val (vector-ref r i)])
                          (if (and (member i '(0 4 5 6)) (string? val)) (string-downcase val)
-                             (if (and (eq? i 3) (string? val)) (if (string-contains-ci val "NEXTVAL") 1 sql-null)
+                             (if (and (eq? i 3) (string? val)) (if (regexp-match #rx"(?i:NEXTVAL)" val) 1 sql-null)
                                  val))))) rows))
     )))
 
