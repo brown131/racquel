@@ -31,8 +31,8 @@
   ;'postgresql
   ;'sqlite3
   ;'sqlserver
-  'oracle
-  ;'db2
+  ;'oracle
+  'db2
   )
 
 (when (equal? *test-dbsys-type* 'oracle) (set-odbc-dbsystem-type! *test-dbsys-type*))
@@ -60,6 +60,7 @@
         [(eq? *test-dbsys-type* 'postgresql) "public"]
         [(eq? *test-dbsys-type* 'sqlserver) "dbo"]
         [(eq? *test-dbsys-type* 'oracle) "TEST"]
+        [(eq? *test-dbsys-type* 'db2) "TEST"]
         ))
   
 ;;;; TEST DATA OBJECT DEFINITION
