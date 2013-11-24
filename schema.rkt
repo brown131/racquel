@@ -262,40 +262,51 @@ where table_name='" (string-upcase tbl-nm) "'
     )))
 
 ;;; Load DB/2 schema.
-; select colname, identity from syscat.columns where tabname='AUTO' and tabschema='TEST';
 (define (load-db2-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "select cols.column_name as col_name, cons.constraint_type, keycols.ordinal_position, null,
-  fkey.table_name, fkey.column_name, cons.constraint_name
-from information_schema.columns as cols
-left join information_schema.key_column_usage as keycols
-  on keycols.column_name=cols.column_name
-  and keycols.table_name=cols.table_name
-  and keycols.table_schema=cols.table_schema
-left join information_schema.table_constraints as cons
-  on cons.constraint_name=keycols.constraint_name
-  and cons.constraint_schema=cons.constraint_schema
-left join information_schema.referential_constraints as refs
-  on  refs.constraint_schema = cons.constraint_schema
-  and refs.constraint_name = cons.constraint_name
-left join information_schema.key_column_usage as fkey
-  on fkey.constraint_schema = refs.unique_constraint_schema
-  and fkey.constraint_name = refs.unique_constraint_name
+  (let ([schema-sql (string-append "select cols.colname, case when pkey.colname is not null then 'P' end, pkey.colseq,
+  case when cols.identity = 'Y' then 1 end, refs.reftabname, fkey.colname, fkey.constname
+from syscat.columns cols
+left outer join syscat.tabconst pcons
+  on cols.tabname=pcons.tabname
+  and cols.tabschema=pcons.tabschema
+  and pcons.type='P'
+left outer join syscat.keycoluse pkey
+  on pcons.constname=pkey.constname
+  and pcons.tabname=pkey.tabname
+  and pcons.tabschema=pkey.tabschema
+  and cols.colname=pkey.colname
+left outer join syscat.references refs
+  on cols.tabname=refs.tabname
+  and cols.tabschema=refs.tabschema
+left outer join syscat.keycoluse fkey
+  on refs.constname=fkey.constname
+  and refs.tabname=fkey.tabname
+  and refs.tabschema=fkey.tabschema 
+  and cols.colname=fkey.colname
 where cols.table_name='" tbl-nm "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select fkey.column_name, 'F', fkey.ordinal_position, null, 
-   cols.table_name, cols.column_name, cons.constraint_name
-from information_schema.columns as cols
-left join information_schema.key_column_usage as fkey
-   on fkey.column_name=cols.column_name
-   and fkey.table_name=cols.table_name
-   and fkey.table_schema=cols.table_schema
-left join information_schema.table_constraints as cons
-   on cons.constraint_name=fkey.constraint_name
-   and cons.constraint_schema=fkey.constraint_schema
-   and cons.table_name=fkey.table_name
-   and cons.table_schema=fkey.table_schema
+select cols.colname, case when pkey.colname is not null then 'P' end, pkey.colseq,
+  case when cols.identity = 'Y' then 1 end, refs.reftabname, fkey.colname, fkey.constname
+from syscat.columns cols
+left outer join syscat.tabconst pcons
+  on cols.tabname=pcons.tabname
+  and cols.tabschema=pcons.tabschema
+  and pcons.type='P'
+left outer join syscat.keycoluse pkey
+  on pcons.constname=pkey.constname
+  and pcons.tabname=pkey.tabname
+  and pcons.tabschema=pkey.tabschema
+  and cols.colname=pkey.colname
+left outer join syscat.references refs
+  on cols.tabname=refs.tabname
+  and cols.tabschema=refs.tabschema
+left outer join syscat.keycoluse fkey
+  on refs.constname=fkey.constname
+  and refs.tabname=fkey.tabname
+  and refs.tabschema=fkey.tabschema 
+  and cols.colname=fkey.colname
 where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
     (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, col_name"))
