@@ -32,7 +32,7 @@
 (define data-class<%> (interface ()))
 
 ;;; Class of an object
-(define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
+(define-syntax-rule (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
 
 ;;; Select SQL.
 (define (select-sql con cls where-clause)

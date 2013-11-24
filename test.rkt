@@ -30,8 +30,8 @@
   ;'mysql
   ;'postgresql
   ;'sqlite3
-  'sqlserver
-  ;'oracle
+  ;'sqlserver
+  'oracle
   ;'db2
   )
 
@@ -160,7 +160,7 @@
                                    string<? #:key (lambda (k) (symbol->string (first k))))
                              '((city #f "city") (id #f "id") (line #f "line")
                                (person-id #f "person_id")(state #f "state") (zip-code #f "zip_code"))))
-
+    
     (test-case "address join schema ok?" 
                (check-equal? (get-join-schema address-schema)
                              '(("address_person_id_fkey" "person" "id" "person_id" ("id")))))

@@ -176,15 +176,19 @@ select fkey.column_name, 'F', fkey.ordinal_position,
    case when columnproperty(object_id(cols.table_name), cols.column_name, 'isidentity')=1 then 1 end, 
    cols.table_name, cols.column_name, cons.constraint_name
 from information_schema.columns as cols
-left join information_schema.key_column_usage as fkey
-   on fkey.column_name=cols.column_name
-   and fkey.table_name=cols.table_name
-   and fkey.table_schema=cols.table_schema
+left join information_schema.key_column_usage as keycols
+  on keycols.column_name=cols.column_name
+  and keycols.table_name=cols.table_name
+  and keycols.table_schema=cols.table_schema
 left join information_schema.table_constraints as cons
-   on cons.constraint_name=fkey.constraint_name
-   and cons.constraint_schema=fkey.constraint_schema
-   and cons.table_name=fkey.table_name
-   and cons.table_schema=fkey.table_schema
+  on cons.constraint_name=keycols.constraint_name
+  and cons.constraint_schema=cons.constraint_schema
+left join information_schema.referential_constraints as refs
+  on  refs.constraint_schema = cons.constraint_schema
+  and refs.constraint_name = cons.constraint_name
+left join information_schema.key_column_usage as fkey
+  on fkey.constraint_schema = refs.unique_constraint_schema
+  and fkey.constraint_name = refs.unique_constraint_name
 where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
     (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, cols.column_name"))
@@ -193,13 +197,8 @@ where fkey.table_name='" tbl-nm "'")))
 ;;; Load Oracle schema
 (define (load-oracle-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name, cons.constraint_type,
-   cc.position, trigger_body, rcons.table_name, rcc.column_name, cons.constraint_name
+   cc.position, null, rcons.table_name, rcc.column_name, cons.constraint_name
 from all_tab_cols cols
-left outer join all_triggers trgs
-   on cols.owner=trgs.owner
-   and cols.table_name=trgs.table_name 
-   and trgs.triggering_event='INSERT'
-   and status='ENABLED'
 left outer join all_cons_columns cc
    on cols.owner=cc.owner
    and cols.table_name=cc.table_name
@@ -215,18 +214,13 @@ left outer join all_cons_columns rcc
    on rcons.constraint_name=rcc.constraint_name
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
-where cols.table_name='" (string-upcase tbl-nm) "' and cols.owner='" (string-upcase schema-nm)  "'")])
-    (when schema-nm (set! schema-sql (string-append schema-sql)))
+where cols.table_name='" (string-upcase tbl-nm) "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.owner='" (string-upcase schema-nm) "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
 select rcc.column_name, 'F', cc.position, 
-   trigger_body, cols.table_name, cols.column_name, cons.constraint_name
+   null, cols.table_name, cols.column_name, cons.constraint_name
 from all_tab_cols cols
-left outer join all_triggers trgs
-   on cols.owner=trgs.owner
-   and cols.table_name=trgs.table_name 
-   and trgs.triggering_event='INSERT'
-   and status='ENABLED'
 join all_cons_columns cc
    on cols.owner=cc.owner
    and cols.table_name=cc.table_name
@@ -243,18 +237,28 @@ left outer join all_cons_columns rcc
    and rcons.owner=rcc.owner
    and rcons.table_name=rcc.table_name
 where rcons.table_name='" (string-upcase tbl-nm) "'")))
-      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.owner='" (string-upcase schema-nm)))))
-    (set! schema-sql (string-append schema-sql " order by constraint_name, cc.position, cols.column_name"))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and rcons.owner='" (string-upcase schema-nm) "'"))))
+    (set! schema-sql (string-append schema-sql " order by 7, 3, 1"))
     (let ([rows (query-rows con schema-sql)])
       (when (eq? (length rows) 0) (error 'load-oracle-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))      
       (foldl (lambda (r l) 
-               (if (findf (lambda (rl) (equal? (vector-ref rl 0) (vector-ref r 0))) l) l (cons r l))) null 
+               (if (findf (lambda (rl) (and (equal? (vector-ref rl 0) (vector-ref r 0)) 
+                                            (equal? (vector-ref r 1) sql-null))) l) l (cons r l))) null 
              (map (lambda (r) 
                     (for/vector ([i (in-range 0 (vector-length r))])
                        (let ([val (vector-ref r i)])
                          (if (and (member i '(0 4 5 6)) (string? val)) (string-downcase val)
-                             (if (and (eq? i 3) (string? val)) (let ([match (regexp-match #px"([a-zA-Z0-9_$#]+)\\.(?i:nextval)" val)])
-                                                            (if match (second match) sql-null)) val))))) rows))
+                             (if (and (eq? i 3) (equal? (vector-ref r 1) "P")) 
+                                 (let ([trg-sql (string-append "select trigger_body from all_triggers 
+where table_name='" (string-upcase tbl-nm) "'
+   and triggering_event='INSERT'
+   and status='ENABLED'")])
+                                   (when schema-nm (set! schema-sql (string-append trg-sql " and owner='" (string-upcase schema-nm) "'")))                      
+                                   (let* ([trg-body (query-rows con trg-sql)]
+                                          [match (if (eq? (length trg-body) 1) 
+                                                     (regexp-match #px"([a-zA-Z0-9_$#]+)\\.(?i:nextval)"
+                                                                   (vector-ref (first trg-body) 0)) #f)])
+                                     (if match (second match) sql-null))) val))))) rows))
     )))
 
 ;;; Load DB/2 schema.

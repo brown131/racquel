@@ -185,7 +185,7 @@
 (define (get-join-schema schema)
   (foldl (lambda (r l) 
            (if (and (not (sql-null? (schema-join-table r))) 
-                    (equal? (schema-constraint-type r) "F"))
+                    (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
                (let ([jn-def (findf (lambda (m) (string=? (schema-constraint r) (first m))) l)]) 
                  (if jn-def (cons (append (take jn-def 4) (list (append (last jn-def) (list (schema-join-column r)))))
                                   (remove (first jn-def) l (lambda (a b) (string=? a (first b)))))
