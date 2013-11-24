@@ -52,7 +52,7 @@ where cols.table_name='" tbl-nm "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select fkey.referenced_column_name, 'R', fkey.ordinal_position, 
+select fkey.referenced_column_name, 'F', fkey.ordinal_position, 
    case when cols.extra='auto_increment' then 1 end, cols.table_name, cols.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as fkey
@@ -71,7 +71,7 @@ where fkey.referenced_table_name='" tbl-nm "'"))
 
 ;;; Load PostgreSQL schema.
 (define (load-postgresql-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "select cols.column_name, substring(cons.constraint_type, 1, 1) as constraint_type, keycols.ordinal_position, 
+  (let ([schema-sql (string-append "select cols.column_name as sortname, substring(cons.constraint_type, 1, 1) as constraint_type, keycols.ordinal_position, 
   cols.column_default, fkey.table_name, fkey.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as keycols
@@ -91,30 +91,33 @@ where (cons.constraint_type is null or cons.constraint_type <> 'UNIQUE') and col
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select fkey.column_name, 'R', fkey.ordinal_position, 
-  cols.column_default, cols.table_name, cols.column_name, cons.constraint_name
+select fkey.column_name, 'F', fkey.ordinal_position, 
+  cols.column_default, cols.table_name, cols.column_name, refs.constraint_name 
 from information_schema.columns as cols
-left join information_schema.key_column_usage as fkey
-   on fkey.column_name=cols.column_name
-   and fkey.table_name=cols.table_name
-   and fkey.table_schema=cols.table_schema
+left join information_schema.key_column_usage as keycols
+  on keycols.column_name=cols.column_name
+  and keycols.table_name=cols.table_name
+  and keycols.table_schema=cols.table_schema
 left join information_schema.table_constraints as cons
-   on cons.constraint_name=fkey.constraint_name
-   and cons.constraint_schema=fkey.constraint_schema
-   and cons.table_name=fkey.table_name
-   and cons.table_schema=fkey.table_schema
+  on cons.constraint_name=keycols.constraint_name
+  and cons.constraint_schema=cons.constraint_schema
+left join information_schema.referential_constraints as refs
+  on  refs.constraint_schema = cons.constraint_schema
+  and refs.constraint_name = cons.constraint_name
+left join information_schema.key_column_usage as fkey
+  on fkey.constraint_schema = refs.unique_constraint_schema
+  and fkey.constraint_name = refs.unique_constraint_name
 where fkey.table_name='" tbl-nm "'")))
       (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
-    (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, cols.column_name"))
+    (set! schema-sql (string-append schema-sql " order by 7 nulls first, 3, 1"))
     (let ([rows (query-rows con schema-sql)])
-      (when (eq? (length rows) 0) (error 'load-postgres-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))      
-      (foldl (lambda (r l) (if (findf (lambda (rl) (equal? (vector-ref rl 0) (vector-ref r 0))) l) l (cons r l))) null 
+      (when (eq? (length rows) 0) (error 'load-postgres-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))    
              (map (lambda (r) 
                     (for/vector ([i (in-range 0 (vector-length r))])
                       (let ([val (vector-ref r i)])
                         (if (and (eq? i 3) (string? val)) (let ([match (regexp-match #px"(?i:nextval)\\(\\s*'(\\w+)'" val)])
                                                             (if match (second match) sql-null)) val)))) rows))
-      )))
+      ))
 
 ;;; Load SQLite3 schema.
 (define (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)
@@ -128,7 +131,7 @@ where fkey.table_name='" tbl-nm "'")))
                                                                      [rfkp (findf (lambda (f) (equal? (vector-ref f 2) tbl-nm)) rev-tbl-pragma)])
                                                                 (if rfkp (let ([row (make-vector 7)])
                                                                            (vector-set! row 0 (vector-ref rfkp 4))
-                                                                           (vector-set! row 1 "R")
+                                                                           (vector-set! row 1 "F")
                                                                            (vector-set! row 2 1)
                                                                            (vector-set! row 3 sql-null)
                                                                            (vector-set! row 4 (vector-ref r 2))
@@ -169,7 +172,7 @@ where cols.table_name='" tbl-nm "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select fkey.column_name, 'R', fkey.ordinal_position, 
+select fkey.column_name, 'F', fkey.ordinal_position, 
    case when columnproperty(object_id(cols.table_name), cols.column_name, 'isidentity')=1 then 1 end, 
    cols.table_name, cols.column_name, cons.constraint_name
 from information_schema.columns as cols
@@ -216,7 +219,7 @@ where cols.table_name='" (string-upcase tbl-nm) "' and cols.owner='" (string-upc
     (when schema-nm (set! schema-sql (string-append schema-sql)))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select rcc.column_name, 'R', cc.position, 
+select rcc.column_name, 'F', cc.position, 
    trigger_body, cols.table_name, cols.column_name, cons.constraint_name
 from all_tab_cols cols
 left outer join all_triggers trgs
@@ -255,6 +258,7 @@ where rcons.table_name='" (string-upcase tbl-nm) "'")))
     )))
 
 ;;; Load DB/2 schema.
+; select colname, identity from syscat.columns where tabname='AUTO' and tabschema='TEST';
 (define (load-db2-schema con schema-nm tbl-nm rev-jn?)
   (let ([schema-sql (string-append "select cols.column_name as col_name, cons.constraint_type, keycols.ordinal_position, null,
   fkey.table_name, fkey.column_name, cons.constraint_name
@@ -276,7 +280,7 @@ where cols.table_name='" tbl-nm "'")])
     (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select fkey.column_name, 'R', fkey.ordinal_position, null, 
+select fkey.column_name, 'F', fkey.ordinal_position, null, 
    cols.table_name, cols.column_name, cons.constraint_name
 from information_schema.columns as cols
 left join information_schema.key_column_usage as fkey

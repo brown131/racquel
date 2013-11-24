@@ -185,7 +185,7 @@
 (define (get-join-schema schema)
   (foldl (lambda (r l) 
            (if (and (not (sql-null? (schema-join-table r))) 
-                    (or (equal? (schema-constraint-type r) "F") (equal? (schema-constraint-type r) "R")))
+                    (equal? (schema-constraint-type r) "F"))
                (let ([jn-def (findf (lambda (m) (string=? (schema-constraint r) (first m))) l)]) 
                  (if jn-def (cons (append (take jn-def 4) (list (append (last jn-def) (list (schema-join-column r)))))
                                   (remove (first jn-def) l (lambda (a b) (string=? a (first b)))))
@@ -205,7 +205,7 @@
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema)
-  (let ([pkey (map (lambda (v) (string->symbol (schema-column v)) )
+  (let ([pkey (map (lambda (v) (string->symbol (schema-column v)))
                    (filter (lambda (f) (if (string? (schema-constraint-type f)) (string=? (schema-constraint-type f) "P") #f))
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))

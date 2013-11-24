@@ -30,9 +30,9 @@
   ;'mysql
   ;'postgresql
   ;'sqlite3
-  ;'sqlserver
+  'sqlserver
   ;'oracle
-  'db2
+  ;'db2
   )
 
 (when (equal? *test-dbsys-type* 'oracle) (set-odbc-dbsystem-type! *test-dbsys-type*))
@@ -154,14 +154,13 @@
     (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema) 'id))
     (test-case "simple autoincrement key found?" (check-false (get-autoincrement-key simple-schema *test-dbsys-type*)))
     
-    ;(test-case "address schema" (check-eq? address-schema 111))
     (test-case "address schema loaded?" (check-eq? (length address-schema) 6))
     (test-case "address schema columns ok?" 
                (check-equal? (sort (get-schema-columns address-schema column-name-normalizer) 
                                    string<? #:key (lambda (k) (symbol->string (first k))))
                              '((city #f "city") (id #f "id") (line #f "line")
                                (person-id #f "person_id")(state #f "state") (zip-code #f "zip_code"))))
-    ;(test-case "schema?" (check-eq? address-schema 1))
+
     (test-case "address join schema ok?" 
                (check-equal? (get-join-schema address-schema)
                              '(("address_person_id_fkey" "person" "id" "person_id" ("id")))))
@@ -191,7 +190,7 @@
                              (vector "join2_id" "F" 1 sql-null "Joined" "id" "FK_Join2")
                              (vector "join2_str" "F" 2 sql-null "Joined" "str" "FK_Join2")
                              (vector "simple_id" "F" 1 sql-null "Employer" "id" "FK_Employer")
-                             (vector "id" "R" 1 sql-null "address" "person_id" "FK_Person"))])
+                             (vector "id" "F" 1 sql-null "address" "person_id" "FK_Person"))])
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Employer")
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Joined")
       
@@ -251,7 +250,7 @@
                                    (super-new))]
          [simple% (gen-data-class *con* "simple" 
                                   #:schema-name *schema-name*
-                                  #:generate-joins? #t
+                                  #:generate-joins? #t #:generate-reverse-joins? #t
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer
                                   #:table-name-externalizer name-externalizer)]
@@ -524,6 +523,8 @@
 
 (define-test-suite test-generate-join
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (map (lambda (k) (hash-remove! *data-class-schema* k)) (hash-keys *data-class-schema*))
+  
   (let* ([address% (gen-data-class *con* "address" 
                                    #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
@@ -603,24 +604,56 @@
 
 (define-test-suite test-generate-reverse-join
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (map (lambda (k) (hash-remove! *data-class-schema* k)) (hash-keys *data-class-schema*))
+  
   (let* ([person% (gen-data-class *con* "person" 
                                   #:schema-name *schema-name*
                                   #:generate-reverse-joins? #t
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer)]
+         [person-schema (load-schema *con* *schema-name* "person" #:reverse-join? #t #:db-system-type *test-dbsys-type*)]
          [obj (new person%)])
+    (test-case "generated class ok?" 
+               (check-equal? (gen-data-class *con* "person" #:print? #t
+                                             #:schema-name *schema-name*
+                                             #:generate-reverse-joins? #t
+                                             #:table-name-normalizer table-name-normalizer
+                                             #:column-name-normalizer column-name-normalizer
+                                             #:table-name-externalizer name-externalizer)
+                             '(let ((person%
+                                     (data-class
+                                      object%
+                                      (table-name "person" "Person")
+                                      (column
+                                       (age #f "age")
+                                       (first-name #f "first_name")
+                                       (id #f "id")
+                                       (last-name #f "last_name"))
+                                      (primary-key id)
+                                      (join
+                                       (address
+                                        'address%
+                                        #:cardinality
+                                        'one-to-many
+                                        (where (= ('address% person_id) ?))
+                                        id))
+                                      (super-new)
+                                      (inspect #f))))
+                                person%)))
+
     (test-case "person class created?" (check-not-eq? person% #f))
     (test-true "person class is a data class?" (data-class? person%))
     (test-case "person object created?" (check-not-eq? obj #f))
     (test-case "person class ok?" 
                (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info person%)]) 
                  (check-eq? cls-nm 'person%)))
-   
+  
     (test-case "person class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) (data-class-info person%)])
                  (check-eq? tbl-nm "person")
                  (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
-                               '((age "age") (first-name "first_name") (id "id") (last-name "last_name")))
+                               '((age "age" "age") (first-name "first_name""first_name") (id "id" "id") 
+                                 (last-name "last_name" "last_name")))
                  (check-equal? (caar j-defs) 'address)
                  (check-eq? pkey 'id)
                  (check-eqv? auto-key #f)
@@ -629,6 +662,7 @@
                  ))
    
     (test-case "object class ok?" (check-equal? (object-class obj) person%))
+    (test-case "addresses not joined?" (check-eq? (get-field address obj) #f))
     ))
 
 
@@ -745,6 +779,7 @@
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-joins 'verbose)
 (run-tests test-generate-join 'verbose)
+(run-tests test-generate-reverse-join 'verbose)
 (run-tests test-rql-parsing 'verbose)
 (run-tests test-mixins 'verbose)
 
