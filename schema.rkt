@@ -310,8 +310,8 @@ join syscat.keycoluse rcols
   on rcols.constname=refs.refkeyname
   and rcols.tabname=refs.reftabname
   and rcols.tabschema=refs.tabschema 
-where fkey.tabname='" (string-upcase tbl-nm) "'")))
-      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.tabschema='" (string-upcase schema-nm) "'"))))
+where rcols.tabname='" (string-upcase tbl-nm) "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and rcols.tabschema='" (string-upcase schema-nm) "'"))))
     (set! schema-sql (string-append schema-sql " order by 7, 3, 1"))
     (let ([rows (query-rows con schema-sql)])
       (when (eq? (length rows) 0) (error 'load-db2-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))      
