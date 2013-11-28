@@ -31,8 +31,8 @@
   ;'postgresql
   ;'sqlite3
   ;'sqlserver
-  'oracle
-  ;'db2
+  ;'oracle
+  'db2
   )
 
 (when (equal? *test-dbsys-type* 'oracle) (set-odbc-dbsystem-type! *test-dbsys-type*))
@@ -293,7 +293,7 @@
                (check-equal? (select-sql *con* simple% "where id=?") 
                              (sql-placeholder "select description, id, name, x from simple where id=?" *test-dbsys-type*)))
   
-    (define x-val (if (or (eq? *test-dbsys-type* 'sqlserver) (eq? *test-dbsys-type* 'oracle)) 15 1.5))
+    (define x-val (if (eq? (dbsystem-name (connection-dbsystem *con*)) 'odbc) 15 1.5))
     
     (test-case "columns set?"
                (set-column! id obj 23)

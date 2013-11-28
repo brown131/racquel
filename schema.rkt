@@ -263,51 +263,63 @@ where table_name='" (string-upcase tbl-nm) "'
 
 ;;; Load DB/2 schema.
 (define (load-db2-schema con schema-nm tbl-nm rev-jn?)
-  (let ([schema-sql (string-append "select cols.colname, case when pkey.colname is not null then 'P' end, pkey.colseq,
-  case when cols.identity = 'Y' then 1 end, refs.reftabname, fkey.colname, fkey.constname
+  (let ([schema-sql (string-append "select cols.colname, cons.type, fkey.colseq,
+  case when cols.identity = 'Y' then 1 end, 
+  case when cons.type = 'F' then refs.reftabname end,
+  case when cons.type = 'F' then rcols.colname end,
+  fkey.constname
 from syscat.columns cols
-left outer join syscat.tabconst pcons
-  on cols.tabname=pcons.tabname
-  and cols.tabschema=pcons.tabschema
-  and pcons.type='P'
-left outer join syscat.keycoluse pkey
-  on pcons.constname=pkey.constname
-  and pcons.tabname=pkey.tabname
-  and pcons.tabschema=pkey.tabschema
-  and cols.colname=pkey.colname
+left outer join syscat.keycoluse fkey
+  on cols.tabname=fkey.tabname
+  and cols.tabschema=fkey.tabschema 
+  and cols.colname=fkey.colname
+left outer join syscat.tabconst cons
+  on fkey.constname=cons.constname
+  and fkey.tabname=cons.tabname
+  and fkey.tabschema=cons.tabschema 
 left outer join syscat.references refs
   on cols.tabname=refs.tabname
   and cols.tabschema=refs.tabschema
-left outer join syscat.keycoluse fkey
-  on refs.constname=fkey.constname
-  and refs.tabname=fkey.tabname
-  and refs.tabschema=fkey.tabschema 
-  and cols.colname=fkey.colname
-where cols.table_name='" tbl-nm "'")])
-    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.table_schema='" schema-nm "'")))
+left outer join syscat.keycoluse rcols
+  on rcols.constname=refs.refkeyname
+  and rcols.tabname=refs.reftabname
+  and rcols.tabschema=refs.tabschema 
+where cols.tabname='" (string-upcase tbl-nm) "'")])
+    (when schema-nm (set! schema-sql (string-append schema-sql " and cols.tabschema='" (string-upcase schema-nm) "'")))
     (when rev-jn? 
       (begin (set! schema-sql (string-append schema-sql " union 
-select cols.colname, case when pkey.colname is not null then 'P' end, pkey.colseq,
-  case when cols.identity = 'Y' then 1 end, refs.reftabname, fkey.colname, fkey.constname
+select rcols.colname, 'F', rcols.colseq,
+  case when cols.identity = 'Y' then 1 end, 
+  cols.tabname,
+  cols.colname,
+  cons.constname
 from syscat.columns cols
-left outer join syscat.tabconst pcons
-  on cols.tabname=pcons.tabname
-  and cols.tabschema=pcons.tabschema
-  and pcons.type='P'
-left outer join syscat.keycoluse pkey
-  on pcons.constname=pkey.constname
-  and pcons.tabname=pkey.tabname
-  and pcons.tabschema=pkey.tabschema
-  and cols.colname=pkey.colname
-left outer join syscat.references refs
+join syscat.keycoluse fkey
+  on cols.tabname=fkey.tabname
+  and cols.tabschema=fkey.tabschema 
+  and cols.colname=fkey.colname
+join syscat.tabconst cons
+  on fkey.constname=cons.constname
+  and fkey.tabname=cons.tabname
+  and fkey.tabschema=cons.tabschema 
+join syscat.references refs
   on cols.tabname=refs.tabname
   and cols.tabschema=refs.tabschema
-left outer join syscat.keycoluse fkey
-  on refs.constname=fkey.constname
-  and refs.tabname=fkey.tabname
-  and refs.tabschema=fkey.tabschema 
-  and cols.colname=fkey.colname
-where fkey.table_name='" tbl-nm "'")))
-      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.table_schema='" schema-nm "'"))))
-    (set! schema-sql (string-append schema-sql " order by constraint_name, ordinal_position, col_name"))
-    (query-rows con schema-sql)))
+  and cons.constname=refs.constname
+join syscat.keycoluse rcols
+  on rcols.constname=refs.refkeyname
+  and rcols.tabname=refs.reftabname
+  and rcols.tabschema=refs.tabschema 
+where fkey.tabname='" (string-upcase tbl-nm) "'")))
+      (when schema-nm (set! schema-sql (string-append schema-sql " and fkey.tabschema='" (string-upcase schema-nm) "'"))))
+    (set! schema-sql (string-append schema-sql " order by 7, 3, 1"))
+    (let ([rows (query-rows con schema-sql)])
+      (when (eq? (length rows) 0) (error 'load-db2-schema  "No schema found for table ~a owner ~a\n~a" tbl-nm schema-nm schema-sql))      
+    ;  (foldl (lambda (r l) 
+     ;          (if (findf (lambda (rl) (and (equal? (vector-ref rl 0) (vector-ref r 0)) 
+      ;                                      (equal? (vector-ref r 1) sql-null))) l) l (cons r l))) null 
+             (map (lambda (r) 
+                    (for/vector ([i (in-range 0 (vector-length r))])
+                      (let ([val (vector-ref r i)])
+                        (if (and (member i '(0 4 5 6)) (string? val)) (string-downcase val) val)))) rows))
+    ));)

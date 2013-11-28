@@ -61,7 +61,8 @@
 (define (load-schema con schema-nm tbl-nm #:reverse-join? (rev-jn? #f) #:db-system-type dbsys-type)
   (unless (multi-hash-has-key? *data-class-schema* con schema-nm tbl-nm)
     (multi-hash-set! *data-class-schema* 
-                     (cond [(eq? dbsys-type 'mysql) (load-mysql-schema con schema-nm tbl-nm rev-jn?)]
+                     (cond [(eq? dbsys-type 'db2) (load-db2-schema con schema-nm tbl-nm rev-jn?)]
+                           [(eq? dbsys-type 'mysql) (load-mysql-schema con schema-nm tbl-nm rev-jn?)]
                            [(eq? dbsys-type 'oracle) (load-oracle-schema con schema-nm tbl-nm rev-jn?)]
                            [(eq? dbsys-type 'postgresql) (load-postgresql-schema con schema-nm tbl-nm rev-jn?)]
                            [(eq? dbsys-type 'sqlite3) (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)]
