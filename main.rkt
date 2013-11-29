@@ -177,8 +177,8 @@
     (if (equal? (schema-constraint-type row) "P") #''one-to-one #''one-to-many)))
 
 ;;; RQL where-clause syntax for a key.
-(define (key-where-clause-rql jn-cls jn-columns tbl-nm-norm)
-  (let ([jns (map (lambda (j) #`(= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol j)) ?)) jn-columns)])
+(define (key-where-clause-rql jn-cls jn-columns tbl-nm-norm col-nm-norm)
+  (let ([jns (map (lambda (j) #`(= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol (col-nm-norm j))) ?)) jn-columns)])
     (if (eq? (length jn-columns) 1) #`(where #,@jns) #`(where (and #,@jns)))))
  
 ;;; Join information from the schema.
@@ -200,12 +200,12 @@
   (map (lambda (j) (list (string->symbol (join-nm-norm (second j))) 
                          #`'#,(string->symbol (tbl-nm-norm (second j)))
                          #'#:cardinality (join-cardinality con schema-nm dbsys-type (second j) (third j)) 
-                         (key-where-clause-rql (second j) (last j) tbl-nm-norm)
+                         (key-where-clause-rql (second j) (last j) tbl-nm-norm col-nm-norm)
                          (string->symbol (col-nm-norm (fourth j))))) (get-join-schema schema)))
 
 ;;; Find primary key fields in a table schema.
-(define (find-primary-key-fields schema)
-  (let ([pkey (map (lambda (v) (string->symbol (schema-column v)))
+(define (find-primary-key-fields schema col-nm-norm)
+  (let ([pkey (map (lambda (v) (string->symbol (col-nm-norm (schema-column v))))
                    (filter (lambda (f) (if (string? (schema-constraint-type f)) (string=? (schema-constraint-type f) "P") #f))
                            schema))])
     (if (eq? (length pkey) 1) (first pkey) pkey)))
@@ -236,7 +236,7 @@
                         . rest) 
   (let* ([schema (load-schema con schema-nm tbl-nm #:reverse-join? gen-rev-joins? #:db-system-type dbsys-type)]
          [cls-nm (string->symbol (tbl-nm-norm tbl-nm))]
-         [pkey (find-primary-key-fields schema)]
+         [pkey (find-primary-key-fields schema col-nm-norm)]
          [jns (if (or gen-joins? gen-rev-joins?)
                   (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm) null)]
          [auto-key (get-autoincrement-key schema dbsys-type)]
@@ -269,9 +269,8 @@
 
 ;;; Create a primary key from a database row.
 (define (create-primary-key cls row)
-  (let* ([cols (sort (get-column-names cls) string<?)]
-         [pkey (foldl (lambda (r c l) (if (memf (lambda (k) (equal? k c)) (primary-key-fields cls)) (cons r l) l)) 
-                      null (vector->list row) cols)])
+  (let* ([pkey (foldl (lambda (r c l) (if (memf (lambda (k) (equal? k c)) (primary-key-fields cls)) (cons r l) l)) 
+                      null (vector->list row) (sort (get-column-names cls) string<?))])
     (when (eq? (length pkey) 1) (set! pkey (first pkey)))))
 
 ;;; Create a data object from a database row.
@@ -303,16 +302,19 @@
 ;;; Select data objects from the database.
 (define-syntax (select-data-objects stx)
   (syntax-parse stx
-    [(_ con:id cls:id where-expr:where-expr rest:expr ...)
-     #'(let* ([rows (query-rows con (select-sql con cls where-expr.expr ...) rest ...)]
-              [objs null])
-         (foldl (lambda (o r) (cons (create-data-object con cls r) o)) objs rows)
-         objs)]
-    [(_ con:id cls:id where-expr:expr rest:expr ...)
-     #'(let* ([rows (query-rows con (select-sql con cls where-expr) rest ...)]
-              [objs null])
-         (foldl (lambda (o r) (cons (create-data-object con cls r) o)) objs rows)
-         objs)]))
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)))
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let ([sql (select-sql con cls "")])
+           (if prnt? sql (foldl (lambda (r o) (cons (create-data-object con cls r) o)) null (query-rows con sql)))))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where:where-expr)
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let ([sql (select-sql con cls (select-sql con cls (string-append where.expr ...)))])
+           #'(if prnt? sql (foldl (lambda (r o) (cons (create-data-object con cls r) o)) null (query-rows con sql)))))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where:where-expr rest:expr ...)
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let ([sql (select-sql con cls (select-sql con cls (string-append where.expr ...)))])
+           #'(if prnt? sql (foldl (lambda (r o) (cons (create-data-object con cls r) o)) null (query-rows con sql rest ...)))))]
+    ))
 
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey) 

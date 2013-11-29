@@ -118,13 +118,6 @@
            #:with expr #'((icol xcol) val) 
            #:attr col-def #'(list 'xcol col-nm ext-nm)))
 
-#|
-(define-syntax (test stx) (syntax-parse stx
-    [(test i:id)
-       (with-syntax ([get-join (datum->syntax stx (string->symbol (format "get-join-~a" (syntax->datum #'i))))])
-         #'(define (get-join x) (+ x 2)))]))
-|#
-
 (define-syntax-class join-def
   #:description "join definition"
   (pattern (jcol:id jcls:expr (~optional (~seq #:cardinality card:expr) #:defaults ([card #''one-to-many])) where:where-expr rest:expr ...) 
@@ -179,7 +172,7 @@
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (x:expr ...)            
-           #:attr cls-expr #'(x ...) 
+           #:attr cls-expr #'(x ...)
            #:attr meta-expr #'#f
            #:attr col-defs #'null 
            #:attr jn-rows #'null 

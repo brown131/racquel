@@ -27,12 +27,12 @@
 
 ;;; Database system to test.
 (define *test-dbsys-type* 
-  ;'mysql
+  'mysql
   ;'postgresql
   ;'sqlite3
   ;'sqlserver
   ;'oracle
-  'db2
+  ;'db2
   )
 
 (when (equal? *test-dbsys-type* 'oracle) (set-odbc-dbsystem-type! *test-dbsys-type*))
@@ -45,7 +45,7 @@
         [(eq? *test-dbsys-type* 'postgresql) 
          (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" #:password "test")]
         [(eq? *test-dbsys-type* 'sqlite3) 
-         (sqlite3-connect #:database "schema/racquel_test.sqlite")]        
+         (sqlite3-connect #:database "racquel_test.sqlite")]        
         [(eq? *test-dbsys-type* 'sqlserver) 
          (odbc-connect #:dsn "racquel_test" #:user "test" #:password "test")]
         [(eq? *test-dbsys-type* 'oracle) 
@@ -129,6 +129,8 @@
                                               (sql-placeholder "delete from test where id=?" *test-dbsys-type*)))
     (test-case "select sql ok?"  (check-equal? (select-sql *con* test-class% "where id=?") 
                                                (sql-placeholder "select description, id, name, x from test where id=?" *test-dbsys-type*)))
+    (test-case "select all sql ok?"  (check-equal? (select-sql *con* test-class% "") 
+                                               (sql-placeholder "select description, id, name, x from test " *test-dbsys-type*)))
     ))
 
 
@@ -151,7 +153,7 @@
     (test-case "simple schema joins ok?" 
                (check-equal? (get-schema-joins *con* *schema-name* simple-schema *test-dbsys-type* table-name-normalizer
                                                join-name-normalizer column-name-normalizer) null))
-    (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema) 'id))
+    (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema column-name-normalizer) 'id))
     (test-case "simple autoincrement key found?" (check-false (get-autoincrement-key simple-schema *test-dbsys-type*)))
     
     (test-case "address schema loaded?" (check-eq? (length address-schema) 6))
@@ -178,7 +180,7 @@
                (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
                              '(where (= ('person% id) ?))))
-    (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema) 'id))
+    (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema column-name-normalizer) 'id))
     (test-case "address autoincrement key found?" 
                (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) "address_id_seq")]
                      [(eq? *test-dbsys-type* 'oracle) (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) "address_id_seq")]
@@ -201,16 +203,16 @@
                                                                ("FK_Join1" "Joined" "id" "join1_id" ("id" "str")))))
     
       (test-case "key-where-clause-rql ok?" )(check-equal?
-                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer))
+                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer column-name-normalizer))
                                           '(where (= ('joined% id) ?)))     
       (test-case "key-where-clause-rql ok?" )(check-equal?
-                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id" "str") table-name-normalizer))
+                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id" "str") table-name-normalizer column-name-normalizer))
                                           '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
 
       (test-case "test schema 1st join cardinality ok?" 
                (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (= ('address% person_id) ?))))
+                             '(where (= ('address% person-id) ?))))
       (test-case "test schema 2nd join cardinality ok?" 
                (check-equal? (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
                                                                  table-name-normalizer join-name-normalizer column-name-normalizer))))
@@ -379,6 +381,9 @@
       (test-case "select sql ok?" 
                  (check-equal? (select-sql *con* auto% "where id=?") 
                                (sql-placeholder "select description, id, name from auto where id=?" *test-dbsys-type*)))
+      (test-case "select all sql ok?" 
+                 (check-equal? (select-sql *con* auto% "") 
+                               (sql-placeholder "select description, id, name from auto " *test-dbsys-type*)))
       
       (test-case "columns set?"
                  (set-column! name obj "test")
@@ -410,6 +415,10 @@
                  (let ([a (select-data-object *con* auto% (where (= name ?)) (get-field name obj))])
                    (check-equal? (get-field name a) "test2")
                    (check-eq? (data-object-state a) 'loaded)))
+      
+      (test-case "objects selected?"
+                 (let ([a (select-data-objects *con* auto% )])
+                   (check-eq? (length a) 3)))
       
       (test-case "object deleted?" 
                  (delete-data-object *con* obj)
@@ -635,7 +644,7 @@
                                         'address%
                                         #:cardinality
                                         'one-to-many
-                                        (where (= ('address% person_id) ?))
+                                        (where (= ('address% person-id) ?))
                                         id))
                                       (super-new)
                                       (inspect #f))))
