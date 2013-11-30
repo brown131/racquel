@@ -91,15 +91,15 @@
              elem.cls-expr ...
              (field [cls-id #f]
                     [data-object-state 'new])
+             (inspect #f)
              (define/public (set-data-join! con jn-fld jn-cls)
-               (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
-                      [rows (append elem.jn-rows ...)]
-                      [objs (make-list (length rows) (new jn-cls))])
-                 (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
-                                         (get-column-ids (object-class o)) (vector->list r))
-                        (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
-                        (set-field! data-object-state o 'loaded)) objs rows)
-                 objs))
+               (let* ([rows (append elem.jn-rows ...)])
+                 (map (lambda (r) (let ([obj (new jn-cls)])
+                                    (map (lambda (f v) (dynamic-set-field! f obj v)) 
+                                         (get-column-ids jn-cls) (vector->list r))
+                                    (define-member-name data-object-state (get-class-metadata state-key jn-cls))
+                                    (set-field! data-object-state obj 'loaded)
+                                    obj)) rows)))
              (define/private (base-data-class cls)
                (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
                  (if (data-class? cls) (if sup-cls (base-data-class sup-cls) cls) cls)))
@@ -123,15 +123,15 @@
              elem.cls-expr ...
              (field [cls-id #f]
                     [data-object-state 'new])
+             (inspect #f)
              (define/public (set-data-join! con jn-fld jn-cls)
-               (let* ([col-nms (sort (get-column-names jn-cls) string<?)]                          
-                      [rows (append elem.jn-rows ...)]
-                      [objs (make-list (length rows) (new jn-cls))])
-                 (map (lambda (o r) (map (lambda (f v) (dynamic-set-field! f o v)) 
-                                         (get-column-ids (object-class o)) (vector->list r))
-                        (define-member-name data-object-state (get-class-metadata state-key (object-class o)))
-                        (set-field! data-object-state o 'loaded)) objs rows)
-                 objs))
+               (let* ([rows (append elem.jn-rows ...)])
+                 (map (lambda (r) (let ([obj (new jn-cls)])
+                                    (map (lambda (f v) (dynamic-set-field! f obj v)) 
+                                         (get-column-ids jn-cls) (vector->list r))
+                                    (define-member-name data-object-state (get-class-metadata state-key jn-cls))
+                                    (set-field! data-object-state obj 'loaded)
+                                    obj)) rows)))
              (define/private (base-data-class cls)
                (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
                  (if (data-class? cls) (if sup-cls (base-data-class sup-cls) cls) cls)))            
@@ -150,15 +150,14 @@
     ([_ jn-fld obj con] 
      #'(begin
          (when (eq? (get-field jn-fld obj) #f)
-           (let* ([jn-def (get-join-definition jn-fld (object-class obj))]
-                  [jn-cls-expr (second jn-def)]
+           (let* ([jn-def (get-join-definition jn-fld (object-class obj))]     
+                  [jn-cls-expr (join-definition-class jn-def)]
                   [jn-cls (cond [(class? jn-cls-expr) jn-cls-expr]
-                                [(symbol? jn-cls-expr) (get-class jn-cls-expr)])])             
+                                [(symbol? jn-cls-expr) (get-class jn-cls-expr)])])
              (set-field! jn-fld obj (send obj set-data-join! con 'jn-fld jn-cls))
-             (when (and (equal? (third jn-def) 'one-to-one) (> (length (get-field jn-fld obj)) 0))
+             (when (and (equal? (join-definition-cardinality jn-def) 'one-to-one) (> (length (get-field jn-fld obj)) 0))
                (set-field! jn-fld obj (first (get-field jn-fld obj))))))
          (get-field jn-fld obj)))))
-
 
 ;;; DATA CLASS GENERATION
 
@@ -247,7 +246,6 @@
                                    #,(if auto-key (list 'primary-key pkey '#:autoincrement auto-key) (list 'primary-key pkey))
                                    #,(if (and gen-joins? (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
                                    (super-new)
-                                   (inspect #f)
                                    #,@rest
                                    )])
                   #,cls-nm)])

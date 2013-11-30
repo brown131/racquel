@@ -7,11 +7,23 @@
 (gen-data-class *con* "Album" #:print? #t
                 #:schema-name "Chinook"
                 #:generate-joins? #t #:generate-reverse-joins? #t)
+(gen-data-class *con* "Track" #:print? #t
+                #:schema-name "Chinook"
+                #:generate-joins? #t #:generate-reverse-joins? #t)
 
 (define album% (gen-data-class *con* "Album"
                                #:schema-name "Chinook"
                                #:generate-joins? #t #:generate-reverse-joins? #t))
+(define track% (gen-data-class *con* "Track"
+                               #:schema-name "Chinook"
+                               #:generate-joins? #t #:generate-reverse-joins? #t))
+(define *albums* (select-data-objects *con* album%))
+(length *albums*)
 
-(define albums (select-data-objects *con* album%))
+;(get-join track (first *albums*) *con*)
 
-albums
+(define *tracks* (select-data-objects *con* track%))
+(length *tracks*)
+
+;(map (lambda (t) (get-column name t)) (get-join track (first *albums*) *con*))
+
