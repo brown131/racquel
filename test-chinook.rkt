@@ -28,10 +28,10 @@
 (map (lambda (t) (get-column name t)) (get-join tracks (first *albums*) *con*))
 
 (select-data-objects *con* track% #:print? #t
-                          (join album% (= (album% album-id) (track% album-id))) 
-                          (where (like (track% name) ?)) "A%")
+                          (join album% (and (= (album% album-id) (track% album-id)) (like (album% title) ?))) 
+                          (where (like (track% name) ?)) "A%" "B%")
 
-(map (lambda (a) (get-column name a)) 
+(map (lambda (a) (cons (get-column title (first (get-join albums a *con*))) (get-column name a))) 
      (select-data-objects *con* track% 
-                          (join album% (= (album% album-id) (track% album-id))) 
-                          (where (like (track% name) ?)) "A%"))
+                          (join album% (and (= (album% album-id) (track% album-id)) (like (album% title) ?))) 
+                          (where (like (track% name) ?)) "A%" "B%"))

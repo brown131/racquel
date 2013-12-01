@@ -11,7 +11,7 @@
 (provide data-class data-class* data-class? data-class-info data-object-state 
          gen-data-class make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-         get-join get-column set-column! json-data-class-mixin xml-data-class-mixin 
+         get-column set-column! get-join json-data-class-mixin xml-data-class-mixin 
          default-table-name-normalizer default-column-name-normalizer default-join-name-normalizer
          set-odbc-dbsystem-type! (all-from-out "keywords.rkt"))
 
