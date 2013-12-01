@@ -51,7 +51,7 @@
 
 (define-syntax-class join-expr 
   #:description "rql join expression"
-  (pattern (join table:id rql:rql-expr) #:with (expr ...) #'("join " (~a 'table) " on " rql.expr ... " ")))
+  (pattern (join table:id rql:rql-expr) #:with (expr ...) #'("join " (rql-table-name 'table) " on " rql.expr ... " ")))
 
 (define-syntax-class where-expr 
   #:description "rql where expression"

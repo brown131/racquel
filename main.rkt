@@ -11,7 +11,8 @@
 (provide data-class data-class* data-class? data-class-info data-object-state 
          gen-data-class make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-         get-join get-column set-column! json-data-class-mixin xml-data-class-mixin
+         get-join get-column set-column! json-data-class-mixin xml-data-class-mixin 
+         default-table-name-normalizer default-column-name-normalizer default-join-name-normalizer
          set-odbc-dbsystem-type! (all-from-out "keywords.rkt"))
 
 ;;;; DATA CLASS DEFINITION
@@ -152,7 +153,7 @@
          (when (eq? (get-field jn-fld obj) #f)
            (let* ([jn-def (get-join-definition jn-fld (object-class obj))]     
                   [jn-cls-expr (join-definition-class jn-def)]
-                  [jn-cls (cond [(class? jn-cls-expr) jn-cls-expr]
+                  [jn-cls (cond [(class? jn-cls-expr) jn-cls-expr] 
                                 [(symbol? jn-cls-expr) (get-class jn-cls-expr)])])
              (set-field! jn-fld obj (send obj set-data-join! con 'jn-fld jn-cls))
              (when (and (equal? (join-definition-cardinality jn-def) 'one-to-one) (> (length (get-field jn-fld obj)) 0))
@@ -168,17 +169,17 @@
     (sort (map (lambda (f) (list (string->symbol (col-nm-norm f)) #f f)) col-nms) 
           string<? #:key (lambda (k) (symbol->string (first k))))))
 
+;;; RQL where-clause syntax for a key.
+(define (key-where-clause-rql jn-cls jn-columns tbl-nm-norm col-nm-norm)
+  (let ([jns (map (lambda (j) #`(= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol (col-nm-norm j))) ?)) jn-columns)])
+    (if (eq? (length jn-columns) 1) #`(where #,@jns) #`(where (and #,@jns)))))
+
 ;;; Get the cardinality of a join based on schema metadata.
 (define (join-cardinality con schema-nm dbsys-type jn-tbl-nm jn-key) 
   (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
          [row (findf (lambda (r) (equal? (schema-column r) (if (list? jn-key) (first jn-key) jn-key))) jn-schema)])
     (unless row (error 'join-cardinality "row not found for join table: ~a key: ~a" jn-tbl-nm jn-key))
     (if (equal? (schema-constraint-type row) "P") #''one-to-one #''one-to-many)))
-
-;;; RQL where-clause syntax for a key.
-(define (key-where-clause-rql jn-cls jn-columns tbl-nm-norm col-nm-norm)
-  (let ([jns (map (lambda (j) #`(= ('#,(string->symbol (tbl-nm-norm jn-cls)) #,(string->symbol (col-nm-norm j))) ?)) jn-columns)])
-    (if (eq? (length jn-columns) 1) #`(where #,@jns) #`(where (and #,@jns)))))
  
 ;;; Join information from the schema.
 (define (get-join-schema schema)
@@ -194,14 +195,6 @@
                                  (schema-column r) 
                                  (list (schema-join-column r))) l))) l)) null schema))
 
-;;; Get joins from the schema.
-(define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
-  (map (lambda (j) (list (string->symbol (join-nm-norm (second j))) 
-                         #`'#,(string->symbol (tbl-nm-norm (second j)))
-                         #'#:cardinality (join-cardinality con schema-nm dbsys-type (second j) (third j)) 
-                         (key-where-clause-rql (second j) (last j) tbl-nm-norm col-nm-norm)
-                         (string->symbol (col-nm-norm (fourth j))))) (get-join-schema schema)))
-
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema col-nm-norm)
   (let ([pkey (map (lambda (v) (string->symbol (col-nm-norm (schema-column v))))
@@ -214,11 +207,24 @@
                                                                                       [(eq? dbsys-type 'oracle) (string? (schema-autoincrement f))]
                                                                                       [else (eq? (schema-autoincrement f) 1)])) schema)])
                                                     (if row (if (string? (schema-autoincrement row)) (schema-autoincrement row) #t) #f)))
-  
+
+;;; Get joins from the schema.
+(define (get-schema-joins con schema-nm schema dbsys-type tbl-nm-norm join-nm-norm col-nm-norm)
+  (map (lambda (j) (list (string->symbol (join-nm-norm (second j) (eval-syntax (join-cardinality con schema-nm dbsys-type (second j) (third j))))) 
+                         #`'#,(string->symbol (tbl-nm-norm (second j)))
+                         #'#:cardinality (join-cardinality con schema-nm dbsys-type (second j) (third j)) 
+                         (key-where-clause-rql (second j) (last j) tbl-nm-norm col-nm-norm)
+                         (string->symbol (col-nm-norm (fourth j))))) (get-join-schema schema)))
+
 ;;; Default name normalizer. Replaces underscores and mixed case with hyphens. Returns all lower case.
 (define mixed-case-norm-regexp (regexp "([a-z])([A-Z])"))
-(define (default-name-normalizer s) 
+(define (default-column-name-normalizer s) 
   (string-downcase (string-replace (regexp-replace* mixed-case-norm-regexp s "\\1-\\2")  "_" "-")))
+(define (default-table-name-normalizer s) 
+  (string-append (default-column-name-normalizer s) "%"))
+(define (default-join-name-normalizer s (c 'one-to-many)) 
+  (string-append (default-column-name-normalizer s) 
+                 (if (eq? c 'one-to-many) (if (string=? (substring s (- (string-length s) 1) (string-length s)) "s") "es" "s") "")))
 
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
@@ -227,9 +233,9 @@
                         #:generate-reverse-joins? (gen-rev-joins? #f)
                         #:schema-name (schema-nm #f)
                         #:inherits (base-cls 'object%)
-                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (string-append (default-name-normalizer n) "%"))) 
-                        #:column-name-normalizer (col-nm-norm (lambda (n) (default-name-normalizer n))) 
-                        #:join-name-normalizer (join-nm-norm (lambda (n (c 'one-to-many)) (default-name-normalizer n))) 
+                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (default-table-name-normalizer n))) 
+                        #:column-name-normalizer (col-nm-norm (lambda (n) (default-column-name-normalizer n))) 
+                        #:join-name-normalizer (join-nm-norm (lambda (n (c 'one-to-many)) (default-join-name-normalizer n c))) 
                         #:table-name-externalizer (tbl-nm-extern (lambda (n) (begin n)))
                         #:print? (prnt? #f)
                         . rest) 
@@ -267,9 +273,11 @@
 
 ;;; Create a primary key from a database row.
 (define (create-primary-key cls row)
-  (let* ([pkey (foldl (lambda (r c l) (if (memf (lambda (k) (equal? k c)) (primary-key-fields cls)) (cons r l) l)) 
-                      null (vector->list row) (sort (get-column-names cls) string<?))])
-    (when (eq? (length pkey) 1) (set! pkey (first pkey)))))
+  (let* ([pkey-flds (primary-key-fields cls)]
+         [pkey (foldl (lambda (r c l) (if (memf (lambda (k) (equal? k (get-column-id c cls))) pkey-flds) (cons r l) l)) 
+                     null (vector->list row) (sort (get-column-names cls) string<?))])
+    (when (eq? (length pkey) 1) (set! pkey (first pkey)))
+    pkey))
 
 ;;; Create a data object from a database row.
 (define (create-data-object con cls row #:primary-key (primary-key #f))
@@ -303,15 +311,19 @@
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)))
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
        #'(let ([sql (select-sql con cls "")])
-           (if prnt? sql (foldl (lambda (r o) (cons (create-data-object con cls r) o)) null (query-rows con sql)))))]
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where:where-expr)
+           (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (select-sql con cls (string-append where.expr ...)))])
-           #'(if prnt? sql (foldl (lambda (r o) (cons (create-data-object con cls r) o)) null (query-rows con sql)))))]
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where:where-expr rest:expr ...)
+       #'(let ([sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
+           (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql rest ...)))))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (select-sql con cls (string-append where.expr ...)))])
-           #'(if prnt? sql (foldl (lambda (r o) (cons (create-data-object con cls r) o)) null (query-rows con sql rest ...)))))]
+       #'(let ([sql (select-sql con cls (string-append where-expr.expr ...))])
+           (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
+    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
+     (with-syntax ([prnt? (or (attribute prnt) #'#f)])
+       #'(let ([sql (select-sql con cls (string-append where-expr.expr ...))])
+           (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql rest ...)))))]
     ))
 
 ;;; Load a data object from the database by primary key.

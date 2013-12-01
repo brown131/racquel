@@ -32,5 +32,7 @@
 (define-syntax rql-like [syntax-rules () ((_ a b) (string-append (~a a) " like " (~a b)))])
 (define-syntax rql-in [syntax-rules () ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
 (define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
+(define-syntax rql-table-name [syntax-rules () ((_ a) (get-class-metadata table-name (get-class a)))])
+(define-syntax rql-column-name [syntax-rules () ((_ a) (get-column-name b (get-class a)))])
 (define-syntax rql-column-pair [syntax-rules () ((_ a b) (string-append (get-class-metadata table-name (get-class a)) 
                                                                         "." (get-column-name b (get-class a))))])

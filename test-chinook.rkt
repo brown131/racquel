@@ -20,10 +20,18 @@
 (define *albums* (select-data-objects *con* album%))
 (length *albums*)
 
-;(get-join track (first *albums*) *con*)
-
 (define *tracks* (select-data-objects *con* track%))
 (length *tracks*)
 
-;(map (lambda (t) (get-column name t)) (get-join track (first *albums*) *con*))
+(map (lambda (a) (get-column title a)) (select-data-objects *con* album% (where (like (album% title) ?)) "Q%"))
 
+(map (lambda (t) (get-column name t)) (get-join tracks (first *albums*) *con*))
+
+(select-data-objects *con* track% #:print? #t
+                          (join album% (= (album% album-id) (track% album-id))) 
+                          (where (like (track% name) ?)) "A%")
+
+(map (lambda (a) (get-column name a)) 
+     (select-data-objects *con* track% 
+                          (join album% (= (album% album-id) (track% album-id))) 
+                          (where (like (track% name) ?)) "A%"))

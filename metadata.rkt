@@ -5,6 +5,10 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
+;;; Define namespace anchor.
+(define-namespace-anchor racquel-namespace-anchor)
+(define racquel-namespace (namespace-anchor->namespace racquel-namespace-anchor))
+
 (require "schema.rkt")
 
 (provide (all-defined-out))
@@ -26,10 +30,6 @@
            [external-name #f])
     (super-new)
     (inspect #f)))
-
-;;; Define namespace anchor.
-(define-namespace-anchor racquel-namespace-anchor)
-(define racquel-namespace (namespace-anchor->namespace racquel-namespace-anchor))
 
 ;;; Get metadata for a class.
 (define (get-class-metadata-object cls)
@@ -91,7 +91,7 @@
     
 ;;; Get the column name for a column field in a class.
 (define-syntax-rule (get-column-name f cls)
-  (if (class? cls) (let ([col-def (findf (lambda (c) (eq? f (first c))) (get-class-metadata columns cls))])
+  (if (class? cls) (let ([col-def (findf (lambda (c) (equal? f (first c))) (get-class-metadata columns cls))])
                      (if col-def (second col-def) (error (format "column name for id ~a class ~a not found" f cls))))
       (raise-argument-error 'get-column-name "argument ~a is not a class" cls)))
          

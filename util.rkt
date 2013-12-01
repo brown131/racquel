@@ -36,9 +36,10 @@
 
 ;;; Select SQL.
 (define (select-sql con cls where-clause)
-  (let ([col-nms (sort (get-column-names cls) string<?)])
-    (string-append "select " (string-join col-nms ", ") 
-                   " from " (get-class-metadata table-name cls) " "
+  (let ([tbl-nm (get-class-metadata table-name cls)]
+        [col-nms (sort (get-column-names cls) string<?)])
+    (string-append "select " (string-join (map (lambda (c) (string-append tbl-nm "." c)) col-nms) ", ") 
+                   " from " tbl-nm " "
                    (sql-placeholder where-clause (dbsystem-type con)))))
 
 ; Set a value given a sequence of keys.
