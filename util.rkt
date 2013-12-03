@@ -8,7 +8,6 @@
 
 (provide (all-defined-out))
 
-
 ;;; ODBC database system type. Values are: 'sqlserver, 'oracle, or 'db2.
 (define *odbc-dbsystem-type* 'sqlserver)
 
@@ -26,7 +25,10 @@
 (define *data-class-schema* (make-multi-hash))
 
 ;;; Define type checker for a data class.
-(define (data-class? cls) (implementation? cls data-class<%>))
+(define-syntax-rule (data-class? cls) (implementation? cls data-class<%>))
+
+;;; Define type checker for a data object.
+(define-syntax-rule (data-object? cls) (is-a? data-class<%>))
 
 ;;; Define an empty interface used to identify a data class.
 (define data-class<%> (interface ()))

@@ -14,8 +14,8 @@ Racquel is an object/relational mapper for Racket. It consists of several compon
           @item{An S-expression based SQL-like query language.}
           @item{Mix-in classes for serializing objects to and from JSON or XML.}]
 
-Racquel supports connectivity to all the database systems provided by Racket's DB package, which are: MySQL, PostgreSQL, 
-SQLite3, and through ODBC: SQL Server, Oracle, and DB/2.
+Racquel supports connectivity to all the database systems provided by Racket's @link["http://docs.racket-lang.org/db/"]{DB}
+package, which are: MySQL, PostgreSQL, SQLite3, and through ODBC: SQL Server, Oracle, and DB/2.
 
 Racquel can be used by downloading and installing the package from @link["http://planet.racket-lang.org/"]{PLaneT}.
 
@@ -117,15 +117,44 @@ an @racket[inspect] expression has already been defined.
 This is analagous to the @racket[class] definition, where the interface expression is omitted.                                           
 }
  
-@defform[(data-class? sym)]{
-Determines if a symbol is a data class.
+@defproc[(data-class? [v any/c]) boolean?]{
+Returns @racket[#t] if @racket[v] is a dtata class, @racket[#f] otherwise.
 }
   
-@defform[(data-class-info cls)]{
-Determines if a symbol is a data class.
-}
-                              
-                                
+@defproc[(data-class-info [class data-class?])
+         (values member-name-key?
+                 member-name-key?
+                 string?
+                 (listof (listof identifier? string? string?))
+                 (listof (listof identifier? identifier? identifier? any/c))
+                 (or/c identifier? (listof identifier?))
+                 (or/c #t string? #f)
+                 (or/c string? #f))]{
+Returns eight values, analogous to the returnvalues of @racket[class-info]:
+
+@itemize[
+  @item{@racket[_class-id-key]: the hidden name for the class's metadata id field;}
+
+  @item{@racket[_state-key]: the hidden name for the class's state field;}
+
+  @item{@racket[_table-name]: the database table name for the class;}
+
+  @item{@racket[_columns]: a list of column definition lists. Each column defintion
+  consists of the column field, the database column name, and the external name used for serialization;}
+
+  @item{@racket[_joins]: a list of join definition lists. Each join definition
+  consists of the join field, the data class of the object(s) joined to, 
+  the cardinality (either @racket['one-to-one] or @racket['one-to-many], and the RQL where-clause for the join;}
+
+  @item{@racket[_primary-key]: either an field or a list of fields that constitute the primary key;}
+
+  @item{@racket[_autoincrement-key]: set to @racket[#t] if the primary key is an auto-increment key
+         (unless the database system is Postgres or Oracle, in which case it is the name of the sequence used
+         for the primary key);}
+
+  @item{@racket[_external-name]: the external name used for serialization;}
+]}
+                                                      
 @section[#:tag "generation"]{Automated Data Class Generation}
                                 
 A powerful feature of Racquel is the ability to generate @racket[data-class] mappings automatically using 
@@ -165,87 +194,105 @@ a database without the tedious effort of manually coding the mappings.
 
 [table-name-externalizer-kw (code:line) (code:line #:table-name-externalizer )]
 
-[print?-kw (code:line) (code:line #:print? )]
+[print?-kw (code:line) (code:line #:print?)]
 )]{
-
+?
 }
   
-@defform[(default-table-name-normalizer table-name)]{
-
+@defproc[(default-table-name-normalizer [table-name string?]) (string?)]{
+?
 }
   
-@defform[(default-column-name-normalizer table-name)]{
-
+@defproc[(default-column-name-normalizer [table-name string?]) (string?)]{
+?
 }
   
-@defform[(default-join-name-normalizer table-name)]{
-
+@defproc[(default-join-name-normalizer [table-name string?]) (string?)]{
+?
 }
   
-@defform[(default-table-name-externalizer table-name)]{
-
+@defproc[(default-table-name-externalizer [table-name string?]) (string?)]{
+?
 }
   
-@defform[(set-odbc-dbsystem-type! odbc-sys-type)]{
-
+@defproc[(set-odbc-dbsystem-type! [odbc-sys-type (or/c 'sqlserver 'oracle 'db2)]) (void?)]{
+?
 }
 
 @section[#:tag "persistence"]{Data Object Persistence}
  
-@defform[(make-data-object db-connection data-class primary-key)]{
-Load a data object from the database by primary key.
+@defproc[(make-data-object [db-connection connection?] 
+                           [data-class data-class?]
+                           [primary-key (or/c identifier? (list of identifier?))]) (data-object?)]{
+Loads a data object from the database by primary key.
 }
  
-@defform[(save-data-object db-connection data-object)]{
-Save a data object.
+@defproc[(save-data-object [db-connection connection?] [data-object data-object?]) (void?)]{
+Saves a data object into the database connected to. This will either insert this object into the database, if the object's state is @racket['new] or
+update if the object has been previously loaded. The object's state will be changed to @racket['saved].                                                                                                                                                                                         
 }
  
-@defform[(insert-data-object db-connection data-object)]{
-Save a data object.
+@defproc[(insert-data-object [db-connection connection?] [data-object data-object?]) (void?)]{
+Inserts a data object into the database connected to. The object's state will be changed to @racket['saved].
 }
    
-@defform[(update-data-object db-connection data-object)]{
-Save a data object.
+@defproc[(update-data-object [db-connection connection?] [data-object data-object?])(void?)]{
+Updates a data object into the database connected to. The object's state will be changed to @racket['saved].
 }
  
-@defform[(delete-data-object db-connection data-object)]{
-Save a data object.
+@defproc[(delete-data-object [db-connection connection?] [data-object data-object?])(void?)]{
+Deletes a data object from the connected database. The object's state will be changed to @racket['deleted].
 }
  
-@defform[(select-data-object db-connection data-class join-clause ... where-clause rest)]{
-Save a data object.
+@defproc[(select-data-object [db-connection connection?] [data-class data-class?] 
+                             [join-clause any/c] ... [where-clause any/c] [rest any/c] ...) (data-object?)]{
+Loads a data object from the database connected to using the criteria defined by the where and/or
+join RQL clauses. The object's initial state will be @racket['loaded].
 }
  
-@defform[(select-data-objects db-connection data-class join-clause ... where-clause rest)]{
-Save a data object.
+@defproc[(select-data-objects [db-connection connection?] [data-class data-class?] 
+                              [join-clause any/c] ... [where-clause any/c] [rest any/c] ...) (listof data-object?)]{
+Loads data objects from the database connected to using the criteria defined by the where and/or
+join RQL clauses. Each object's initial state will be @racket['loaded].
 }
   
-@defform[(data-object-state sym)]{
-Determines if a symbol is a data class.
+@defproc[(data-object-state [data-object data-object?]) (or/c 'new 'loaded 'saved 'deleted)]{
+Returns the current state of the data object.
+
+@itemize[
+  @item{@racket['new]: the state of a data object that has been created but never stored in the database;}
+  @item{@racket['loaded]: the state of a data object that has been loaded from the database;}
+  @item{@racket['saved]: the state of a data object that has been saved to the database after being 
+         either newly created or loaded from the database;}
+  @item{@racket['deleted]: the state of a data object that has been deleted from the database;}
+]
 }
   
-@defform[(get-column sym)]{
-Determines if a symbol is a data class.
+@defproc[(get-column [id symbol?] [data-object data-object?]) (any/c)]{
+Gets the value of a data object's column, analogous to @racket[get-field].
 }
   
-@defform[(set-column! sym)]{
-Determines if a symbol is a data class.
+@defproc[(set-column! [id symbol?] [data-object data-object?] [value any/c]) (void?)]{
+Sets the value of a data object's column, analogous to @racket[set-field!].
 }
   
-@defform[(get-join sym)]{
-Determines if a symbol is a data class.
-}
-                   
+@defproc[(get-join [id symbol?] [data-object data-object?]) (or/c any/c (listof any/c))]{
+Gets the value of a data object join. The value of thie join field is loaded from the database upon
+first call. (This is known as "lazy" loading.)
+}               
 
 @section[#:tag "rql"]{RQL: The Racquel Query Language}
 
+The RQL query language defines SQL-like S-expressions.
 
 @section[#:tag "mixins"]{Data Object Serialization}
 
 @defform[(json-data-class-mixin class-definition)]{
-Defines a mixin that implements the @racket[externalize] and @racket[internalize] methods.
+Defines a mixin that implements the @racket[externalize] and @racket[internalize] methods of the 
+@racket[externalizable<%>] interface. Objects are serialized to and from JSON string.
 }
 
 @defform[(xml-data-class-mixin class-definition)]{
-Defines a mixin that implements the @racket[externalize] and @racket[internalize] methods.
+Defines a mixin that implements the @racket[externalize] and @racket[internalize] methods of the 
+@racket[externalizable<%>] interface. Objects are serialized to and from XML strings.
 }
