@@ -30,8 +30,9 @@ expressions.
 @racketblock[
 (define vehicle% 
   (data-class object%
-    (table-name "VEHICLE")                         
-    (column (vehicle-id #f "VEHICLE_ID") (make #f "MAKE") (year 0 "YEAR") (axels 1 "AXELS"))
+    (table-name "Vehicle")                         
+    (column (vehicle-id #f "Vehicle_Id") (make #f "Make") 
+            (year 0 "Year") (axels 1 "Axels"))
     (primary-key vehicle-id)
     (join owner customer% #:cardinality 'one-to-one  
           (where (= (customer% customer-id) (vehicle% customer-id))))
@@ -39,7 +40,7 @@ expressions.
       (* (get-field axels this) 2))
     (super-new)))]
 
-Here a database table named "VEHICLE" is mapped to the @racket[vehicle%] data class. Columns are defined mapping the columns
+Here a database table named "Vehicle" is mapped to the @racket[vehicle%] data class. Columns are defined mapping the columns
 of the table to a field of the data class, as well as default value for the field. There is also an expression which defines the
 primary key. This table also has a join field @racket[owner] which defines a one-to-one join to a @racket[customer%] object.
 
@@ -105,7 +106,7 @@ Joined objects are loaded lazily, that is, they are not loaded from the database
 The @racket[primary-key] expression defines the primary key for the mapped table. If a primary key consists of multiple parts
 then the columns must be defined in a list. An optional keyword @racket[#:auto-increment] can be used to indicate that the
 primary key is an auto-incrementing a.k.a. identity column. Typically the value for this keyword is simply @racket[#t], 
-however if the type of database being mapped to is Postgres or Oracle, then the value of the keyword must be a string 
+however if the type of database being mapped to is PostgreSQL or Oracle, then the value of the keyword must be a string 
 defining the name of the sequence entity being used for the table.
 
 A @racket[data-class] automatically defines a @racket[inspect] with a value of @racket[#f], as class transparancy
@@ -149,42 +150,42 @@ Returns eight values, analogous to the returnvalues of @racket[class-info]:
   @item{@racket[_primary-key]: either an field or a list of fields that constitute the primary key;}
 
   @item{@racket[_autoincrement-key]: set to @racket[#t] if the primary key is an auto-increment key
-         (unless the database system is Postgres or Oracle, in which case it is the name of the sequence used
+         (unless the database system is PostgreSQL or Oracle, in which case it is the name of the sequence used
          for the primary key);}
 
-  @item{@racket[_external-name]: the external name used for serialization;}
+  @item{@racket[_external-name]: the external name used for JSON/XML serialization;}
 ]}
                                                       
 @section[#:tag "generation"]{Automated Data Class Generation}
                                 
 A powerful feature of Racquel is the ability to generate @racket[data-class] mappings automatically using 
-database schema meta-data. This allows for data classes to be defined for all the tables in 
+database schema metadata. This allows for data classes to be defined for all the tables in 
 a database without the tedious effort of manually coding the mappings.
 
 @defform/subs[
 #:literals (table-name init-column column field join primary-key)
 (gen-data-class db-connection
-                table-name 
-                #:db-system-type val
-                #:generate-joins? val
-                #:generate-reverse-joins? val
-                #:schema-name val
-                #:inherits val
+                table-name
+                #:db-system-type db-system-type-kw
+                #:generate-joins? generate-joins-kw
+                #:generate-reverse-joins? generate-reverse-joins-kw
+                #:schema-name schema-name
+                #:inherits base-class
                 #:table-name-normalizer proc
                 #:column-name-normalizer proc
                 #:join-name-normalizer proc
                 #:table-name-externalizer proc
-                #:print? (prnt? #f)
+                #:print? print-kw
                 data-class-clause ...)
-([db-system-type-kw (code:line) (code:line #:db-system-type cardinality-expr)]
+([db-system-type-kw (code:line) (code:line #:db-system-type db-system-type)]
 
-[generate-joins?-kw (code:line) (code:line #:generate-joins? )]
+[generate-joins-kw (code:line) (code:line #:generate-joins? (or/c #t #f))]
 
-[generate-reverse-joins?-kw (code:line) (code:line #:generate-reverse-joins? )]
+[generate-reverse-joins-kw (code:line) (code:line #:generate-reverse-joins? (or/c #t #f))]
 
-[schema-name-kw (code:line) (code:line #:schema-name )]
+[schema-name-kw (code:line) (code:line #:schema-name (string?))]
 
-[inherits-kw (code:line) (code:line #:inherits )]
+[inherits-kw (code:line) (code:line #:inherits (string?))]
 
 [table-name-normalizer-kw (code:line) (code:line #:table-name-normalizer )]
 
@@ -194,29 +195,79 @@ a database without the tedious effort of manually coding the mappings.
 
 [table-name-externalizer-kw (code:line) (code:line #:table-name-externalizer )]
 
-[print?-kw (code:line) (code:line #:print?)]
+[print-kw (code:line) (code:line #:print? (or/c #t #f))]
 )]{
-?
+Generates a data class from the specified @racket[table-name] using the @racket[db-connection]. If the database system type is an ODBC connection, then
+the particular system type can be specified using the @racket[#:db-system-type] keyword. (This is not necessary if the database system type has
+already been defined by calling @racket[set-odbc-dbsystem-type!]. If the @racket[#:db-system-type] is not
+specified, then the database system type is determined from the @racket[dbsystem-name] of the
+@racket[db-connection], where the @racket['odbc] database system is aassumed to be SQL Server.
+
+The @racket[generate-joins?] and @racket[generate-reverse-joins] keywords control the 
+automatic generation of joins and reverse joins. Joins are determined based on foreign key constraints 
+in the database, and reverse joins are based on any foreign key contraints referencing it. By default
+joins are generated, but reverse joins are not.
+
+In some cases, the table name may not be unique in the database server's metadata. In those cases, the 
+@racket[schema-name] can be used to specify the schema that the table resides in.
+
+The base class of the generated data class can be specified using the @racket[#:inherits] keyword. The
+default base-class is @racket[object%].
+
+Behavior of the map generation can be controlled by customizing the normalizer procedures which normalize
+database names into Racket symbols. Generation of external names from the symbol can also be controlled 
+using the externalizer procedures. A normalizer or externalizer can be customized by specifying the
+procedure to use with the appropriate keyword. An example of a situation where one would want to override
+the default normalizers is if table names in a database started with a prefix.
+
+Below are the default normalizers and externalizers.
 }
   
-@defproc[(default-table-name-normalizer [table-name string?]) (string?)]{
-?
+@defproc[(table-name-normalizer [table-name string?]) (string?)]{
+This normalizer converts database table names into Racket class names, using a set of rules. First,
+the normalizer will convert mixed-case names, e.g. "MixedCase", and make the all lower-case with hyphens
+between the names, e.g. "mixed-case". It will then convert any underscores to hyphens. Finally, it will
+append a percent sign to the end of the name, since that is the Racket standard for naming classes.
+
+@racketblock[
+> (table-name-normalizer "ExampleTable_Name")
+  example-table-name%]
+
+This is default normalizer for table names if the @racket[#:table-name-externalizer] keyword is not specified.
 }
   
-@defproc[(default-column-name-normalizer [table-name string?]) (string?)]{
-?
+@defproc[(column-name-normalizer [table-name string?]) (string?)]{
+This converts column names of a table into Racket symbols, following a set of rules. The 
+rules are similar to those for the @racket[table-name-normalizer]. First mixed-case names are converted to 
+lower-case with hyphens, then underscores are converted to hyphens.
+
+@racketblock[
+> (column-name-normalizer "ExampleColumn_Name")
+  example-column-name]
+
+This is default normalizer for table names if the @racket[#:column-name-externalizer] keyword is not specified.
 }
   
-@defproc[(default-join-name-normalizer [table-name string?]) (string?)]{
-?
+@defproc[(join-name-normalizer [table-name string?]) (string?)]{
+This converts joined table names into Racket symbols, following a set of rules. The 
+rules are similar to those for the @racket[column-name-normalizer]. First mixed-case names are converted to 
+lower-case with hyphens, then underscores are converted to hyphens. Also, if the cardinality of the join is 
+@racket['one-to-many], an "s" is appended to the end of the name (or "es" if the name ends with an "s".)
+
+@racketblock[
+> (join-name-normalizer "JoinExample_Address")
+  join-example-addresses]
+
+This is default normalizer for table names if the @racket[#:join-name-externalizer] keyword is not specified.
 }
   
-@defproc[(default-table-name-externalizer [table-name string?]) (string?)]{
-?
+@defproc[(table-name-externalizer [table-name string?]) (string?)]{
+Converts a database table name to an external name for JSON or XML serialization. The default is no change at all to the table name.
 }
   
 @defproc[(set-odbc-dbsystem-type! [odbc-sys-type (or/c 'sqlserver 'oracle 'db2)]) (void?)]{
-?
+If the database system being used is either Oracle or DB/2, then the database system type needs to be set to distinquish the ODBC
+connection from a SQL Server connection, which is assumed for an ODBC connection is it is not sepcified using this procedure.
 }
 
 @section[#:tag "persistence"]{Data Object Persistence}
@@ -283,7 +334,22 @@ first call. (This is known as "lazy" loading.)
 
 @section[#:tag "rql"]{RQL: The Racquel Query Language}
 
-The RQL query language defines SQL-like S-expressions.
+The RQL query language defines SQL-like S-expressions. The expressions are used to define
+selection criteria when loading data objects (using @racket[select-data-object] or @racket[select-data-objects])
+or joining to other data objects (using @racket[join]s).
+
+@subsection[#:tag "syntax"]{Syntax forms}
+
+
+
+@subsection[#:tag "where"]{The where clause}
+
+@subsection[#:tag "join"]{The join clause}
+
+@subsection[#:tag "examples"]{RQL examples}
+
+@subsection[#:tag "tips"]{Tips and suggestions}
+
 
 @section[#:tag "mixins"]{Data Object Serialization}
 

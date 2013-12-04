@@ -12,7 +12,7 @@
          gen-data-class make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
          get-column set-column! get-join json-data-class-mixin xml-data-class-mixin 
-         default-table-name-normalizer default-column-name-normalizer default-join-name-normalizer
+         table-name-normalizer column-name-normalizer join-name-normalizer
          set-odbc-dbsystem-type! (all-from-out "keywords.rkt"))
 
 ;;;; DATA CLASS DEFINITION
@@ -218,12 +218,12 @@
 
 ;;; Default name normalizer. Replaces underscores and mixed case with hyphens. Returns all lower case.
 (define mixed-case-norm-regexp (regexp "([a-z])([A-Z])"))
-(define (default-column-name-normalizer s) 
+(define (column-name-normalizer s) 
   (string-downcase (string-replace (regexp-replace* mixed-case-norm-regexp s "\\1-\\2")  "_" "-")))
-(define (default-table-name-normalizer s) 
-  (string-append (default-column-name-normalizer s) "%"))
-(define (default-join-name-normalizer s (c 'one-to-many)) 
-  (string-append (default-column-name-normalizer s) 
+(define (table-name-normalizer s) 
+  (string-append (column-name-normalizer s) "%"))
+(define (join-name-normalizer s (c 'one-to-many)) 
+  (string-append (column-name-normalizer s) 
                  (if (eq? c 'one-to-many) (if (string=? (substring s (- (string-length s) 1) (string-length s)) "s") "es" "s") "")))
 
 ;;; Generate a class using database schema information.
@@ -233,9 +233,9 @@
                         #:generate-reverse-joins? (gen-rev-joins? #f)
                         #:schema-name (schema-nm #f)
                         #:inherits (base-cls 'object%)
-                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (default-table-name-normalizer n))) 
-                        #:column-name-normalizer (col-nm-norm (lambda (n) (default-column-name-normalizer n))) 
-                        #:join-name-normalizer (join-nm-norm (lambda (n (c 'one-to-many)) (default-join-name-normalizer n c))) 
+                        #:table-name-normalizer (tbl-nm-norm (lambda (n) (table-name-normalizer n))) 
+                        #:column-name-normalizer (col-nm-norm (lambda (n) (column-name-normalizer n))) 
+                        #:join-name-normalizer (join-nm-norm (lambda (n (c 'one-to-many)) (join-name-normalizer n c))) 
                         #:table-name-externalizer (tbl-nm-extern (lambda (n) (begin n)))
                         #:print? (prnt? #f)
                         . rest) 
