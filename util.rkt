@@ -4,12 +4,15 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db "metadata.rkt" "schema.rkt")
+(require db "metadata.rkt" "schema.rkt" (for-syntax racket/syntax syntax/parse))
 
 (provide (all-defined-out))
 
 ;;; ODBC database system type. Values are: 'sqlserver, 'oracle, or 'db2.
 (define *odbc-dbsystem-type* 'sqlserver)
+
+;;; Define a global hash holding prepared statements.
+(define *prepared-statements* (make-weak-hash))
 
 ;;; Database system type.
 (define-syntax-rule (dbsystem-type con) 
@@ -36,13 +39,21 @@
 ;;; Class of an object
 (define-syntax-rule (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
 
-;;; Select SQL.
-(define (select-sql con cls where-clause)
-  (let ([tbl-nm (get-class-metadata table-name cls)]
-        [col-nms (sort (get-column-names cls) string<?)])
-    (string-append "select " (string-join (map (lambda (c) (string-append tbl-nm "." c)) col-nms) ", ") 
-                   " from " tbl-nm " "
-                   (sql-placeholder where-clause (dbsystem-type con)))))
+;;; Get a prepared SQL statement.
+(define-syntax (select-sql stx)
+  (syntax-parse stx
+     [(_ con:id cls:id (~optional (~seq #:print? prnt)) where-clause:expr)
+      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
+                    [key (gensym)])
+        #`(if (hash-has-key? *prepared-statements* 'key) (hash-ref *prepared-statements* 'key)
+              (let* ([tbl-nm (get-class-metadata table-name cls)]
+                     [col-nms (sort (get-column-names cls) string<?)]
+                     [sql (string-append "select " (string-join (map (lambda (c) (string-append tbl-nm "." c)) col-nms) ", ") 
+                                         " from " tbl-nm " "
+                                         (sql-placeholder where-clause (dbsystem-type con)))]
+                     [pst (if prnt? sql (prepare con sql))])
+                (unless prnt? (hash-set! *prepared-statements* 'key pst))
+                pst)))]))
 
 ; Set a value given a sequence of keys.
 (define (multi-hash-set! hash-tbl value . keys)

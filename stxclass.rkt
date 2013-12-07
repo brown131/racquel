@@ -26,7 +26,7 @@
 ;;; Parse an RQL expression.
 (define-syntax-class rql-expr
   #:description "rql expression"
-  #:literals (join where and or not = <> >= <= > < like in unquote)
+  #:literals (join where and or not = <> >= <= > < like in between unquote)
   (pattern and #:with (expr ...) #'(rql-and))
   (pattern or #:with (expr ...) #'(rql-or))
   (pattern not #:with (expr ...) #'(rql-not))
@@ -38,9 +38,10 @@
   (pattern < #:with (expr ...) #'(rql-<))
   (pattern like #:with (expr ...) #'(rql-like))
   (pattern in #:with (expr ...) #'(rql-in))
-  (pattern i:id #:with (expr ...) #'('i))
-  (pattern s:str #:with (expr ...) #'(s))
-  (pattern n:nat #:with (expr ...) #'(n))
+  (pattern between #:with (expr ...) #'(rql-between))
+  (pattern i:id #:with (expr ...) #'((~a 'i)))
+  (pattern s:str #:with (expr ...) #'((~a s)))
+  (pattern n:nat #:with (expr ...) #'((~a n)))
   (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
   (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column-pair p1 'p2)))
   (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
@@ -162,6 +163,12 @@
   (pattern (primary-key pkey:id #:autoincrement flag:expr) 
            #:attr cls-expr #'#f
            #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m flag)))
+           #:attr col-defs #'null 
+           #:attr jn-rows #'null 
+           #:attr jn-defs #'null)
+  (pattern (primary-key pkey:expr #:autoincrement flag:expr) 
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m flag)))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)

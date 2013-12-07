@@ -249,7 +249,8 @@
                        (data-class #,base-cls
                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))
                                    #,(append '(column) (get-schema-columns schema col-nm-norm))
-                                   #,(if auto-key (list 'primary-key pkey '#:autoincrement auto-key) (list 'primary-key pkey))
+                                   (primary-key '#,pkey #:autoincrement #,auto-key)
+                                  ; #,(if auto-key (list 'primary-key pkey '#:autoincrement auto-key) (list 'primary-key pkey))
                                    #,(if (and gen-joins? (list? jns) (> (length jns) 0)) (append '(join) jns) '(begin #f))
                                    (super-new)
                                    #,@rest
@@ -261,7 +262,7 @@
 ;;;; PERSISTENCE
 
 
-;;; Define a global table holding data objects.
+;;; Define a global hash holding data objects.
 (define *data-objects* (make-multi-hash #:weak? #t))
 
 ;;; Set the data in a data object.
@@ -294,15 +295,15 @@
     #:literals (join where)
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
+       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append join-expr.expr ... where-expr.expr ...))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (string-append where-expr.expr ...))])
+       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append where-expr.expr ...))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls where-expr)])
+       #'(let ([sql (select-sql con cls  #:print? prnt? where-expr)])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]))
 
 ;;; Select data objects from the database.
@@ -310,19 +311,19 @@
   (syntax-parse stx
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)))
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls "")])
+       #'(let ([sql (select-sql con cls  #:print? prnt? "")])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (string-append join-expr.expr ... where-expr.expr ...))])
+       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append join-expr.expr ... where-expr.expr ...))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (string-append where-expr.expr ...))])
+       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append where-expr.expr ...))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls (string-append where-expr.expr ...))])
+       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append where-expr.expr ...))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql rest ...)))))]
     ))
 
