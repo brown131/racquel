@@ -40,7 +40,7 @@
 (define-syntax-rule (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
 
 ;;; Get a prepared SQL statement.
-(define-syntax (select-sql stx)
+(define-syntax (make-select-statement stx)
   (syntax-parse stx
      [(_ con:id cls:id (~optional (~seq #:print? prnt)) where-clause:expr)
       (with-syntax ([prnt? (or (attribute prnt) #'#f)]

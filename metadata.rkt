@@ -43,13 +43,21 @@
             (if md-pair (begin (set-field! class (cdr md-pair) cls) (cdr md-pair)) #f))))
       (raise-argument-error 'get-class-metadata-object "argument ~a is not a class" cls)))
 
+;;; Find a class metadata by class name.
+(define-syntax-rule (find-class-name-metadata cls-name)
+  (findf (lambda (v) (let ([cls (get-field class v)])
+                       (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
+                                 (equal? cls-nm (if (string? cls-name) (string->symbol cls-name) cls-name))) #f))) 
+         (hash-values *data-class-metadata*)))
+
+;;; Find a class metadata by external name.
+(define-syntax-rule (find-external-name-metadata ext-name)
+  (findf (lambda (v) (equal? (if (string? ext-name) ext-name (symbol->string ext-name))
+                             (get-field external-name v))) (hash-values *data-class-metadata*))) 
+
 ;;; Get a class from the metadata by name or symbol.
 (define-syntax-rule (get-class cls-name)
-  (if (class? cls-name) cls-name
-      (get-field class (findf (lambda (v) (let ([cls (get-field class v)])
-                                            (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
-                                                      (eq? cls-nm (if (string? cls-name) (string->symbol cls-name) cls-name))) #f))) 
-                              (hash-values *data-class-metadata*)))))
+  (if (class? cls-name) cls-name (get-field class (find-class-name-metadata cls-name))))
 
 ;;; Get a class from the metadata by name or symbol.
 (define-syntax-rule (get-class-name cls)

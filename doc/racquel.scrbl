@@ -12,7 +12,7 @@ Racquel is an object/relational mapper for Racket. It consists of several compon
           @item{A generator that automatically creates mapped classes using database schema, including joins.}
           @item{Persistence functions for selecting, saving, and deleting objects in the database.}
           @item{An S-expression based SQL-like query language.}
-          @item{Mix-in classes for serializing objects to and from JSON or XML.}]
+          @item{Functions for serializing objects to and from JSON or XML.}]
 
 Racquel supports connectivity to all the database systems provided by Racket's @link["http://docs.racket-lang.org/db/"]{DB}
 package, which are: MySQL, PostgreSQL, SQLite3, and through ODBC: SQL Server, Oracle, and DB/2.
@@ -351,14 +351,20 @@ or joining to other data objects (using @racket[join]s).
 @subsection[#:tag "tips"]{Tips and suggestions}
 
 
-@section[#:tag "mixins"]{Data Object Serialization}
+@section[#:tag "serialization"]{Data Object Serialization}
 
-@defform[(json-data-class-mixin class-definition)]{
-Defines a mixin that implements the @racket[externalize] and @racket[internalize] methods of the 
-@racket[externalizable<%>] interface. Objects are serialized to and from JSON string.
+@defproc[(data-object->jsexpr [object data-object?]) (jsexpr?)]{
+Serializes a data object into a JS-expression.
 }
 
-@defform[(xml-data-class-mixin class-definition)]{
-Defines a mixin that implements the @racket[externalize] and @racket[internalize] methods of the 
-@racket[externalizable<%>] interface. Objects are serialized to and from XML strings.
+@defproc[(jsexpr->data-object [jsx jsexpr?]) (data-object?)]{
+Creates a data object from a JS-expression string.
+}
+
+@defproc[(data-object->xexpr [object data-object?]) (xexpr?)]{
+Serializes a data object into an X-expression.
+}
+
+@defproc[(xexpr->data-object [xml xexpr?]) (data-object?)]{
+Creates a data object from an X-expression.
 }

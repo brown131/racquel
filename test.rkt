@@ -4,7 +4,7 @@
 ;;;; test - Test module for the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
-(require rackunit rackunit/text-ui racket/trace db json racquel "metadata.rkt" "schema.rkt" "util.rkt")
+(require rackunit rackunit/text-ui racket/trace db json xml xml/xexpr racquel "metadata.rkt" "schema.rkt" "util.rkt")
 
 (require/expose racquel (savable-fields 
                          key-where-clause-sql
@@ -126,9 +126,9 @@
                                               (sql-placeholder "update test set description=?, id=?, name=?, x=? where id=?" *test-dbsys-type*)))
     (test-case "delete sql ok?" (check-equal? (delete-sql *con* test-class%) 
                                               (sql-placeholder "delete from test where id=?" *test-dbsys-type*)))
-    (test-case "select sql ok?"  (check-equal? (select-sql *con* test-class% #:print? #t "where id=?") 
+    (test-case "select sql ok?"  (check-equal? (make-select-statement *con* test-class% #:print? #t "where id=?") 
                                                (sql-placeholder "select test.description, test.id, test.name, test.x from test where id=?" *test-dbsys-type*)))
-    (test-case "select all sql ok?"  (check-equal? (select-sql *con* test-class% #:print? #t "") 
+    (test-case "select all sql ok?"  (check-equal? (make-select-statement *con* test-class% #:print? #t "") 
                                                (sql-placeholder "select test.description, test.id, test.name, test.x from test " *test-dbsys-type*)))
     ))
 
@@ -289,7 +289,7 @@
     (test-case "delete sql ok?" (check-equal? (delete-sql *con* simple%) 
                                               (sql-placeholder "delete from simple where id=?" *test-dbsys-type*)))
     (test-case "select sql ok?" 
-               (check-equal? (select-sql *con* simple% #:print? #t "where id=?") 
+               (check-equal? (make-select-statement *con* simple% #:print? #t "where id=?") 
                              (sql-placeholder "select simple.description, simple.id, simple.name, simple.x from simple where id=?" *test-dbsys-type*)))
   
     (define x-val (if (eq? (dbsystem-name (connection-dbsystem *con*)) 'odbc) 15 1.5))
@@ -376,10 +376,10 @@
       (test-case "delete sql ok?" (check-equal? (delete-sql *con* auto%) 
                                                 (sql-placeholder "delete from auto where id=?" *test-dbsys-type*)))
       (test-case "select sql ok?" 
-                 (check-equal? (select-sql *con* auto% #:print? #t "where id=?") 
+                 (check-equal? (make-select-statement *con* auto% #:print? #t "where id=?") 
                                (sql-placeholder "select auto.description, auto.id, auto.name from auto where id=?" *test-dbsys-type*)))
       (test-case "select all sql ok?" 
-                 (check-equal? (select-sql *con* auto% #:print? #t "") 
+                 (check-equal? (make-select-statement *con* auto% #:print? #t "") 
                                (sql-placeholder "select auto.description, auto.id, auto.name from auto " *test-dbsys-type*)))
       
       (test-case "columns set?"
@@ -708,7 +708,7 @@
 "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where id = 1"))
     (test-case "select join sql ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t 
-                                                 (join person% (= (person% id) person-id)) (where (= id ?)) 2)
+                                                 (join person% (= (person% id) person_id)) (where (= id ?)) 2)
 (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = person_id where id = ?"
                  *test-dbsys-type*)))
      
@@ -735,6 +735,38 @@
      ))
 
 
+;;;; TEST SERIALIZATION
+
+
+(define-test-suite test-serialization
+  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (let* ([test-class% (data-class object%
+                                 (table-name "test" "Test")
+                                 (column [id 1 ("id" "Id")] 
+                                         [name "test" ("name" "Name")] 
+                                         [description "Test" "Description"])
+                                 (primary-key id)
+                                 (super-new))]
+         [from-obj (new test-class%)])
+
+    (test-case "serialized to json ok?" (check-equal? (jsexpr->string (data-object->jsexpr from-obj))
+                                                      "{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"test\"}}"))
+    (test-case "data object is json?" (check-true (jsexpr? (data-object->jsexpr from-obj))))
+    (define js-obj (jsexpr->data-object (string->jsexpr 
+                                         "{\"Test\":{\"Description\":\"new desc\",\"Id\":2,\"Name\":\"new name\"}}")))
+    (test-case "deserialized from json ok?" (check-true (is-a? js-obj test-class%)))
+    (test-case "name deserialized ok?" (check-equal? (get-column name js-obj) "new name"))
+ 
+    (test-case "serialized to xml ok?" (check-equal? (xexpr->string (data-object->xexpr from-obj))
+                                                      "<Test><Description>Test</Description><Id>1</Id><Name>test</Name></Test>"))
+    (test-case "data object is xml" (check-true (xexpr? (data-object->xexpr from-obj))))
+    (define xml-obj (xexpr->data-object (string->xexpr 
+                                         "<Test><Description>new desc</Description><Id>2</Id><Name>new name</Name></Test>")))
+    (test-case "deserialized from xml ok?" (check-true (is-a? xml-obj test-class%)))
+    (test-case "name deserialized ok?" (check-equal? (get-column name xml-obj) "new name"))
+  ))
+
+
 ;;;; TEST MIXINS
 
 
@@ -749,16 +781,17 @@
                                  (super-new))]
          [json-mixed-class% (json-data-class-mixin test-class%)]
          [json-extern-obj (new json-mixed-class%)]
-         [json-intern-obj (new json-mixed-class%)]
+         [json-intern-obj (new json-mixed-class%)] 
          [xml-mixed-class% (xml-data-class-mixin test-class%)]
          [xml-extern-obj (new xml-mixed-class%)]
          [xml-intern-obj (new xml-mixed-class%)])
+    
     
     (set-column! name json-extern-obj "new name")
     (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
     
     (test-case "json externalized ok?" (check-equal? (string->jsexpr (send json-extern-obj externalize))
-(string->jsexpr"{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}"))) 
+(string->jsexpr "{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}"))) 
     (send json-intern-obj internalize (send json-extern-obj externalize))
     (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
     
@@ -791,6 +824,7 @@
 (run-tests test-generate-join 'verbose)
 (run-tests test-generate-reverse-join 'verbose)
 (run-tests test-rql-parsing 'verbose)
+(run-tests test-serialization 'verbose)
 (run-tests test-mixins 'verbose)
 
 

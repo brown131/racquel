@@ -5,14 +5,15 @@
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
 
-(require db json "keywords.rkt" "metadata.rkt" "mixin.rkt" "schema.rkt" "util.rkt"
+(require db json "keywords.rkt" "metadata.rkt" "schema.rkt" "util.rkt"
          (for-syntax racket/syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-object? data-class-info data-object-state 
          gen-data-class make-data-object select-data-object select-data-objects save-data-object 
          insert-data-object update-data-object delete-data-object 
-         get-column set-column! get-join json-data-class-mixin xml-data-class-mixin 
+         get-column set-column! get-join 
          table-name-normalizer column-name-normalizer join-name-normalizer
+         data-object->jsexpr jsexpr->data-object data-object->xexpr xexpr->data-object
          set-odbc-dbsystem-type! (all-from-out "keywords.rkt"))
 
 ;;;; DATA CLASS DEFINITION
@@ -28,7 +29,7 @@
   (let ([pkey (get-class-metadata primary-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
    
 ;;; Set auto-increment id.
-(define (set-autoincrement-id! con obj)
+(define-syntax-rule (set-autoincrement-id! con obj)
   (let* ([cls (object-class obj)]
          [auto-key (get-class-metadata autoincrement-key cls)])
     (when auto-key
@@ -36,11 +37,11 @@
                           (query-value con (sql-autoincrement (dbsystem-type con) auto-key))))))
 
 ;;; Get the primary key from an object.
-(define (get-primary-key obj)
+(define-syntax-rule (get-primary-key obj)
  (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields (object-class obj))))
 
 ;;; Auto-increment key fields
-(define (autoincrement-key-fields cls)
+(define-syntax-rule (autoincrement-key-fields cls)
   (if (get-class-metadata autoincrement-key cls) (primary-key-fields cls) null))
     
 ;;; Columns without the autoincrement key
@@ -88,7 +89,7 @@
              (hash-set! *data-class-metadata* 'cls-id m))
            (define-member-name cls-id (get-field class-id-key m))
            (define-member-name data-object-state (get-field state-key m))
-           (class* base-cls (data-class<%>) 
+           (class* base-cls (data-class<%>)
              elem.cls-expr ...
              (field [cls-id #f]
                     [data-object-state 'new])
@@ -295,15 +296,15 @@
     #:literals (join where)
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append join-expr.expr ... where-expr.expr ...))])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? (string-append join-expr.expr ... where-expr.expr ...))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append where-expr.expr ...))])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? (string-append where-expr.expr ...))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? where-expr)])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? where-expr)])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]))
 
 ;;; Select data objects from the database.
@@ -311,26 +312,26 @@
   (syntax-parse stx
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)))
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? "")])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? "")])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) join-expr:join-expr where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append join-expr.expr ... where-expr.expr ...))])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? (string-append join-expr.expr ... where-expr.expr ...))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql rest ...)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append where-expr.expr ...))])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? (string-append where-expr.expr ...))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) where-expr:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)])
-       #'(let ([sql (select-sql con cls  #:print? prnt? (string-append where-expr.expr ...))])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? (string-append where-expr.expr ...))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql rest ...)))))]
     ))
 
 ;;; Load a data object from the database by primary key.
 (define-syntax-rule (make-data-object con cls pkey) 
   (create-data-object con cls 
-    (query-row con (select-sql con cls (key-where-clause-sql con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
+    (query-row con (make-select-statement con cls (key-where-clause-sql con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
 
 ;;; Save a data object.
 (define-syntax-rule (save-data-object con obj) 
@@ -340,9 +341,11 @@
 ;;; Insert a data object
 (define-syntax-rule (insert-data-object con obj) 
   (let* ([cls (object-class obj)]
-         [sql (insert-sql con cls)]
+         [key (format "i~a" cls)]
+         [pst (if (multi-hash-has-key? *prepared-statements* con key) (multi-hash-ref *prepared-statements* con key)
+                  (let ([p (prepare con (insert-sql con cls))]) (multi-hash-set! *prepared-statements* p con key) p))]
          [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))])
-    (apply query-exec con sql flds)
+    (apply query-exec con pst flds)
     (set-autoincrement-id! con obj)
     (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'saved)
@@ -351,18 +354,66 @@
 ;;; Update a data object.
 (define-syntax-rule (update-data-object con obj) 
   (let* ([cls (object-class obj)]
-         [sql (update-sql con cls)]
+         [key (format "u~a" cls)]
+         [pst (if (multi-hash-has-key? *prepared-statements* con key) (multi-hash-ref *prepared-statements* con key)
+                  (let ([p (prepare con (update-sql con cls))]) (multi-hash-set! *prepared-statements* p con key) p))]
          [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))]
          [pkey (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields cls))])
-    (apply query-exec con sql (append flds pkey))
+    (apply query-exec con pst (append flds pkey))
     (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'saved)))
 
 ;;; Delete a data object.
-(define-syntax-rule (delete-data-object con obj) 
-  (let ([sql (delete-sql con (object-class obj))]
-        [pkey (map (lambda (f) (dynamic-get-field f obj)) 
-                   (primary-key-fields (object-class obj)))])
-    (apply query-exec con sql pkey)
-    (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+(define-syntax-rule (delete-data-object con obj)
+  (let* ([cls (object-class obj)]
+         [key (format "d~a" cls)]
+         [pst (if (multi-hash-has-key? *prepared-statements* con key) (multi-hash-ref *prepared-statements* con key)
+                  (let ([p (prepare con (delete-sql con cls))]) (multi-hash-set! *prepared-statements* p con key) p))]
+         [pkey (map (lambda (f) (dynamic-get-field f obj)) 
+                    (primary-key-fields (object-class obj)))])
+    (apply query-exec con pst pkey)
+    (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'deleted)))
+
+
+;;;; SERIALIZATION
+
+
+;;; Generate a JS-expression from a data object.
+(define-syntax-rule (data-object->jsexpr obj)
+  (let ([cls (object-class obj)])
+    (hasheq (string->symbol (get-class-metadata external-name cls)) 
+            (make-hasheq (map (lambda (d) (cons (string->symbol (third d)) (dynamic-get-field (first d) obj))) 
+                              (get-class-metadata columns cls))))))
+
+;;; Create a data object from a JS-expression.
+(define-syntax-rule (jsexpr->data-object jsx)
+  (let* ([md (find-external-name-metadata (first (hash-keys jsx)))]
+         [cols (first (hash-values jsx))]
+         [col-defs (get-field columns md)]
+         [cls (get-field class md)]
+         [obj (new cls)])
+    (hash-map cols (lambda (k v) (dynamic-set-field! (first (findf (lambda (c) (equal? (symbol->string k) (third c))) 
+                                                                   col-defs)) obj v)))
+    (define-member-name data-object-state (get-class-metadata state-key cls))
+    (set-field! data-object-state obj 'deserialized)
+    obj))
+
+;;; Generate an X-expression from a data object.
+(define-syntax-rule (data-object->xexpr obj)
+  (let ([cls (object-class obj)])
+    (append (list (string->symbol (get-class-metadata external-name cls)) '()) 
+            (map (lambda (d) (list (string->symbol (third d)) '() 
+                                   (~a (dynamic-get-field (first d) obj)))) (get-class-metadata columns cls)))))
+
+;;; Create a data object from an X-expression.
+(define-syntax-rule (xexpr->data-object xmlx)
+  (let* ([md (find-external-name-metadata (first xmlx))]
+         [col-defs (get-field columns md)]
+         [cls (get-field class md)]
+         [obj (new cls)])
+    (map (lambda (x) (dynamic-set-field! (first (findf (lambda (c) (equal? (symbol->string (first x)) (third c))) col-defs)) obj (third x)))
+         (filter (lambda (x) (and (list? x) (> (length x) 1))) xmlx))
+    (define-member-name data-object-state (get-class-metadata state-key cls))
+    (set-field! data-object-state obj 'deserialized)
+    obj))

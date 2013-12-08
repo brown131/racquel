@@ -123,7 +123,7 @@
   #:description "join definition"
   (pattern (jcol:id jcls:expr (~optional (~seq #:cardinality card:expr) #:defaults ([card #''one-to-many])) where:where-expr rest:expr ...) 
            #:with expr #'(jcol #f) 
-           #:attr j-row #'((eq? jn-fld 'jcol) (query-rows con (select-sql con jn-cls (string-append where.expr ...)) rest ...))
+           #:attr j-row #'((eq? jn-fld 'jcol) (query-rows con (make-select-statement con jn-cls (string-append where.expr ...)) rest ...))
            #:attr j-def #'(list 'jcol jcls card)))
 
 (define-syntax-class data-class-element
