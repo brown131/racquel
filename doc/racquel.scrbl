@@ -1,6 +1,6 @@
 #lang scribble/doc
 @(require racquel
-          scribble/manual scribble/eval
+          scribble/manual scribble/eval scribble/bnf
           (for-label racket)
           (for-syntax racket/base racket/class racket/serialize))
 
@@ -340,7 +340,42 @@ or joining to other data objects (using @racket[join]s).
 
 @subsection[#:tag "syntax"]{Syntax forms}
 
+Below is the BNF for RQL expressions.
 
+@(let ([open @litchar{(}]
+       [close @litchar{)}])
+   @BNF[(list @litchar{                } @litchar{})
+        (list @nonterm{expression}
+              @BNF-seq[open @litchar{join} @nonterm{table name} @nonterm{search condition} close]
+              @BNF-seq[open @litchar{where} @nonterm{search condition} close])
+        (list @nonterm{search condition}
+              @BNF-seq[@nonterm{boolean term}]
+              @BNF-seq[open @litchar{or} @nonterm{search condition} @nonterm{boolean term} close])
+        (list @nonterm{boolean term}
+              @BNF-seq[@nonterm{boolean factor}]
+              @BNF-seq[open @litchar{and} @nonterm{boolean term} @nonterm{boolean factor} close])
+        (list @nonterm{boolean factor}
+              @BNF-seq[open @litchar{not} @nonterm{boolean test} close])
+        (list @nonterm{boolean test}
+              @BNF-seq[@nonterm{boolean primary}])
+        (list @nonterm{boolean primary}
+              @BNF-seq[@nonterm{predicate}]
+              @BNF-seq[@nonterm{search condition}])
+        (list @nonterm{predicate}
+              @BNF-seq[@nonterm{comparison predicate}]
+              @BNF-seq[@nonterm{between predicate}]
+              @BNF-seq[@nonterm{in predicate}]
+              @BNF-seq[@nonterm{like predicate}]
+              @BNF-seq[@nonterm{null predicate}])
+        (list @nonterm{between predicate}
+              @BNF-seq[open @litchar{between} @nonterm{row value constructor} @nonterm{row value constructor} @nonterm{row value constructor} close])
+        (list @nonterm{in predicate}
+              @BNF-seq[open @litchar{in} @nonterm{row value constructor} @nonterm{in value list} close])
+        (list @nonterm{in value list}
+              @BNF-seq[@kleeneplus[@nonterm{value expression}]])
+        (list @nonterm{like predicate}
+              @BNF-seq[open @litchar{like} @nonterm{pattern} close])
+        ])
 
 @subsection[#:tag "where"]{The where clause}
 
@@ -348,8 +383,10 @@ or joining to other data objects (using @racket[join]s).
 
 @subsection[#:tag "examples"]{RQL examples}
 
+@verbatim|{
+(select-data-object con address% #:print? #t (where (in id ,(make-list 3 '?)))
+}|
 @subsection[#:tag "tips"]{Tips and suggestions}
-
 
 @section[#:tag "serialization"]{Data Object Serialization}
 
