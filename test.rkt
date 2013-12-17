@@ -767,43 +767,6 @@
   ))
 
 
-;;;; TEST MIXINS
-
-
-(define-test-suite test-mixins
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
-  (let* ([test-class% (data-class object%
-                                 (table-name "test" "Test")
-                                 (column [id 1 ("id" "Id")] 
-                                         [name "test" ("name" "Name")] 
-                                         [description "Test" "Description"])
-                                 (primary-key id)
-                                 (super-new))]
-         [json-mixed-class% (json-data-class-mixin test-class%)]
-         [json-extern-obj (new json-mixed-class%)]
-         [json-intern-obj (new json-mixed-class%)] 
-         [xml-mixed-class% (xml-data-class-mixin test-class%)]
-         [xml-extern-obj (new xml-mixed-class%)]
-         [xml-intern-obj (new xml-mixed-class%)])
-    
-    
-    (set-column! name json-extern-obj "new name")
-    (test-case "column name set?" (check-equal? (get-column name json-extern-obj) "new name"))
-    
-    (test-case "json externalized ok?" (check-equal? (string->jsexpr (send json-extern-obj externalize))
-(string->jsexpr "{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"new name\"}}"))) 
-    (send json-intern-obj internalize (send json-extern-obj externalize))
-    (test-case "json internalized ok?" (check-equal? (get-column name json-intern-obj) "new name"))
-    
-    (set-column! name xml-extern-obj "a new name")
-    (test-case "column name set?" (check-equal? (get-column name xml-extern-obj) "a new name"))
-    (test-case "xml externalized ok?" (check-equal? (send xml-extern-obj externalize) 
-"<Test><Description>Test</Description><Id>1</Id><Name>a new name</Name></Test>"))
-    (send xml-intern-obj internalize (send xml-extern-obj externalize))
-    (test-case "xml internalized ok?" (check-equal? (get-column name xml-intern-obj) "a new name"))
-  ))
-
-
 ;;;; TEST MULTI-PART KEYS
 
 
@@ -825,7 +788,6 @@
 (run-tests test-generate-reverse-join 'verbose)
 (run-tests test-rql-parsing 'verbose)
 (run-tests test-serialization 'verbose)
-(run-tests test-mixins 'verbose)
 
 
 ;;;; TEAR-DOWN

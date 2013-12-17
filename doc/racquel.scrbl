@@ -336,7 +336,17 @@ first call. (This is known as "lazy" loading.)
 
 The RQL query language defines SQL-like S-expressions. The expressions are used to define
 selection criteria when loading data objects (using @racket[select-data-object] or @racket[select-data-objects])
-or joining to other data objects (using @racket[join]s).
+or joining to other data objects (using @racket[join]s). RQL-expressions are translated into database system-specific SQL. 
+
+Rather than naming a table in a query, as in an SQL, a class which maps to a table is named instead. For instance if the
+table "INVOICE" was mapped to the class @racket[invoice%], the name @racket[invoice%] would be using the an RQL query. In
+addition, columns in RQL as identified using a pair with class name and field name. This the SQL table-column
+reference "INVOICE.CREATED" would be @racket[(invoice% created)]. A column name must be defined in RQL with it's corresponding
+class, in order to be correctly mapped to the corresponding SQL.
+
+RQL query parameters are represented using a question mark (@racket[?]). Since the representation of parameter values can
+be database system specific, it is recommended that parameters be used rather than actual hard-coded values, as to ensure correct
+mapping of the value into the specific database system's format.
 
 @subsection[#:tag "syntax"]{Syntax forms}
 
@@ -376,15 +386,33 @@ Below is the BNF for RQL expressions.
         (list @nonterm{like predicate}
               @BNF-seq[open @litchar{like} @nonterm{pattern} close])
         ])
-
+     
 @subsection[#:tag "where"]{The where clause}
 
+A @racket[where] clause is used in @racket[select-data-object] and @racket[select-data-objects]. It follows the
+behavior of SQL-expressions, which can include AND, OR, =, IN, LIKE, etc., but are expressed as S-expressions. Thus the
+SQL-expression "ID = 1" would be coded as the S-expression "(= ID 1)".
+
+Currently only a subset of SQL is supported. Subqueries and existence functions are not supported.
+
 @subsection[#:tag "join"]{The join clause}
+
+Join clauses can also included in @racket[select-data-object] and @racket[select-data-objects] functions. The @racket[join]
+clauses must be defined before the @racket[where] clause. There may be any number of join clauses, each expressing a
+join relationship, similar to an SQL join clause.
+
+A @racket[join] clause may also be defined in a @racket[data-class] declaration, but is expressed in a slightly different 
+form (see @racket[data-class*] above. For instance, the @racket[join] clause, expresses the equivalant of the SQL-expression 
+"JOIN PERSON ON PERSON.ID = ADDRESS.PERSON_ID".
+
+@verbatim|{
+(join person% (= (person% id) (address% person-id)))
+}|
 
 @subsection[#:tag "examples"]{RQL examples}
 
 @verbatim|{
-(select-data-object con address% #:print? #t (where (in id ,(make-list 3 '?)))
+(select-data-objects con address% #:print? #t (where (in id ,address-ids))
 }|
 @subsection[#:tag "tips"]{Tips and suggestions}
 
