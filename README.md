@@ -1,39 +1,19 @@
-racquel
-=======
+racquel - An Object/Relational Mapper for Racket
 
-An ORM for Racket. 
+
+Racquel is an object/relational mapper for Racket. Its features include both manual and automatic generation of 
+mappings, a basic S-expression query language, and JSON and XML serialization. This supports MySQL, Postgres, SQLite, SQL Server, 
+Oracle, and DB/2.
 
 I was dissatisfied with the lack of an ORM that uses Racket Objects and supports multiple databases, so I
-decided to write my own.
+decided to write my own. This is a preliminary release of this package. I will probably consider it "released" once there have 
+been a couple of users to shake any remaining bugs out.
 
-THIS IS STILL UNDER DEVELOPMENT.
+See doc/racquel.html for further documentation.
 
-Requirements:
-
-   * Supports MySQL.
-   * Supports SQLite3.
-   * Supports Postgres.
-   * Supports SQL Server (ODBC).
-   * Supports Oracle (ODBC).
-   * Supports DB/2 (ODBC).
-   * Supports Mixed case, Camel case, or a separator ("_") in table and column names when generating.
-   * Supports prefixing of names.
-   * Can select one or more objects using where-cause s-expression.
-   * Generates data classes using schema info.
-   * Can create object using primary key.
-   * Multiple-part primary keys are lists of key values.
-   * Supports auto-increment in DB systems that support it (MySQL, SQL Server, ?)
-   * Can select one or more objects using where-clause string.
-   * Objects have save method.
-   * Objects have insert method.
-   * Objects have update method.
-   * Objects have delete method.
-   * Objects have contained objects (joins).
-   * Joined objects are loaded lazily.
-   * Can print generated class s-expression.
-   * Can externalize/internalize to/from JSON.
-   * Can externalize/internalize to/from XML.
-   * Can have a different base class.
-   * Can a-synch select objects in the background.
-   * Has level-1 (primary key) cache.
-   * Can generate accessors and mutators.
+To Do/Wish List:
+   * Improve docs.
+   * Track changes in get-column for updates.
+   * Support Views as well as Tables. Would need to determine primary key for generating.
+   * Test object inheritance.
+   * Qualify all generated SQL names by DB type (`name`, [name], etc.)

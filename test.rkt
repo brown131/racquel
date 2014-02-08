@@ -750,7 +750,7 @@
          [from-obj (new test-class%)])
 
     (test-case "serialized to json ok?" (check-equal? (jsexpr->string (data-object->jsexpr from-obj))
-                                                      "{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"test\"}}"))
+                                                      "{\"Test\":{\"Name\":\"test\",\"Description\":\"Test\",\"Id\":1}}"))
     (test-case "data object is json?" (check-true (jsexpr? (data-object->jsexpr from-obj))))
     (define js-obj (jsexpr->data-object (string->jsexpr 
                                          "{\"Test\":{\"Description\":\"new desc\",\"Id\":2,\"Name\":\"new name\"}}")))
