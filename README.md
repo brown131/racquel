@@ -16,4 +16,4 @@ To Do/Wish List:
    * Track changes in get-column for updates.
    * Support Views as well as Tables. Would need to determine primary key for generating.
    * Test object inheritance.
-   * Qualify all generated SQL names by DB type (`name`, [name], etc.)
+   * Qualify all generated SQL names by DB type (\`name\`, [name], etc.)
