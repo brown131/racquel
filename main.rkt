@@ -16,6 +16,7 @@
          data-object->jsexpr jsexpr->data-object data-object->xexpr xexpr->data-object
          set-odbc-dbsystem-type! (all-from-out "keywords.rkt"))
 
+
 ;;;; DATA CLASS DEFINITION
    
 
@@ -160,6 +161,7 @@
              (when (and (equal? (join-definition-cardinality jn-def) 'one-to-one) (> (length (get-field jn-fld obj)) 0))
                (set-field! jn-fld obj (first (get-field jn-fld obj))))))
          (get-field jn-fld obj)))))
+
 
 ;;; DATA CLASS GENERATION
 

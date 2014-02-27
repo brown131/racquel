@@ -24,6 +24,22 @@
 ; Create a multi-dimensional hash table.
 (define (make-multi-hash #:weak? (wk? #f)) (if wk? (make-weak-hash) (make-hash)))
 
+; Set a value given a sequence of keys.
+(define (multi-hash-set! hash-tbl value . keys)
+  (if (null? (cdr keys)) (hash-set! hash-tbl (car keys) value)
+      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-set! (hash-ref hash-tbl (car keys)) value (cdr keys)) 
+          (let ([h (make-multi-hash #:weak? (hash-weak? hash-tbl))]) (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
+          
+; Retrieve a value given a sequence of keys.
+(define (multi-hash-ref hash-tbl . keys) 
+  (if (null? (cdr keys)) (if (hash-has-key? hash-tbl (car keys)) (hash-ref hash-tbl (car keys)) #f)
+      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
+          
+; Test if the hash contains the given sequence of keys.
+(define (multi-hash-has-key? hash-tbl . keys) 
+  (if (null? (cdr keys)) (hash-has-key? hash-tbl (car keys))
+      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
+
 ;;; Define a global hash table holding data class schema.
 (define *data-class-schema* (make-multi-hash))
 
@@ -54,22 +70,6 @@
                      [pst (if prnt? sql (prepare con sql))])
                 (unless prnt? (hash-set! *prepared-statements* 'key pst))
                 pst)))]))
-
-; Set a value given a sequence of keys.
-(define (multi-hash-set! hash-tbl value . keys)
-  (if (null? (cdr keys)) (hash-set! hash-tbl (car keys) value)
-      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-set! (hash-ref hash-tbl (car keys)) value (cdr keys)) 
-          (let ([h (make-multi-hash #:weak? (hash-weak? hash-tbl))]) (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
-          
-; Retrieve a value given a sequence of keys.
-(define (multi-hash-ref hash-tbl . keys) 
-  (if (null? (cdr keys)) (if (hash-has-key? hash-tbl (car keys)) (hash-ref hash-tbl (car keys)) #f)
-      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
-          
-; Test if the hash contains the given sequence of keys.
-(define (multi-hash-has-key? hash-tbl . keys) 
-  (if (null? (cdr keys)) (hash-has-key? hash-tbl (car keys))
-      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
    
 ;;; SQL schema by database system type.
 (define (load-schema con schema-nm tbl-nm #:reverse-join? (rev-jn? #f) #:db-system-type dbsys-type)
@@ -83,6 +83,3 @@
                            [(eq? dbsys-type 'sqlserver) (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)])  
                      con schema-nm tbl-nm))                                
   (multi-hash-ref *data-class-schema* con schema-nm tbl-nm))
-
-;;; True if string t contains string s.
-;(define (string-contains t s) 

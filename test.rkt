@@ -83,6 +83,7 @@
          [obj (new test-class% [x 2])])
     (test-case "test class created?" (check-not-eq? test-class% #f))
     (test-true "test class is a data class?" (data-class? test-class%))
+    (test-true "test class implements test interface?" (implementation? test-class% test-interface<%>))
     (test-case "test object created?" (check-not-eq? obj #f))
     (test-case "test class info ok?" 
                (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info test-class%)]) 
@@ -114,6 +115,7 @@
                (check-eq? (get-column id obj) 1)
                (check-eq? (get-column name obj) "Test")
                (check-eq? (get-column description obj) "This is a test")
+               (check-eq? (get-column x obj) 2)
                (check-eq? (get-column object obj) #f))
     
     (test-case "savable field ok?" (check-equal? (savable-fields *con* test-class%) '(description id name x)))

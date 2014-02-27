@@ -1,4 +1,4 @@
-#lang scribble/doc
+#lang scribble/manual
 @(require racquel
           scribble/manual scribble/eval scribble/bnf
           (for-label racket)
@@ -17,7 +17,8 @@ Racquel is an object/relational mapper for Racket. It consists of several compon
 Racquel supports connectivity to all the database systems provided by Racket's @link["http://docs.racket-lang.org/db/"]{DB}
 package, which are: MySQL, PostgreSQL, SQLite3, and through ODBC: SQL Server, Oracle, and DB/2.
 
-Racquel can be used by downloading and installing the package from @link["http://planet.racket-lang.org/"]{PLaneT}.
+Racquel can be used by installing the package from @link["https://github.com/brown131/racquel"]{GitHub}
+Or, as of Racket 6.0, it can be downloaded using the Package Manager in DrRacket.
 
 @defmodule[racquel]
 
@@ -411,9 +412,42 @@ form (see @racket[data-class*] above. For instance, the @racket[join] clause, ex
 
 @subsection[#:tag "examples"]{RQL examples}
 
+Below is an example of a manually defined data class map. This class implements interface @racket[my-interface,%>]. It also has
+a column @racket[x] which is required to be specified when a new instance of the class is created. There is also a one-to-one
+join to an object of class @racket[object%] where the id column of the object equals 1.
+@verbatim|{
+(define my-class% (data-class* object% (my-interface<%>)
+                                   (table-name "test")
+                                   (column [id #f ("id" "Id")] 
+                                           [name #f ("name" "Name")] 
+                                           [title #f ("title" "Title")])
+                                   (init-column [x ("x" "X")])
+                                   (join [object object% 
+                                          #:cardinality 'one-to-one 
+                                          (where (= id ?)) 1])
+                                   (primary-key id)
+                                   (define/public (test) (x + 1))
+                                   (super-new)))
+                                   }|
+
+This creates an instance of the class above. Note that @racket[x] must be specified.
+@verbatim|{
+(define obj (new test-class% [x 2]))
+}|
+
+Generate a class @racket[book%] from the table Book in the Library database, with joins and reverse joins.
+@verbatim|{
+(define book% (gen-data-class con "Book" 
+               #:schema-name "Library"
+               #:generate-joins? #t #:generate-reverse-joins? #t)
+}|
+
+Because the @racket[#:print?] keyword is true, this will return the SQL that would be used to select the objects from
+the database.
 @verbatim|{
 (select-data-objects con address% #:print? #t (where (in id ,address-ids))
 }|
+
 @subsection[#:tag "tips"]{Tips and suggestions}
 
 @section[#:tag "serialization"]{Data Object Serialization}
