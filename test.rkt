@@ -701,8 +701,8 @@
                  (check-equal? (get-field city a) "Chicago")
                  (check-eq? (data-object-state a) 'loaded)))
 
-    (test-case "select with sql ok?" (select-data-object *con* address% "join person on person.id = address.person_id where address.id = 1")
-"select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where id = 1")
+    (test-case "select with sql ok?" (check-equal? (select-data-object *con* address%  #:print? #t "join person on person.id = address.person_id where address.id = 1")
+"select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where id = 1"))
 
     (test-case "select join sql ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t 
