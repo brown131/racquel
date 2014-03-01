@@ -4,22 +4,22 @@
 ;;;; test - Test module for the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
-(require rackunit rackunit/text-ui racket/trace db json xml xml/xexpr racquel "metadata.rkt" "schema.rkt" "util.rkt")
+(require rackunit rackunit/text-ui racket/trace db json xml xml/xexpr "main.rkt" "metadata.rkt" "schema.rkt" "util.rkt")
 
-(require/expose racquel (savable-fields 
-                         key-where-clause-sql
-                         primary-key-fields
-                         insert-sql 
-                         update-sql 
-                         delete-sql
-                         join-cardinality
-                         get-schema-columns
-                         key-where-clause-rql
-                         get-join-schema
-                         get-schema-joins
-                         find-primary-key-fields
-                         create-data-object
-                         get-autoincrement-key))
+(require/expose "main.rkt" (savable-fields 
+                            key-where-clause-sql
+                            primary-key-fields
+                            insert-sql 
+                            update-sql 
+                            delete-sql
+                            join-cardinality
+                            get-schema-columns
+                            key-where-clause-rql
+                            get-join-schema
+                            get-schema-joins
+                            find-primary-key-fields
+                            create-data-object
+                            get-autoincrement-key))
  
 
 ;;;; SETUP

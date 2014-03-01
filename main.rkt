@@ -233,7 +233,7 @@
 (define (gen-data-class con tbl-nm 
                         #:db-system-type (dbsys-type (dbsystem-type con))
                         #:generate-joins? (gen-joins? #t)
-                        #:generate-reverse-joins? (gen-rev-joins? #f)
+                        #:generate-reverse-joins? (gen-rev-joins? #t)
                         #:schema-name (schema-nm #f)
                         #:inherits (base-cls 'object%)
                         #:table-name-normalizer (tbl-nm-norm (lambda (n) (table-name-normalizer n))) 
