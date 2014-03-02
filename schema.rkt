@@ -26,13 +26,13 @@
           [else (error 'sql-autoincrement "auto-increment not defined for database system ~a" dbsys-type)]))
 
 ;;; Schema accessors.
-(define-syntax-rule (schema-autoincrement row) (vector-ref row 3))
-(define-syntax-rule (schema-column row) (vector-ref row 0))
-(define-syntax-rule (schema-constraint row) (vector-ref row 6))
-(define-syntax-rule (schema-constraint-type row) (vector-ref row 1))
-(define-syntax-rule (schema-join-column row) (vector-ref row 5))
-(define-syntax-rule (schema-join-table row) (vector-ref row 4))
-(define-syntax-rule (schema-ordinal-position row) (vector-ref row 2))
+(define (schema-autoincrement row) (vector-ref row 3))
+(define (schema-column row) (vector-ref row 0))
+(define (schema-constraint row) (vector-ref row 6))
+(define (schema-constraint-type row) (vector-ref row 1))
+(define (schema-join-column row) (vector-ref row 5))
+(define (schema-join-table row) (vector-ref row 4))
+(define (schema-ordinal-position row) (vector-ref row 2))
 
 ;;; Load MySQL schema.
 (define (load-mysql-schema con schema-nm tbl-nm rev-jn?)

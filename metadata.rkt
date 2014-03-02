@@ -44,23 +44,23 @@
       (raise-argument-error 'get-class-metadata-object "argument ~a is not a class" cls)))
 
 ;;; Find a class metadata by class name.
-(define-syntax-rule (find-class-name-metadata cls-name)
+(define (find-class-name-metadata cls-name)
   (findf (lambda (v) (let ([cls (get-field class v)])
                        (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
                                  (equal? cls-nm (if (string? cls-name) (string->symbol cls-name) cls-name))) #f))) 
          (hash-values *data-class-metadata*)))
 
 ;;; Find a class metadata by external name.
-(define-syntax-rule (find-external-name-metadata ext-name)
+(define (find-external-name-metadata ext-name)
   (findf (lambda (v) (equal? (if (string? ext-name) ext-name (symbol->string ext-name))
                              (get-field external-name v))) (hash-values *data-class-metadata*))) 
 
 ;;; Get a class from the metadata by name or symbol.
-(define-syntax-rule (get-class cls-name)
+(define (get-class cls-name)
   (if (class? cls-name) cls-name (get-field class (find-class-name-metadata cls-name))))
 
 ;;; Get a class from the metadata by name or symbol.
-(define-syntax-rule (get-class-name cls)
+(define (get-class-name cls)
     (if (class? cls) (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)]) cls-nm)
       (raise-argument-error 'get-class-name "argument ~a is not a class" cls)))
 
@@ -70,50 +70,50 @@
       (error 'get-class-metadata "argument ~a is not a class. field: ~a" cls 'fld)))
 
 ;;; Set a data class metadata field.
-(define-syntax-rule (set-class-metadata! id cls val)
+(define (set-class-metadata! id cls val)
   (set-field! id (get-class-metadata-object cls) val))
 
 ;;; Dynamically get a data class metadata field.
-(define-syntax-rule (dynamic-get-class-metadata id cls)
+(define (dynamic-get-class-metadata id cls)
   (dynamic-get-field id (get-class-metadata-object cls)))
 
 ;;; Dynamically set a data class metadata field.
-(define-syntax-rule (dynamic-set-class-metadata! id cls val)
+(define (dynamic-set-class-metadata! id cls val)
   (dynamic-set-field! id (get-class-metadata-object cls) val))
 
 ;;; Return info about a data class.
-(define-syntax-rule (data-class-info cls)
+(define (data-class-info cls)
   (if (class? cls) (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info data-class-metadata%)])
                      (apply values (map (lambda (f) (dynamic-get-class-metadata f cls)) fld-nms)))
       (raise-argument-error 'data-class-info "argument ~a is not a class" cls)))
 
 ;;; Get a list of column ids for a class.
-(define-syntax-rule (get-column-ids cls)
+(define (get-column-ids cls)
   (if (class? cls) (map first (get-class-metadata columns cls))
       (raise-argument-error 'get-column-ids "argument ~a is not a class" cls)))
 
 ;;; Get a list of column names for a class.
-(define-syntax-rule (get-column-names cls)
+(define (get-column-names cls)
   (if (class? cls) (map second (get-class-metadata columns cls))
       (raise-argument-error 'get-column-names "argument ~a is not a class" cls)))
     
 ;;; Get the column name for a column field in a class.
-(define-syntax-rule (get-column-name f cls)
+(define (get-column-name f cls)
   (if (class? cls) (let ([col-def (findf (lambda (c) (equal? f (first c))) (get-class-metadata columns cls))])
                      (if col-def (second col-def) (error (format "column name for id ~a class ~a not found" f cls))))
       (raise-argument-error 'get-column-name "argument ~a is not a class" cls)))
          
 ;;; Get the column id for a column name in a class.
-(define-syntax-rule (get-column-id col-nm cls)
+(define (get-column-id col-nm cls)
     (if (class? cls) (let ([col-def (findf (lambda (c) (equal? col-nm (second c))) (get-class-metadata columns cls))])
                        (if col-def (first col-def) (error (format "column id for name ~a class ~a not found" col-nm cls))))
       (raise-argument-error 'get-column-id "argument ~a is not a class" cls)))
 
 ;;; Join definition accessors.
-(define-syntax-rule (join-definition-name jn-def) (first jn-def))
-(define-syntax-rule (join-definition-class jn-def) (second jn-def))
-(define-syntax-rule (join-definition-cardinality jn-def) (third jn-def))
-(define-syntax-rule (join-definition-where-clause jn-def) (fourth jn-def))
+(define (join-definition-name jn-def) (first jn-def))
+(define (join-definition-class jn-def) (second jn-def))
+(define (join-definition-cardinality jn-def) (third jn-def))
+(define (join-definition-where-clause jn-def) (fourth jn-def))
 
 ;;; Get a join definition.
 (define-syntax-rule (get-join-definition jn-fld cls)

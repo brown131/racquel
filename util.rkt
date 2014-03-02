@@ -15,7 +15,7 @@
 (define *prepared-statements* (make-weak-hash))
 
 ;;; Database system type.
-(define-syntax-rule (dbsystem-type con) 
+(define (dbsystem-type con) 
   (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
     (if (equal? dbsys-type 'odbc) *odbc-dbsystem-type* dbsys-type)))
 
@@ -44,16 +44,16 @@
 (define *data-class-schema* (make-multi-hash))
 
 ;;; Define type checker for a data class.
-(define-syntax-rule (data-class? cls) (implementation? cls data-class<%>))
+(define (data-class? cls) (implementation? cls data-class<%>))
 
 ;;; Define type checker for a data object.
-(define-syntax-rule (data-object? cls) (is-a? data-class<%>))
+(define (data-object? cls) (is-a? data-class<%>))
 
 ;;; Define an empty interface used to identify a data class.
 (define data-class<%> (interface ()))
 
 ;;; Class of an object
-(define-syntax-rule (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
+(define (object-class obj) (let-values ([(cls x) (object-info obj)]) cls))
 
 ;;; Get a prepared SQL statement.
 (define-syntax (make-select-statement stx)

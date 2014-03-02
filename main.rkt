@@ -30,7 +30,7 @@
   (let ([pkey (get-class-metadata primary-key cls)]) (if (list? pkey) (sort pkey string<? #:key symbol->string) (list pkey))))
    
 ;;; Set auto-increment id.
-(define-syntax-rule (set-autoincrement-id! con obj)
+(define (set-autoincrement-id! con obj)
   (let* ([cls (object-class obj)]
          [auto-key (get-class-metadata autoincrement-key cls)])
     (when auto-key
@@ -38,11 +38,11 @@
                           (query-value con (sql-autoincrement (dbsystem-type con) auto-key))))))
 
 ;;; Get the primary key from an object.
-(define-syntax-rule (get-primary-key obj)
+(define (get-primary-key obj)
  (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields (object-class obj))))
 
 ;;; Auto-increment key fields
-(define-syntax-rule (autoincrement-key-fields cls)
+(define (autoincrement-key-fields cls)
   (if (get-class-metadata autoincrement-key cls) (primary-key-fields cls) null))
     
 ;;; Columns without the autoincrement key
@@ -342,7 +342,7 @@
       (update-data-object con obj)))
 
 ;;; Insert a data object
-(define-syntax-rule (insert-data-object con obj) 
+(define (insert-data-object con obj) 
   (let* ([cls (object-class obj)]
          [key (format "i~a" cls)]
          [pst (if (multi-hash-has-key? *prepared-statements* con key) (multi-hash-ref *prepared-statements* con key)
@@ -355,7 +355,7 @@
     (multi-hash-set! *data-objects* obj con cls (get-primary-key obj))))
 
 ;;; Update a data object.
-(define-syntax-rule (update-data-object con obj) 
+(define (update-data-object con obj) 
   (let* ([cls (object-class obj)]
          [key (format "u~a" cls)]
          [pst (if (multi-hash-has-key? *prepared-statements* con key) (multi-hash-ref *prepared-statements* con key)
@@ -367,7 +367,7 @@
     (set-field! data-object-state obj 'saved)))
 
 ;;; Delete a data object.
-(define-syntax-rule (delete-data-object con obj)
+(define (delete-data-object con obj)
   (let* ([cls (object-class obj)]
          [key (format "d~a" cls)]
          [pst (if (multi-hash-has-key? *prepared-statements* con key) (multi-hash-ref *prepared-statements* con key)
@@ -383,14 +383,14 @@
 
 
 ;;; Generate a JS-expression from a data object.
-(define-syntax-rule (data-object->jsexpr obj)
+(define (data-object->jsexpr obj)
   (let ([cls (object-class obj)])
     (hasheq (string->symbol (get-class-metadata external-name cls)) 
             (make-hasheq (map (lambda (d) (cons (string->symbol (third d)) (dynamic-get-field (first d) obj))) 
                               (get-class-metadata columns cls))))))
 
 ;;; Create a data object from a JS-expression.
-(define-syntax-rule (jsexpr->data-object jsx)
+(define (jsexpr->data-object jsx)
   (let* ([md (find-external-name-metadata (first (hash-keys jsx)))]
          [cols (first (hash-values jsx))]
          [col-defs (get-field columns md)]
@@ -403,14 +403,14 @@
     obj))
 
 ;;; Generate an X-expression from a data object.
-(define-syntax-rule (data-object->xexpr obj)
+(define (data-object->xexpr obj)
   (let ([cls (object-class obj)])
     (append (list (string->symbol (get-class-metadata external-name cls)) '()) 
             (map (lambda (d) (list (string->symbol (third d)) '() 
                                    (~a (dynamic-get-field (first d) obj)))) (get-class-metadata columns cls)))))
 
 ;;; Create a data object from an X-expression.
-(define-syntax-rule (xexpr->data-object xmlx)
+(define (xexpr->data-object xmlx)
   (let* ([md (find-external-name-metadata (first xmlx))]
          [col-defs (get-field columns md)]
          [cls (get-field class md)]
