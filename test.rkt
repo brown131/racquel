@@ -355,7 +355,7 @@
                  (check-eq? tbl-nm "auto")
                  (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
                                '((description "description" "description") (id "id""id") (name "name" "name")))
-                 (check-equal? j-defs null)
+                 (check-equal? j-defs '((multipartkeys multipartkey% one-to-many)))
                  (check-eq? pkey 'id)
                  (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? auto-key "auto_id_seq")]
                        [(eq? *test-dbsys-type* 'oracle) (check-equal? auto-key "auto_id_seq")]
@@ -556,6 +556,7 @@
                                           (primary-key 'id #:autoincrement "address_id_seq")
                                           (join (person 'person% #:cardinality 'one-to-one (where (= ('person% id) ?)) person-id))
                                           (super-new))))
+                                    (get-class-metadata-object address%)
                                     address%)
                                  '(let ((address%
                                          (data-class
@@ -571,6 +572,7 @@
                                           (primary-key 'id #:autoincrement #t)
                                           (join (person 'person% #:cardinality 'one-to-one (where (= ('person% id) ?)) person-id))
                                           (super-new))))
+                                    (get-class-metadata-object address%)
                                     address%))))
     (test-case "address class created?" (check-not-eq? address% #f))
     (test-true "address class is a data class?" (data-class? address%))
@@ -640,6 +642,7 @@
                                         (where (= ('address% person-id) ?))
                                         id))
                                       (super-new))))
+                                (get-class-metadata-object person%)
                                 person%)))
 
     (test-case "person class created?" (check-not-eq? person% #f))
@@ -702,7 +705,7 @@
                  (check-eq? (data-object-state a) 'loaded)))
 
     (test-case "select with sql ok?" (check-equal? (select-data-object *con* address%  #:print? #t "join person on person.id = address.person_id where address.id = 1")
-"select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where id = 1"))
+"select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where address.id = 1"))
 
     (test-case "select join sql ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t 
@@ -751,8 +754,16 @@
                                  (super-new))]
          [from-obj (new test-class%)])
 
-    (test-case "serialized to json ok?" (check-equal? (jsexpr->string (data-object->jsexpr from-obj))
-                                                      "{\"Test\":{\"Name\":\"test\",\"Description\":\"Test\",\"Id\":1}}"))
+    ;; This checks multiple results because the JSON package serializes hashes in an unpredictable order.
+    (define js-str (jsexpr->string (data-object->jsexpr from-obj)))
+    (test-case "serialized to json ok?" 
+               (check-true (or (string=? js-str "{\"Test\":{\"Id\":1,\"Name\":\"test\",\"Description\":\"Test\"}}")
+                               (string=? js-str "{\"Test\":{\"Id\":1,\"Description\":\"Test\",\"Name\":\"test\"}}")
+                               (string=? js-str "{\"Test\":{\"Name\":\"test\",\"Id\":1,\"Description\":\"Test\"}}")
+                               (string=? js-str "{\"Test\":{\"Name\":\"test\",\"Description\":\"Test\",\"Id\":1}}")
+                               (string=? js-str "{\"Test\":{\"Description\":\"Test\",\"Id\":1,\"Name\":\"test\"}}")
+                               (string=? js-str "{\"Test\":{\"Description\":\"Test\",\"Name\":\"test\",\"Id\":1}}"))))
+                                                  
     (test-case "data object is json?" (check-true (jsexpr? (data-object->jsexpr from-obj))))
     (define js-obj (jsexpr->data-object (string->jsexpr 
                                          "{\"Test\":{\"Description\":\"new desc\",\"Id\":2,\"Name\":\"new name\"}}")))

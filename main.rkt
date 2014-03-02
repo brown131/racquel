@@ -9,7 +9,7 @@
          (for-syntax racket/syntax syntax/parse "stxclass.rkt"))
  
 (provide data-class data-class* data-class? data-object? data-class-info data-object-state 
-         gen-data-class make-data-object select-data-object select-data-objects save-data-object 
+         gen-data-class make-data-object select-data-object select-data-objects save-data-object get-class-metadata-object
          insert-data-object update-data-object delete-data-object 
          get-column set-column! get-join 
          table-name-normalizer column-name-normalizer join-name-normalizer
@@ -258,6 +258,7 @@
                                    (super-new)
                                    #,@rest
                                    )])
+                  (get-class-metadata-object #,cls-nm)
                   #,cls-nm)])
     (if prnt? (syntax->datum stx) (eval-syntax stx racquel-namespace))))
 
