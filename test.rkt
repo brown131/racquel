@@ -4,6 +4,7 @@
 ;;;; test - Test module for the project
 ;;;;
 ;;;; Copyright (c) Scott Brown 2013
+
 (require rackunit rackunit/text-ui racket/trace db json xml xml/xexpr "main.rkt" "metadata.rkt" "schema.rkt" "util.rkt")
 
 (require/expose "main.rkt" (savable-fields 
@@ -738,10 +739,22 @@ from address where city < ?" *test-dbsys-type*))
     (test-equal? "select like ok?" (select-data-object *con* address% #:print? #t (where (like city ?)))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
 from address where city like ?" *test-dbsys-type*))
-    (test-equal? "select in ok?" 
-                 (select-data-object *con* address% #:print? #t (where (in id ,(make-list 3 '?))))
+    (test-equal? "select like literal ok?" (select-data-object *con* address% #:print? #t (where (like city "'%test%'")))
+                 (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city like '%test%'" *test-dbsys-type*))
+    (test-equal? "select in with unquote ok?" 
+                 (select-data-object *con* address% #:print? #t (where (in id (make-list 3 '?))))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
 from address where id in (?,?,?)" *test-dbsys-type*))
+    (test-equal? "select in with literal ok?" 
+                 (select-data-object *con* address% #:print? #t (where (in (address% id) '(1 2 3))))
+                 (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where address.id in (1,2,3)" *test-dbsys-type*))
+    (define in-list '(1 2 3))
+    (test-equal? "select in with list ok?" 
+                 (select-data-object *con* address% #:print? #t (where (in id in-list)))
+                 (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where id in (1,2,3)" *test-dbsys-type*))
     (test-equal? "select between ok?" 
                  (select-data-object *con* address% #:print? #t (where (between id 1 3)))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
