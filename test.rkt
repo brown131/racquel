@@ -90,8 +90,8 @@
                  (check-eq? cls-nm 'test-class%)
                  (check-equal? fld-nms '(id name description object x))))
    
-    (test-case "test class metadata added?" (check-eq? (length (hash->list *data-class-metadata*)) 1))
-    (test-case "test class metadata ok?" (check-eq? (get-class-metadata table-name test-class%) "test"))
+    (test-eq? "test class metadata added?" (length (hash->list *data-class-metadata*)) 1)
+    (test-eq? "test class metadata ok?" (get-class-metadata table-name test-class%) "test")
    
     (test-case "data object metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
@@ -106,7 +106,7 @@
                  (check-not-eq? st-key #f)
                  ))
    
-    (test-case "object class ok?" (check-equal? (object-class obj) test-class%))
+    (test-equal? "object class ok?" (object-class obj) test-class%)
    
     (test-case "columns set?" 
                (set-column! id obj 1)
@@ -118,20 +118,20 @@
                (check-eq? (get-column x obj) 2)
                (check-eq? (get-column object obj) #f))
     
-    (test-case "savable field ok?" (check-equal? (savable-fields *con* test-class%) '(description id name x)))
-    (test-case "primary key fields ok?" (check-equal? (primary-key-fields test-class%) '(id)))
-    (test-case "where clause ok?" (check-equal? (key-where-clause-sql *con* test-class% (primary-key-fields test-class%)) 
-                                                (sql-placeholder" where id=?" *test-dbsys-type*)))
-    (test-case "insert sql ok?" (check-equal? (insert-sql *con* test-class%) 
-                                              (sql-placeholder "insert into test (description, id, name, x) values (?, ?, ?, ?)" *test-dbsys-type*)))
-    (test-case "update sql ok?" (check-equal? (update-sql *con* test-class%) 
-                                              (sql-placeholder "update test set description=?, id=?, name=?, x=? where id=?" *test-dbsys-type*)))
-    (test-case "delete sql ok?" (check-equal? (delete-sql *con* test-class%) 
-                                              (sql-placeholder "delete from test where id=?" *test-dbsys-type*)))
-    (test-case "select sql ok?"  (check-equal? (make-select-statement *con* test-class% #:print? #t "where id=?") 
-                                               (sql-placeholder "select test.description, test.id, test.name, test.x from test where id=?" *test-dbsys-type*)))
-    (test-case "select all sql ok?"  (check-equal? (make-select-statement *con* test-class% #:print? #t "") 
-                                               (sql-placeholder "select test.description, test.id, test.name, test.x from test " *test-dbsys-type*)))
+    (test-equal? "savable field ok?" (savable-fields *con* test-class%) '(description id name x))
+    (test-equal? "primary key fields ok?" (primary-key-fields test-class%) '(id))
+    (test-equal? "where clause ok?" (key-where-clause-sql *con* test-class% (primary-key-fields test-class%)) 
+                 (sql-placeholder" where id=?" *test-dbsys-type*))
+    (test-equal? "insert sql ok?" (insert-sql *con* test-class%) 
+                 (sql-placeholder "insert into test (description, id, name, x) values (?, ?, ?, ?)" *test-dbsys-type*))
+    (test-equal? "update sql ok?" (update-sql *con* test-class%) 
+                 (sql-placeholder "update test set description=?, id=?, name=?, x=? where id=?" *test-dbsys-type*))
+    (test-equal? "delete sql ok?" (delete-sql *con* test-class%) 
+                 (sql-placeholder "delete from test where id=?" *test-dbsys-type*))
+    (test-equal? "select sql ok?" (make-select-statement *con* test-class% #:print? #t "where id=?") 
+                 (sql-placeholder "select test.description, test.id, test.name, test.x from test where id=?" *test-dbsys-type*))
+    (test-equal? "select all sql ok?" (make-select-statement *con* test-class% #:print? #t "") 
+                 (sql-placeholder "select test.description, test.id, test.name, test.x from test " *test-dbsys-type*))
     ))
 
 
@@ -146,41 +146,41 @@
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
   (let* ([simple-schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f #:db-system-type *test-dbsys-type*)]
          [address-schema (load-schema *con* *schema-name* "address" #:reverse-join? #f #:db-system-type *test-dbsys-type*)])
-    (test-case "simple schema loaded?" (check-eq? (length simple-schema) 4))
-    (test-case "simple schema columns ok?" 
-               (check-equal? (sort (get-schema-columns simple-schema column-name-normalizer) 
-                                   string<? #:key (lambda (k) (symbol->string (first k))))
-                             '((description #f "description") (id #f "id") (name #f "name") (x #f "x"))))
-    (test-case "simple schema joins ok?" 
-               (check-equal? (get-schema-joins *con* *schema-name* simple-schema *test-dbsys-type* table-name-normalizer
-                                               join-name-normalizer column-name-normalizer) null))
-    (test-case "simple primary key fields found?" (check-eq? (find-primary-key-fields simple-schema column-name-normalizer) 'id))
-    (test-case "simple autoincrement key found?" (check-false (get-autoincrement-key simple-schema *test-dbsys-type*)))
+    (test-eq? "simple schema loaded?" (length simple-schema) 4)
+    (test-equal? "simple schema columns ok?" 
+                 (sort (get-schema-columns simple-schema column-name-normalizer) 
+                       string<? #:key (lambda (k) (symbol->string (first k))))
+                 '((description #f "description") (id #f "id") (name #f "name") (x #f "x")))
+    (test-equal? "simple schema joins ok?" 
+                 (get-schema-joins *con* *schema-name* simple-schema *test-dbsys-type* table-name-normalizer
+                                   join-name-normalizer column-name-normalizer) null)
+    (test-eq? "simple primary key fields found?" (find-primary-key-fields simple-schema column-name-normalizer) 'id)
+    (test-false "simple autoincrement key found?" (get-autoincrement-key simple-schema *test-dbsys-type*))
     
-    (test-case "address schema loaded?" (check-eq? (length address-schema) 6))
-    (test-case "address schema columns ok?" 
-               (check-equal? (sort (get-schema-columns address-schema column-name-normalizer) 
-                                   string<? #:key (lambda (k) (symbol->string (first k))))
-                             '((city #f "city") (id #f "id") (line #f "line")
-                               (person-id #f "person_id")(state #f "state") (zip-code #f "zip_code"))))
+    (test-eq? "address schema loaded?" (length address-schema) 6)
+    (test-equal? "address schema columns ok?" 
+                 (sort (get-schema-columns address-schema column-name-normalizer) 
+                       string<? #:key (lambda (k) (symbol->string (first k))))
+                 '((city #f "city") (id #f "id") (line #f "line")
+                   (person-id #f "person_id")(state #f "state") (zip-code #f "zip_code")))
     
-    (test-case "address join schema ok?" 
-               (check-equal? (get-join-schema address-schema)
-                             '(("address_person_id_fkey" "person" "id" "person_id" ("id")))))
-    (test-case "address join cardinality ok?" 
-               (check-equal? (eval-syntax (join-cardinality *con* *schema-name* *test-dbsys-type* "person" "id")) 'one-to-one))
-    (test-case "address schema join name ok?" 
-               (check-eq? (first (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* table-name-normalizer join-name-normalizer column-name-normalizer))) 
-                          'person))
-    (test-case "address schema join cardinality ok?" 
-               (check-equal? (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
-                                                                           table-name-normalizer join-name-normalizer column-name-normalizer))) racquel-namespace)
-                             'one-to-one))
-    (test-case "address schema join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
-                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (= ('person% id) ?))))
-    (test-case "address primary key fields found?" (check-eq? (find-primary-key-fields address-schema column-name-normalizer) 'id))
+    (test-equal? "address join schema ok?" 
+                 (get-join-schema address-schema)
+                 '(("address_person_id_fkey" "person" "id" "person_id" ("id"))))
+    (test-equal? "address join cardinality ok?" 
+                 (eval-syntax (join-cardinality *con* *schema-name* *test-dbsys-type* "person" "id")) 'one-to-one)
+    (test-eq? "address schema join name ok?" 
+               (first (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* table-name-normalizer join-name-normalizer column-name-normalizer))) 
+                          'person)
+    (test-equal? "address schema join cardinality ok?" 
+                 (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
+                                                               table-name-normalizer join-name-normalizer column-name-normalizer))) racquel-namespace)
+                 'one-to-one)
+    (test-equal? "address schema join cardinality ok?" 
+                 (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
+                                                                    table-name-normalizer join-name-normalizer column-name-normalizer))))
+                 '(where (= ('person% id) ?)))
+    (test-eq? "address primary key fields found?" (find-primary-key-fields address-schema column-name-normalizer) 'id)
     (test-case "address autoincrement key found?" 
                (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) "address_id_seq")]
                      [(eq? *test-dbsys-type* 'oracle) (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) "address_id_seq")]
@@ -196,35 +196,35 @@
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Employer")
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* *schema-name* "Joined")
       
-      (test-case "address join schema ok?" 
-                 (check-equal? (get-join-schema test-schema) '(("FK_Person" "address" "person_id" "id" ("person_id"))
-                                                               ("FK_Employer" "Employer" "id" "simple_id" ("id"))
-                                                               ("FK_Join2" "Joined" "id" "join2_id" ("id" "str"))
-                                                               ("FK_Join1" "Joined" "id" "join1_id" ("id" "str")))))
+      (test-equal? "address join schema ok?" 
+                 (get-join-schema test-schema) '(("FK_Person" "address" "person_id" "id" ("person_id"))
+                                                 ("FK_Employer" "Employer" "id" "simple_id" ("id"))
+                                                 ("FK_Join2" "Joined" "id" "join2_id" ("id" "str"))
+                                                 ("FK_Join1" "Joined" "id" "join1_id" ("id" "str"))))
     
-      (test-case "key-where-clause-rql ok?" )(check-equal?
-                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer column-name-normalizer))
-                                          '(where (= ('joined% id) ?)))     
-      (test-case "key-where-clause-rql ok?" )(check-equal?
-                                         (syntax->datum #`#,(key-where-clause-rql "Joined" '("id" "str") table-name-normalizer column-name-normalizer))
-                                          '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
+      (test-equal? "key-where-clause-rql ok?" 
+                   (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer column-name-normalizer))
+                   '(where (= ('joined% id) ?)))
+      (test-equal? "key-where-clause-rql ok?" 
+                   (syntax->datum #`#,(key-where-clause-rql "Joined" '("id" "str") table-name-normalizer column-name-normalizer))
+                   '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
 
-      (test-case "test schema 1st join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
-                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (= ('address% person-id) ?))))
-      (test-case "test schema 2nd join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
-                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (= ('employer% id) ?))))
-      (test-case "test schema 3rd join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (third (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
-                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (and (= ('joined% id) ?) (= ('joined% str) ?)))))
-      (test-case "test schema 4th join cardinality ok?" 
-               (check-equal? (syntax->datum #`#,(fifth (fourth (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
-                                                                 table-name-normalizer join-name-normalizer column-name-normalizer))))
-                             '(where (and (= ('joined% id) ?) (= ('joined% str) ?)))))
+      (test-equal? "test schema 1st join cardinality ok?" 
+                   (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
+                                                                      table-name-normalizer join-name-normalizer column-name-normalizer))))
+                   '(where (= ('address% person-id) ?)))
+      (test-equal? "test schema 2nd join cardinality ok?" 
+                   (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
+                                                                       table-name-normalizer join-name-normalizer column-name-normalizer))))
+                   '(where (= ('employer% id) ?)))
+      (test-equal? "test schema 3rd join cardinality ok?" 
+                   (syntax->datum #`#,(fifth (third (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
+                                                                      table-name-normalizer join-name-normalizer column-name-normalizer))))
+                   '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
+      (test-equal? "test schema 4th join cardinality ok?" 
+                   (syntax->datum #`#,(fifth (fourth (get-schema-joins *con* *schema-name* test-schema *test-dbsys-type* 
+                                                                       table-name-normalizer join-name-normalizer column-name-normalizer))))
+                   '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
     )))
 
 
@@ -705,38 +705,50 @@
                  (check-eq? (data-object-state a) 'loaded)))
 
     (test-case "select with sql ok?" (check-equal? (select-data-object *con* address%  #:print? #t "join person on person.id = address.person_id where address.id = 1")
-"select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where address.id = 1"))
+                                                   "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address join person on person.id = address.person_id where address.id = 1"))
 
     (test-case "select join sql ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t 
                                                  (join person% (= (person% id) (address% person-id))) (where (= id 1)))
-"select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = address.person_id where id = 1"))
+                             "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address join person on person.id = address.person_id where id = 1"))
     (test-case "select join sql ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t 
                                                  (join person% (= (person% id) person_id)) (where (= id ?)) 2)
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address join person on person.id = person_id where id = ?"
+                             (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address join person on person.id = person_id where id = ?"
                  *test-dbsys-type*)))
      
     (test-case "select = ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (= city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city = ?" *test-dbsys-type*)))
+                                            (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city = ?" *test-dbsys-type*)))
     (test-case "select <> ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<> city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city <> ?" *test-dbsys-type*)))
+                                             (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city <> ?" *test-dbsys-type*)))
     (test-case "select >= ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (>= city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city >= ?" *test-dbsys-type*)))
+                                             (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city >= ?" *test-dbsys-type*)))
     (test-case "select <= ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (<= city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city <= ?" *test-dbsys-type*)))
+                                             (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city <= ?" *test-dbsys-type*)))
     (test-case "select > ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (> city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city > ?" *test-dbsys-type*)))
+                                            (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city > ?" *test-dbsys-type*)))
     (test-case "select < ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (< city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city < ?" *test-dbsys-type*)))                
+                                            (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city < ?" *test-dbsys-type*)))                
     (test-case "select like ok?" (check-equal? (select-data-object *con* address% #:print? #t (where (like city ?)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where city like ?" *test-dbsys-type*)))
+                                               (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where city like ?" *test-dbsys-type*)))
     (test-case "select in ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t (where (in id ,(make-list 3 '?))))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where id in (?,?,?)" *test-dbsys-type*)))
+                             (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where id in (?,?,?)" *test-dbsys-type*)))
     (test-case "select between ok?" 
                (check-equal? (select-data-object *con* address% #:print? #t (where (between id 1 3)))
-(sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code from address where id between 1 and 3" *test-dbsys-type*)))
+                             (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where id between 1 and 3" *test-dbsys-type*)))
      ))
 
 
