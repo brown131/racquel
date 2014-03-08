@@ -26,7 +26,7 @@
 ;;; Parse an RQL expression.
 (define-syntax-class rql-expr
   #:description "rql expression"
-  #:literals (join where and or not = <> >= <= > < like in between unquote)
+  #:literals (join where and or not = <> >= <= > < like in between)
   (pattern and #:with (expr ...) #'(rql-and))
   (pattern or #:with (expr ...) #'(rql-or))
   (pattern not #:with (expr ...) #'(rql-not))
@@ -43,7 +43,6 @@
   (pattern i:id #:with (expr ...) #'((~a 'i)))
   (pattern s:str #:with (expr ...) #'((~a s)))
   (pattern n:nat #:with (expr ...) #'((~a n)))
-  (pattern (unquote x:expr) #:with (expr ...) #'((rql-unquote x)))
   (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column-pair p1 'p2)))
   (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
 

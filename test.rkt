@@ -750,11 +750,13 @@ from address where id in (?,?,?)" *test-dbsys-type*))
                  (select-data-object *con* address% #:print? #t (where (in (address% id) '(1 2 3))))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
 from address where address.id in (1,2,3)" *test-dbsys-type*))
-    (define in-list '(1 2 3))
-    (test-equal? "select in with list ok?" 
-                 (select-data-object *con* address% #:print? #t (where (in id in-list)))
+    (define (test-in in-lst) (select-data-object *con* address% #:print? #t (where (in id in-lst))))
+    (test-equal? "select in with list ok?" (test-in '(1 2 3))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
 from address where id in (1,2,3)" *test-dbsys-type*))
+    (test-equal? "select in with list ok?" (test-in '(4 5 6))
+                 (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \
+from address where id in (4,5,6)" *test-dbsys-type*))
     (test-equal? "select between ok?" 
                  (select-data-object *con* address% #:print? #t (where (between id 1 3)))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, address.state, address.zip_code \

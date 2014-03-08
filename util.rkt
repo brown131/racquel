@@ -58,17 +58,18 @@
 ;;; Get a prepared SQL statement.
 (define-syntax (make-select-statement stx)
   (syntax-parse stx
-     [(_ con:id cls:id (~optional (~seq #:print? prnt)) where-clause:expr)
+     [(_ con:id cls:id (~optional (~seq #:print? prnt)) (~optional (~seq #:prepare? prep)) where-clause:expr)
       (with-syntax ([prnt? (or (attribute prnt) #'#f)]
+                    [prep? (not (or (attribute prep) #'#f))]
                     [key (gensym)])
-        #`(if (hash-has-key? *prepared-statements* 'key) (hash-ref *prepared-statements* 'key)
+        #`(if (and prep? (hash-has-key? *prepared-statements* 'key)) (hash-ref *prepared-statements* 'key)
               (let* ([tbl-nm (get-class-metadata table-name cls)]
                      [col-nms (sort (get-column-names cls) string<?)]
                      [sql (string-append "select " (string-join (map (lambda (c) (string-append tbl-nm "." c)) col-nms) ", ") 
                                          " from " tbl-nm " "
                                          (sql-placeholder where-clause (dbsystem-type con)))]
-                     [pst (if prnt? sql (prepare con sql))])
-                (unless prnt? (hash-set! *prepared-statements* 'key pst))
+                     [pst (if (or prnt? (not prep?)) sql (prepare con sql))])
+                (unless (or prnt? (not prep?)) (hash-set! *prepared-statements* 'key pst))
                 pst)))]))
    
 ;;; SQL schema by database system type.

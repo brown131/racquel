@@ -177,6 +177,7 @@ a database without the tedious effort of manually coding the mappings.
                 #:join-name-normalizer proc
                 #:table-name-externalizer proc
                 #:print? print-kw
+                #:prepare? prepare-kw
                 data-class-clause ...)
 ([db-system-type-kw (code:line) (code:line #:db-system-type db-system-type)]
 
@@ -297,15 +298,29 @@ Deletes a data object from the connected database. The object's state will be ch
 }
  
 @defproc[(select-data-object [db-connection connection?] [data-class data-class?] 
+                             [print-kw (code:line) (code:line #:print? (or/c #t #f))]
+                             [prepare-kw (code:line) (code:line #:prepare? (or/c #t #f))]
                              [join-clause any/c] ... [where-clause any/c] [rest any/c] ...) (data-object?)]{
 Loads a data object from the database connected to using the criteria defined by the where and/or
 join RQL clauses. The object's initial state will be @racket['loaded].
+
+The optional @[racket:#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
+
+The optional @[racket:#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
+This is useful for RQL that may have variable inputs, such a a list in an RQL @[racket:in] cause.
 }
  
 @defproc[(select-data-objects [db-connection connection?] [data-class data-class?] 
+                              [print-kw (code:line) (code:line #:print? (or/c #t #f))]
+                              [prepare-kw (code:line) (code:line #:prepare? (or/c #t #f))]
                               [join-clause any/c] ... [where-clause any/c] [rest any/c] ...) (listof data-object?)]{
 Loads data objects from the database connected to using the criteria defined by the where and/or
 join RQL clauses. Each object's initial state will be @racket['loaded].
+
+The optional @[racket:#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
+
+The optional @[racket:#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
+This is useful for RQL that may have variable inputs, such a a list in an RQL @[racket:in] cause.
 }
   
 @defproc[(data-object-state [data-object data-object?]) (or/c 'new 'loaded 'saved 'deleted)]{
