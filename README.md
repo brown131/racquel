@@ -9,8 +9,7 @@ I was dissatisfied with the lack of an ORM that uses Racket Objects and supports
 decided to write my own. This is a preliminary release of this package. I will probably consider it "released" once there have 
 been a couple of users to shake any remaining bugs out.
 
-See doc/racquel.html for further documentation.
-
+See the [Racquel documentation](http://www.browncross.com/racquel/doc/racquel.html) for further details.
 
 To Do/Wish List:
    * Support Views as well as Tables. Would need to determine primary key for generating.
