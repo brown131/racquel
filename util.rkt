@@ -62,7 +62,7 @@
 (define (data-class? cls) (implementation? cls data-class<%>))
 
 ;;; Define type checker for a data object.
-(define (data-object? cls) (is-a? data-class<%>))
+(define (data-object? obj) (is-a? obj data-class<%>))
 
 ;;; Define an empty interface used to identify a data class.
 (define data-class<%> (interface ()))

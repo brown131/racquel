@@ -20,16 +20,8 @@
 ;;;; You should have received a copy of the GNU General Public License
 ;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-(require db json "keywords.rkt" "metadata.rkt" "schema.rkt" "util.rkt"
+(require db json xml "keywords.rkt" "metadata.rkt" "schema.rkt" "util.rkt"
          (for-syntax racket/syntax syntax/parse "stxclass.rkt"))
- 
-(provide data-class data-class* data-class? data-object? data-class-info data-object-state 
-         gen-data-class make-data-object select-data-object select-data-objects save-data-object get-class-metadata-object
-         insert-data-object update-data-object delete-data-object 
-         get-column set-column! get-join 
-         table-name-normalizer column-name-normalizer join-name-normalizer
-         data-object->jsexpr jsexpr->data-object data-object->xexpr xexpr->data-object
-         set-odbc-dbsystem-type! (all-from-out "keywords.rkt"))
 
 
 ;;;; DATA CLASS DEFINITION
@@ -357,12 +349,12 @@
     ))
 
 ;;; Load a data object from the database by primary key.
-(define-syntax-rule (make-data-object con cls pkey) 
+(define (make-data-object con cls pkey) 
   (create-data-object con cls 
     (query-row con (make-select-statement con cls (key-where-clause-sql con cls (primary-key-fields cls))) pkey) #:primary-key pkey))
 
 ;;; Save a data object.
-(define-syntax-rule (save-data-object con obj) 
+(define (save-data-object con obj) 
   (if (eq? (data-object-state obj) 'new) (insert-data-object con obj) 
       (update-data-object con obj)))
 
@@ -445,3 +437,28 @@
     (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'deserialized)
     obj))
+
+
+;;;; CONTRACTS
+
+(provide data-class data-class* data-class-info gen-data-class select-data-object select-data-objects    
+         get-column set-column! get-join (all-from-out "keywords.rkt")
+         (contract-out
+          [data-class? (any/c . -> . boolean?)]
+          [data-object? (any/c . -> . boolean?)]
+          [data-object-state (data-object? . -> . symbol?)]
+          [make-data-object (connection? data-class? any/c . -> . data-object?)]
+          [save-data-object (connection? data-object? . -> . void?)]
+          [insert-data-object (connection? data-object? . -> . void?)]
+          [update-data-object (connection? data-object? . -> . void?)]
+          [delete-data-object (connection? data-object? . -> . void?)]
+          [get-class-metadata-object (data-class? . -> . object?)]
+          [table-name-normalizer (string? . -> . string?)]
+          [column-name-normalizer (string? . -> . string?)]
+          [join-name-normalizer (string? (or/c symbol?) . -> . string?)]
+          [data-object->jsexpr (data-object? . -> . jsexpr?)]
+          [jsexpr->data-object (jsexpr? . -> . data-object?)]
+          [data-object->xexpr (data-object? . -> . xexpr?)]
+          [xexpr->data-object (xexpr? . -> . data-object?)]
+          [set-odbc-dbsystem-type! (symbol? . -> . void?)]))
+ 

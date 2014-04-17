@@ -20,7 +20,10 @@
 ;;;; You should have received a copy of the GNU General Public License
 ;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-(require rackunit rackunit/text-ui racket/trace db json xml xml/xexpr "main.rkt" "metadata.rkt" "schema.rkt" "util.rkt")
+(require rackunit rackunit/text-ui db json xml xml/xexpr "main.rkt"
+         (except-in "metadata.rkt" get-class-metadata-object data-class-info)
+         (except-in "util.rkt" set-odbc-dbsystem-type! data-object? data-class?)
+         "schema.rkt")
 
 (require/expose "main.rkt" (savable-fields 
                             key-where-clause-sql
@@ -36,7 +39,7 @@
                             find-primary-key-fields
                             create-data-object
                             get-autoincrement-key))
- 
+
 
 ;;;; SETUP
  
@@ -79,6 +82,7 @@
         [(eq? *test-dbsys-type* 'db2) "TEST"]
         ))
   
+
 ;;;; TEST DATA OBJECT DEFINITION
 
 
