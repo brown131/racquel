@@ -1,24 +1,24 @@
 #lang scribble/manual
-;;;; Racquel - An ORM for Racket
-;;;;
-;;;; racquel - Documentation module for the project
-;;;;
-;;;; Copyright (c) Scott Brown 2013
-;;;;
-;;;; This file is part of Racquel
-;;;;
-;;;; Racquel is free software: you can redistribute it and/or modify
-;;;; it under the terms of the GNU General Public License as published by
-;;;; the Free Software Foundation, either version 3 of the License, or
-;;;; (at your option) any later version.
-;;;;
-;;;; This program is distributed in the hope that it will be useful,
-;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;;;; GNU General Public License for more details.
-;;;;
-;;;; You should have received a copy of the GNU General Public License
-;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+@;;;; Racquel - An ORM for Racket
+@;;;;
+@;;;; racquel - Documentation module for the project
+@;;;;
+@;;;; Copyright (c) Scott Brown 2013
+@;;;;
+@;;;; This file is part of Racquel
+@;;;;
+@;;;; Racquel is free software: you can redistribute it and/or modify
+@;;;; it under the terms of the GNU General Public License as published by
+@;;;; the Free Software Foundation, either version 3 of the License, or
+@;;;; (at your option) any later version.
+@;;;;
+@;;;; This program is distributed in the hope that it will be useful,
+@;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+@;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+@;;;; GNU General Public License for more details.
+@;;;;
+@;;;; You should have received a copy of the GNU General Public License
+@;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 @(require racquel
           scribble/manual scribble/eval scribble/bnf
@@ -325,10 +325,10 @@ Deletes a data object from the connected database. The object's state will be ch
 Loads a data object from the database connected to using the criteria defined by the where and/or
 join RQL clauses. The object's initial state will be @racket['loaded].
 
-The optional @[racket:#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
+The optional @racket[#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
 
-The optional @[racket:#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
-This is useful for RQL that may have variable inputs, such a a list in an RQL @[racket:in] cause.
+The optional @racket[#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
+This is useful for RQL that may have variable inputs, such a a list in an RQL @racket[in] cause.
 }
  
 @defproc[(select-data-objects [db-connection connection?] [data-class data-class?] 
@@ -338,10 +338,10 @@ This is useful for RQL that may have variable inputs, such a a list in an RQL @[
 Loads data objects from the database connected to using the criteria defined by the where and/or
 join RQL clauses. Each object's initial state will be @racket['loaded].
 
-The optional @[racket:#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
+The optional @racket[#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
 
-The optional @[racket:#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
-This is useful for RQL that may have variable inputs, such a a list in an RQL @[racket:in] cause.
+The optional @racket[#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
+This is useful for RQL that may have variable inputs, such a a list in an RQL @racket[in] cause.
 }
   
 @defproc[(data-object-state [data-object data-object?]) (or/c 'new 'loaded 'saved 'deleted)]{
