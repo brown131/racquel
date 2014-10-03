@@ -103,7 +103,7 @@ primary key. This table also has a join field @racket[owner] which defines a one
   column-id
   (column-ids ...)]
 
-[auto-increment-kw (code:line) (code:line #:auto-increment auto-increment-expr)]
+[auto-increment-kw (code:line) (code:line #:autoincrement auto-increment-expr)]
 )]{
 
 Produces a data class value used for persisting data objects from a database.
@@ -118,7 +118,7 @@ may also contain @racket[field] columns, but the fields, as they are not mapped 
 
 Data classes can map joins to other data classes, using a @racket[join] expression so that objects related to 
 the object can be contained as part of the object.  For example a join can be defined so that a field of the object
-can contain a list of order for a customer. The path of a the join is defined using an RQL expression (see @secref["rql"])
+can contain a list of order for a customer. The path of a join is defined using an RQL expression (see @secref["rql"])
 which allows for considerable flexibility in regard to what the contained objects are, e.g. a join could be defined so that
 only customer order in the last six months are contained in the object. The cardinality of the join is also definable using a
 keyword. Valid values for the cardinality keyword are @racket['one-to-one] and @racket['one-to-many].
@@ -126,7 +126,7 @@ keyword. Valid values for the cardinality keyword are @racket['one-to-one] and @
 Joined objects are loaded lazily, that is, they are not loaded from the database until they are first referenced.
 
 The @racket[primary-key] expression defines the primary key for the mapped table. If a primary key consists of multiple parts
-then the columns must be defined in a list. An optional keyword @racket[#:auto-increment] can be used to indicate that the
+then the columns must be defined in a list. An optional keyword @racket[#:autoincrement] can be used to indicate that the
 primary key is an auto-incrementing a.k.a. identity column. Typically the value for this keyword is simply @racket[#t], 
 however if the type of database being mapped to is PostgreSQL or Oracle, then the value of the keyword must be a string 
 defining the name of the sequence entity being used for the table.
@@ -162,7 +162,7 @@ Returns eight values, analogous to the returnvalues of @racket[class-info]:
 
   @item{@racket[_table-name]: the database table name for the class;}
 
-  @item{@racket[_columns]: a list of column definition lists. Each column defintion
+  @item{@racket[_columns]: a list of column definition lists. Each column definition
   consists of the column field, the database column name, and the external name used for serialization;}
 
   @item{@racket[_joins]: a list of join definition lists. Each join definition
@@ -224,7 +224,7 @@ Generates a data class from the specified @racket[table-name] using the @racket[
 the particular system type can be specified using the @racket[#:db-system-type] keyword. (This is not necessary if the database system type has
 already been defined by calling @racket[set-odbc-dbsystem-type!]. If the @racket[#:db-system-type] is not
 specified, then the database system type is determined from the @racket[dbsystem-name] of the
-@racket[db-connection], where the @racket['odbc] database system is aassumed to be SQL Server.
+@racket[db-connection], where the @racket['odbc] database system is assumed to be SQL Server.
 
 The @racket[generate-joins?] and @racket[generate-reverse-joins] keywords control the 
 automatic generation of joins and reverse joins. Joins are determined based on foreign key constraints 
@@ -289,8 +289,8 @@ Converts a database table name to an external name for JSON or XML serialization
 }
   
 @defproc[(set-odbc-dbsystem-type! [odbc-sys-type (or/c 'sqlserver 'oracle 'db2)]) (void?)]{
-If the database system being used is either Oracle or DB/2, then the database system type needs to be set to distinquish the ODBC
-connection from a SQL Server connection, which is assumed for an ODBC connection is it is not sepcified using this procedure.
+If the database system being used is either Oracle or DB/2, then the database system type needs to be set to distinguish the ODBC
+connection from a SQL Server connection, which is assumed for an ODBC connection is it is not specified using this procedure.
 }
 
 @section[#:tag "persistence"]{Data Object Persistence}
@@ -328,7 +328,7 @@ join RQL clauses. The object's initial state will be @racket['loaded].
 The optional @racket[#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
 
 The optional @racket[#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
-This is useful for RQL that may have variable inputs, such a a list in an RQL @racket[in] cause.
+This is useful for RQL that may have variable inputs, such a list in an RQL @racket[in] cause.
 }
  
 @defproc[(select-data-objects [db-connection connection?] [data-class data-class?] 
@@ -341,7 +341,7 @@ join RQL clauses. Each object's initial state will be @racket['loaded].
 The optional @racket[#:print?] keyword if true, will return only the SQL generated from the RQL. This is useful for debugging.
 
 The optional @racket[#:prepare?] keyword if true, will force the SQL statement generated to not be cached as a prepared statement. 
-This is useful for RQL that may have variable inputs, such a a list in an RQL @racket[in] cause.
+This is useful for RQL that may have variable inputs, such a list in an RQL @racket[in] cause.
 }
   
 @defproc[(data-object-state [data-object data-object?]) (or/c 'new 'loaded 'saved 'deleted)]{
@@ -365,7 +365,7 @@ Sets the value of a data object's column, analogous to @racket[set-field!].
 }
   
 @defproc[(get-join [id symbol?] [data-object data-object?]) (or/c any/c (listof any/c))]{
-Gets the value of a data object join. The value of thie join field is loaded from the database upon
+Gets the value of a data object join. The value of the join field is loaded from the database upon
 first call. (This is known as "lazy" loading.)
 }               
 
@@ -439,7 +439,7 @@ clauses must be defined before the @racket[where] clause. There may be any numbe
 join relationship, similar to an SQL join clause.
 
 A @racket[join] clause may also be defined in a @racket[data-class] declaration, but is expressed in a slightly different 
-form (see @racket[data-class*] above. For instance, the @racket[join] clause, expresses the equivalant of the SQL-expression 
+form (see @racket[data-class*] above. For instance, the @racket[join] clause, expresses the equivalent of the SQL-expression 
 "JOIN PERSON ON PERSON.ID = ADDRESS.PERSON_ID".
 
 @verbatim|{
