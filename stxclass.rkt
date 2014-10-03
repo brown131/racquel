@@ -187,6 +187,12 @@
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
+  (pattern (primary-key pkey:expr) 
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(set-field! primary-key m pkey)
+           #:attr col-defs #'null 
+           #:attr jn-rows #'null 
+           #:attr jn-defs #'null)
   (pattern (primary-key pkey:id) 
            #:attr cls-expr #'#f
            #:attr meta-expr #'(set-field! primary-key m 'pkey) 
