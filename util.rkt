@@ -42,18 +42,22 @@
 ; Set a value given a sequence of keys.
 (define (multi-hash-set! hash-tbl value . keys)
   (if (null? (cdr keys)) (hash-set! hash-tbl (car keys) value)
-      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-set! (hash-ref hash-tbl (car keys)) value (cdr keys)) 
-          (let ([h (make-multi-hash #:weak? (hash-weak? hash-tbl))]) (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
+      (if (hash-has-key? hash-tbl (car keys)) 
+          (multi-hash-set! (hash-ref hash-tbl (car keys)) value (cdr keys)) 
+          (let ([h (make-multi-hash #:weak? (hash-weak? hash-tbl))]) 
+            (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
           
 ; Retrieve a value given a sequence of keys.
 (define (multi-hash-ref hash-tbl . keys) 
   (if (null? (cdr keys)) (if (hash-has-key? hash-tbl (car keys)) (hash-ref hash-tbl (car keys)) #f)
-      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
+      (if (hash-has-key? hash-tbl (car keys)) 
+          (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
           
 ; Test if the hash contains the given sequence of keys.
 (define (multi-hash-has-key? hash-tbl . keys) 
   (if (null? (cdr keys)) (hash-has-key? hash-tbl (car keys))
-      (if (hash-has-key? hash-tbl (car keys)) (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
+      (if (hash-has-key? hash-tbl (car keys)) 
+          (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
 
 ;;; Define a global hash table holding data class schema.
 (define *data-class-schema* (make-multi-hash))
@@ -73,14 +77,18 @@
 ;;; Get a prepared SQL statement.
 (define-syntax (make-select-statement stx)
   (syntax-parse stx
-     [(_ con:id cls:id (~optional (~seq #:print? prnt)) (~optional (~seq #:prepare? prep)) where-clause:expr)
+     [(_ con:id cls:id (~optional (~seq #:print? prnt)) 
+         (~optional (~seq #:prepare? prep)) where-clause:expr)
       (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                     [prep? (not (or (attribute prep) #'#f))]
                     [key (gensym)])
-        #`(if (and prep? (hash-has-key? *prepared-statements* 'key)) (hash-ref *prepared-statements* 'key)
+        #`(if (and prep? (hash-has-key? *prepared-statements* 'key)) 
+              (hash-ref *prepared-statements* 'key)
               (let* ([tbl-nm (get-class-metadata table-name cls)]
                      [col-nms (sort (get-column-names cls) string<?)]
-                     [sql (string-append "select " (string-join (map (lambda (c) (string-append tbl-nm "." c)) col-nms) ", ") 
+                     [sql (string-append "select " 
+                                         (string-join (map (lambda (c) (string-append tbl-nm "." c)) 
+                                                           col-nms) ", ") 
                                          " from " tbl-nm " "
                                          (sql-placeholder where-clause (dbsystem-type con)))]
                      [pst (if (or prnt? (not prep?)) sql (prepare con sql))])
@@ -91,11 +99,17 @@
 (define (load-schema con schema-nm tbl-nm #:reverse-join? (rev-jn? #f) #:db-system-type dbsys-type)
   (unless (multi-hash-has-key? *data-class-schema* con schema-nm tbl-nm)
     (multi-hash-set! *data-class-schema* 
-                     (cond [(eq? dbsys-type 'db2) (load-db2-schema con schema-nm tbl-nm rev-jn?)]
-                           [(eq? dbsys-type 'mysql) (load-mysql-schema con schema-nm tbl-nm rev-jn?)]
-                           [(eq? dbsys-type 'oracle) (load-oracle-schema con schema-nm tbl-nm rev-jn?)]
-                           [(eq? dbsys-type 'postgresql) (load-postgresql-schema con schema-nm tbl-nm rev-jn?)]
-                           [(eq? dbsys-type 'sqlite3) (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)]
-                           [(eq? dbsys-type 'sqlserver) (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)])  
+                     (cond [(eq? dbsys-type 'db2) 
+                            (load-db2-schema con schema-nm tbl-nm rev-jn?)]
+                           [(eq? dbsys-type 'mysql) 
+                            (load-mysql-schema con schema-nm tbl-nm rev-jn?)]
+                           [(eq? dbsys-type 'oracle) 
+                            (load-oracle-schema con schema-nm tbl-nm rev-jn?)]
+                           [(eq? dbsys-type 'postgresql) 
+                            (load-postgresql-schema con schema-nm tbl-nm rev-jn?)]
+                           [(eq? dbsys-type 'sqlite3) 
+                            (load-sqlite3-schema con schema-nm tbl-nm rev-jn?)]
+                           [(eq? dbsys-type 'sqlserver) 
+                            (load-sqlserver-schema con schema-nm tbl-nm rev-jn?)])  
                      con schema-nm tbl-nm))                                
   (multi-hash-ref *data-class-schema* con schema-nm tbl-nm))

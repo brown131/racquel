@@ -49,20 +49,27 @@
 ;;; Get metadata for a class.
 (define (get-class-metadata-object cls)
   (if (class? cls)
-      (let ([md (findf (lambda (v) (equal? (get-field class v) cls)) (hash-values *data-class-metadata*))])
+      (let ([md (findf (lambda (v) (equal? (get-field class v) cls)) 
+                       (hash-values *data-class-metadata*))])
         (if md md
-          (let ([md-pair (findf (lambda (p) (if (get-field class (cdr p)) #f                            
-                                                (eval-syntax #`(with-handlers ([exn:fail? (lambda (e) #f)])
-                                                                 (define-member-name #,(car p) (get-field class-id-key #,(cdr p)))
-                                                                 (class-field-accessor #,cls #,(car p))) racquel-namespace))) (hash->list *data-class-metadata*))])
+          (let ([md-pair (findf (lambda (p) 
+                                  (if (get-field class (cdr p)) #f                            
+                                      (eval-syntax #`(with-handlers ([exn:fail? (lambda (e) #f)])
+                                                       (define-member-name 
+                                                         #,(car p) (get-field class-id-key #,(cdr p)))
+                                                       (class-field-accessor #,cls #,(car p))) 
+                                                   racquel-namespace))) 
+                                (hash->list *data-class-metadata*))])
             (if md-pair (begin (set-field! class (cdr md-pair) cls) (cdr md-pair)) #f))))
       (raise-argument-error 'get-class-metadata-object "argument ~a is not a class" cls)))
 
 ;;; Find a class metadata by class name.
 (define (find-class-name-metadata cls-name)
   (findf (lambda (v) (let ([cls (get-field class v)])
-                       (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
-                                 (equal? cls-nm (if (string? cls-name) (string->symbol cls-name) cls-name))) #f))) 
+                       (if cls (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
+                                             (class-info cls)])
+                                 (equal? cls-nm (if (string? cls-name) 
+                                                    (string->symbol cls-name) cls-name))) #f))) 
          (hash-values *data-class-metadata*)))
 
 ;;; Find a class metadata by external name.
@@ -76,7 +83,8 @@
 
 ;;; Get a class from the metadata by name or symbol.
 (define (get-class-name cls)
-    (if (class? cls) (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)]) cls-nm)
+    (if (class? cls) (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
+                                   (class-info cls)]) cls-nm)
       (raise-argument-error 'get-class-name "argument ~a is not a class" cls)))
 
 ;;; Get a data class metadata field.
@@ -98,7 +106,8 @@
 
 ;;; Return info about a data class.
 (define (data-class-info cls)
-  (if (class? cls) (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info data-class-metadata%)])
+  (if (class? cls) (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
+                                 (class-info data-class-metadata%)])
                      (apply values (map (lambda (f) (dynamic-get-class-metadata f cls)) fld-nms)))
       (raise-argument-error 'data-class-info "argument ~a is not a class" cls)))
 
@@ -114,14 +123,18 @@
     
 ;;; Get the column name for a column field in a class.
 (define (get-column-name f cls)
-  (if (class? cls) (let ([col-def (findf (lambda (c) (equal? f (first c))) (get-class-metadata columns cls))])
-                     (if col-def (second col-def) (error (format "column name for id ~a class ~a not found" f cls))))
+  (if (class? cls) (let ([col-def (findf (lambda (c) (equal? f (first c))) 
+                                         (get-class-metadata columns cls))])
+                     (if col-def (second col-def) 
+                         (error (format "column name for id ~a class ~a not found" f cls))))
       (raise-argument-error 'get-column-name "argument ~a is not a class" cls)))
          
 ;;; Get the column id for a column name in a class.
 (define (get-column-id col-nm cls)
-    (if (class? cls) (let ([col-def (findf (lambda (c) (equal? col-nm (second c))) (get-class-metadata columns cls))])
-                       (if col-def (first col-def) (error (format "column id for name ~a class ~a not found" col-nm cls))))
+    (if (class? cls) (let ([col-def (findf (lambda (c) (equal? col-nm (second c))) 
+                                           (get-class-metadata columns cls))])
+                       (if col-def (first col-def) 
+                           (error (format "column id for name ~a class ~a not found" col-nm cls))))
       (raise-argument-error 'get-column-id "argument ~a is not a class" cls)))
 
 ;;; Join definition accessors.

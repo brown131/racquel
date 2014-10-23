@@ -30,18 +30,21 @@
 
 
 #| Model:
-(select (address% a)
-        (left-join state% (= abbr (a state)))
-        (and (like (person last-name) "A%")
-             (or (= (id #,(get-field id obj))
-                 (not (in city ("Chicago" "New York"))))
-             (between zip-code 10000 60999)))
+(select-data-object con address%
+                    (left-join state% (= abbr (address% state)))
+                    (where (and (like (person last-name) "A%")
+                                (or (= (id ?)
+                                       (not (in city ("Chicago" "New York"))))
+                                    (between zip-code 10000 60999)
+                                    (in state (select state-abbr state% 
+                                                      (where (= country "US")))))))
+                    (get-field id obj))
 |#
 
 ;;; Parse an RQL expression.
 (define-syntax-class rql-expr
   #:description "rql expression"
-  #:literals (join where and or not = <> >= <= > < like in between)
+  #:literals (and or not = <> >= <= > < like in between)
   (pattern and #:with (expr ...) #'(rql-and))
   (pattern or #:with (expr ...) #'(rql-or))
   (pattern not #:with (expr ...) #'(rql-not))
@@ -67,10 +70,17 @@
 
 (define-syntax-class join-expr 
   #:description "rql join expression"
-  (pattern (join table:id rql:rql-expr) #:with (expr ...) #'("join " (rql-table-name 'table) " on " rql.expr ... " ")))
+  #:literals (join left-join right-join)
+  (pattern (join table:id rql:rql-expr) #:with (expr ...) 
+           #'("join " (rql-table-name 'table) " on " rql.expr ... " "))
+  (pattern (left-join table:id rql:rql-expr) #:with (expr ...) 
+           #'("left outer join " (rql-table-name 'table) " on " rql.expr ... " "))
+  (pattern (right-join table:id rql:rql-expr) #:with (expr ...) 
+           #'("right outer join " (rql-table-name 'table) " on " rql.expr ... " ")))
 
 (define-syntax-class where-expr 
   #:description "rql where expression"
+  #:literals (where)
   (pattern (where rql:rql-expr) #:with (expr ...) #'("where " rql.expr ...)))
 
 
@@ -136,9 +146,14 @@
 
 (define-syntax-class join-def
   #:description "join definition"
-  (pattern (jcol:id jcls:expr (~optional (~seq #:cardinality card:expr) #:defaults ([card #''one-to-many])) where:where-expr rest:expr ...) 
+  (pattern (jcol:id jcls:expr 
+                    (~optional (~seq #:cardinality card:expr) 
+                               #:defaults ([card #''one-to-many])) where:where-expr rest:expr ...) 
            #:with expr #'(jcol #f) 
-           #:attr j-row #'((eq? jn-fld 'jcol) (query-rows con (make-select-statement con jn-cls (string-append where.expr ...)) rest ...))
+           #:attr j-row #'((eq? jn-fld 'jcol) 
+                           (query-rows con (make-select-statement con jn-cls 
+                                                                  (string-append where.expr ...)) 
+                                       rest ...))
            #:attr j-def #'(list 'jcol jcls card)))
 
 (define-syntax-class data-class-element
@@ -147,13 +162,15 @@
   #:attributes (cls-expr meta-expr col-defs jn-rows jn-defs)
   (pattern (table-name tbl-nm:str) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m tbl-nm))
+           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) 
+                                     (set-field! external-name m tbl-nm))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (table-name tbl-nm:str extern-nm:str) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) (set-field! external-name m extern-nm))
+           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) 
+                                     (set-field! external-name m extern-nm))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
@@ -177,25 +194,27 @@
            #:attr jn-defs #'(list jn-def.j-def ...))
   (pattern (primary-key pkey:id #:autoincrement flag:expr) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) (when flag (set-field! autoincrement-key m flag)))
+           #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) 
+                                     (when flag (set-field! autoincrement-key m flag)))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:expr #:autoincrement flag:expr) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! primary-key m pkey) (when flag (set-field! autoincrement-key m flag)))
-           #:attr col-defs #'null 
-           #:attr jn-rows #'null 
-           #:attr jn-defs #'null)
-  (pattern (primary-key pkey:expr) 
-           #:attr cls-expr #'#f
-           #:attr meta-expr #'(set-field! primary-key m pkey)
+           #:attr meta-expr #'(begin (set-field! primary-key m pkey) 
+                                     (when flag (set-field! autoincrement-key m flag)))
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:id) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(set-field! primary-key m 'pkey) 
+           #:attr meta-expr #'(set-field! primary-key m 'pkey)
+           #:attr col-defs #'null 
+           #:attr jn-rows #'null 
+           #:attr jn-defs #'null)
+  (pattern (primary-key pkey:expr) 
+           #:attr cls-expr #'#f
+           #:attr meta-expr #'(set-field! primary-key m pkey) 
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
