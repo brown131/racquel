@@ -26,9 +26,6 @@
 ;;; ODBC database system type. Values are: 'sqlserver, 'oracle, or 'db2.
 (define *odbc-dbsystem-type* 'sqlserver)
 
-;;; Define a global hash holding prepared statements.
-(define *prepared-statements* (make-weak-hash))
-
 ;;; Database system type.
 (define (dbsystem-type con) 
   (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
@@ -80,20 +77,16 @@
      [(_ con:id cls:id (~optional (~seq #:print? prnt)) 
          (~optional (~seq #:prepare? prep)) where-clause:expr)
       (with-syntax ([prnt? (or (attribute prnt) #'#f)]
-                    [prep? (not (or (attribute prep) #'#f))]
-                    [key (gensym)])
-        #`(if (and prep? (hash-has-key? *prepared-statements* 'key)) 
-              (hash-ref *prepared-statements* 'key)
-              (let* ([tbl-nm (get-class-metadata table-name cls)]
-                     [col-nms (sort (get-column-names cls) string<?)]
-                     [sql (string-append "select " 
-                                         (string-join (map (lambda (c) (string-append tbl-nm "." c)) 
-                                                           col-nms) ", ") 
-                                         " from " tbl-nm " "
-                                         (sql-placeholder where-clause (dbsystem-type con)))]
-                     [pst (if (or prnt? (not prep?)) sql (prepare con sql))])
-                (unless (or prnt? (not prep?)) (hash-set! *prepared-statements* 'key pst))
-                pst)))]))
+                    [prep? (not (or (attribute prep) #'#f))])
+        #`(let* ([tbl-nm (get-class-metadata table-name cls)]
+                 [col-nms (sort (get-column-names cls) string<?)]
+                 [sql (string-append "select " 
+                                     (string-join (map (lambda (c) (string-append tbl-nm "." c))
+                                                       col-nms) ", ") 
+                                     " from " tbl-nm " "
+                                     (sql-placeholder where-clause (dbsystem-type con)))]
+                 [pst (if (or prnt? (not prep?)) sql (virtual-statement con sql))])
+            pst))]))
    
 ;;; SQL schema by database system type.
 (define (load-schema con schema-nm tbl-nm #:reverse-join? (rev-jn? #f) #:db-system-type dbsys-type)

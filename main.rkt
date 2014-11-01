@@ -407,11 +407,7 @@
 ;;; Insert a data object
 (define (insert-data-object con obj) 
   (let* ([cls (object-class obj)]
-         [key (format "i~a" cls)]
-         [pst (if (multi-hash-has-key? *prepared-statements* con key) 
-                  (multi-hash-ref *prepared-statements* con key)
-                  (let ([p (prepare con (insert-sql con cls))]) 
-                    (multi-hash-set! *prepared-statements* p con key) p))]
+         [pst (virtual-statement (insert-sql con cls))]
          [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))])
     (apply query-exec con pst flds)
     (set-autoincrement-id! con obj)
@@ -422,11 +418,7 @@
 ;;; Update a data object.
 (define (update-data-object con obj) 
   (let* ([cls (object-class obj)]
-         [key (format "u~a" cls)]
-         [pst (if (multi-hash-has-key? *prepared-statements* con key) 
-                  (multi-hash-ref *prepared-statements* con key)
-                  (let ([p (prepare con (update-sql con cls))]) 
-                    (multi-hash-set! *prepared-statements* p con key) p))]
+         [pst (virtual-statement (update-sql con cls))]
          [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))]
          [pkey (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields cls))])
     (apply query-exec con pst (append flds pkey))
@@ -436,11 +428,7 @@
 ;;; Delete a data object.
 (define (delete-data-object con obj)
   (let* ([cls (object-class obj)]
-         [key (format "d~a" cls)]
-         [pst (if (multi-hash-has-key? *prepared-statements* con key) 
-                  (multi-hash-ref *prepared-statements* con key)
-                  (let ([p (prepare con (delete-sql con cls))]) 
-                    (multi-hash-set! *prepared-statements* p con key) p))]
+         [pst (virtual-statement (delete-sql con cls))]
          [pkey (map (lambda (f) (dynamic-get-field f obj)) 
                     (primary-key-fields (object-class obj)))])
     (apply query-exec con pst pkey)

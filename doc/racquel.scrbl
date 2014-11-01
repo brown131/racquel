@@ -422,9 +422,18 @@ Below is the BNF for RQL expressions.
 
 @(let ([open @litchar{(}]
        [close @litchar{)}])
-   @BNF[(list @litchar{                } @litchar{})
+              @BNF[(list @litchar{                } @litchar{})
         (list @nonterm{expression}
-              @BNF-seq[open @litchar{join} @nonterm{table name} @nonterm{search condition} close]
+              @BNF-seq[@kleenestar[@nonterm{join clause}]]
+              @BNF-seq[@kleenestar[@nonterm{where clause}]])
+        (list @nonterm{join clause}
+              @BNF-seq[open @nonterm{join type} @nonterm{table name}
+                            @nonterm{search condition} close])
+        (list @nonterm{join type}
+              @BNF-seq[@litchar{join}]
+              @BNF-seq[@litchar{left-join}]
+              @BNF-seq[@litchar{right-join}])
+        (list @nonterm{where clause}
               @BNF-seq[open @litchar{where} @nonterm{search condition} close])
         (list @nonterm{search condition}
               @BNF-seq[@nonterm{boolean term}]
@@ -456,17 +465,8 @@ Below is the BNF for RQL expressions.
         (list @nonterm{like predicate}
               @BNF-seq[open @litchar{like} @nonterm{pattern} close])
         ])
-     
-@subsection[#:tag "where"]{The where clause}
 
-A @racket[where] clause is used in @racket[select-data-object] and @racket[select-data-objects]. It 
-follows the behavior of SQL-expressions, which can include AND, OR, =, IN, LIKE, etc., but are 
-expressed as S-expressions. Thus the SQL-expression "ID = 1" would be coded as the S-expression 
-"(= ID 1)".
-
-Currently only a subset of SQL is supported. Subqueries and existence functions are not supported.
-
-@subsection[#:tag "join"]{The join clause}
+@subsection[#:tag "join"]{The @racket[join] clause}
 
 Join clauses can also included in @racket[select-data-object] and @racket[select-data-objects] 
 functions. The @racket[join] clauses must be defined before the @racket[where] clause. There may be 
@@ -482,6 +482,15 @@ expresses the equivalent of the SQL-expression "JOIN PERSON ON PERSON.ID = ADDRE
 @verbatim|{
 (join person% (= (person% id) (address% person-id)))
 }|
+     
+@subsection[#:tag "where"]{The @racket[where] clause}
+
+A @racket[where] clause is used in @racket[select-data-object] and @racket[select-data-objects]. It 
+follows the behavior of SQL-expressions, which can include AND, OR, =, IN, LIKE, etc., but are 
+expressed as S-expressions. Thus the SQL-expression "ID = 1" would be coded as the S-expression 
+"(= ID 1)".
+
+Currently only a subset of SQL is supported. Subqueries and existence functions are not supported.
 
 @subsection[#:tag "examples"]{RQL examples}
 
@@ -518,23 +527,34 @@ joins.
                #:generate-joins? #t #:generate-reverse-joins? #t)
 }|
 
-Because the @racket[#:print?] keyword is true, this will return the SQL that would be used to select 
-the objects from the database.
+Because the @racket[#:print?] keyword is true, the query will return the SQL that would be used to 
+select the objects from the database. The @racket[?] is the RQL parameter placeholder and will be 
+translated into the appropriate placeholder for the SQL dialect used by the connection, e.g. "$1".
 @verbatim|{
-(select-data-objects con address% #:print? #t (where (in id ,address-ids))
+(select-data-objects con address% #:print? #t (where (>= id ?)) min-id)
 }|
 
-Here is an example of a simple join in RQL:
+Here is an example of a simple join which returns all address for a person with the last name 
+"O'Brien". A parameter is used so that the quote in the name is properly escaped in the generated SQL 
+statement.
 @verbatim|{
-(select-data-object *con* address% 
-                    (join person% (= (person% person-id) (address% person-id))) 
-                    (where (= address-id 1)))
+(select-data-object con address% 
+                    (join person% (= (person% person-id) 
+                                     (address% person-id))) 
+                    (where (= (person% last-name) ?)) "O'Brien")
 }|
 
-@subsection[#:tag "tips"]{Tips and suggestions}
+Below is an example of an @racket[in] clause which loads three albums by title.
+@verbatim|{
+(select-data-objects con album% (where (in title (make-list 3 '?))) 
+                     "Inflammable Material" "London Calling" "Ramones")
+}|
 
-@; Using lists in "in" clauses
-@; Use of ? parameters
+This @racket[in] clause uses a list of ids to retrieve the account data objects:
+@verbatim|{
+(define account-ids '(5 23 17))
+(select-data-objects con account% (where (in id account-ids)))) 
+}|
 
 @section[#:tag "serialization"]{Data Object Serialization}
 

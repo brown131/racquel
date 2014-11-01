@@ -513,8 +513,8 @@
                    (check-eq? (data-object-state a) 'loaded)))
       
       (test-case "objects selected?"
-                 (let ([a (select-data-objects *con* auto% )])
-                   (check-eq? (length a) 3)))
+                 (let ([a (select-data-objects *con* auto%)])
+                   (check-eq? (length a) 2)))
       
       (test-case "object deleted?" 
                  (delete-data-object *con* obj)
@@ -898,7 +898,7 @@ from address where city like ?" *test-dbsys-type*))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code \
 from address where city like '%test%'" *test-dbsys-type*))
-    (test-equal? "select in with unquote ok?" 
+    (test-equal? "select in with parameters ok?" 
                  (select-data-object *con* address% #:print? #t (where (in id (make-list 3 '?))))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code \
@@ -922,6 +922,7 @@ from address where id in (4,5,6)" *test-dbsys-type*))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code \
 from address where id between 1 and 3" *test-dbsys-type*))
+
      ))
 
 
