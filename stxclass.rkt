@@ -45,43 +45,38 @@
 (define-syntax-class rql-expr
   #:description "rql expression"
   #:literals (and or not = <> >= <= > < like in between)
-  (pattern and #:with (expr ...) #'(rql-and))
-  (pattern or #:with (expr ...) #'(rql-or))
-  (pattern not #:with (expr ...) #'(rql-not))
-  (pattern = #:with (expr ...) #'(rql-=))
-  (pattern <> #:with (expr ...) #'(rql-<>))
-  (pattern >= #:with (expr ...) #'(rql->=))
-  (pattern <= #:with (expr ...) #'(rql-<=))
-  (pattern > #:with (expr ...) #'(rql->))
-  (pattern < #:with (expr ...) #'(rql-<))
-  (pattern like #:with (expr ...) #'(rql-like))
-  (pattern (in (p1:expr p2:expr) b:expr) #:with (expr ...) #'((rql-in (rql-column-pair p1 'p2) b)))
-  (pattern (in a:expr b:expr) #:with (expr ...) #'((rql-in 'a b)))
-  (pattern between #:with (expr ...) #'(rql-between))
-  (pattern i:id #:with (expr ...) #'((~a 'i)))
-  (pattern s:str #:with (expr ...) #'((~a s)))
-  (pattern n:nat #:with (expr ...) #'((~a n)))
-  (pattern (p1:expr p2:expr) #:with (expr ...) #'((rql-column-pair p1 'p2)))
-  (pattern l:rql-expr-list #:with (expr ...) #'((l.expr ...))))
-
-(define-syntax-class rql-expr-list
-  #:description "rql expression list"
-  (pattern (rql:rql-expr ...) #:with (expr ...) #'(rql.expr ... ...)))
+  (pattern (and p:rql-expr ...) #:with expr #'(rql-and p.expr ...))
+  (pattern (or p:rql-expr ...) #:with expr #'(rql-or p.expr ...))
+  (pattern (not p:rql-expr) #:with expr #'(rql-not p.expr))
+  (pattern (= a:rql-expr b:rql-expr) #:with expr #'(rql-= a.expr b.expr))
+  (pattern (<> a:rql-expr b:rql-expr) #:with expr #'(rql-<> a.expr b.expr))
+  (pattern (>= a:rql-expr b:rql-expr) #:with expr #'(rql->= a.expr b.expr))
+  (pattern (<= a:rql-expr b:rql-expr) #:with expr #'(rql-<= a.expr b.expr))
+  (pattern (> a:rql-expr b:rql-expr) #:with expr #'(rql-> a.expr b.expr))
+  (pattern (< a:rql-expr b:rql-expr) #:with expr #'(rql-< a.expr b.expr))
+  (pattern (like a:rql-expr b:rql-expr) #:with expr #'(rql-like a.expr b.expr))
+  (pattern (in a:rql-expr b:expr) #:with expr #'(rql-in a.expr b))
+  (pattern (between a:rql-expr b:rql-expr c:rql-expr) #:with expr 
+           #'(rql-between a.expr b.expr c.expr))
+  (pattern i:id #:with expr #'(~a 'i))
+  (pattern s:str #:with expr #'s)
+  (pattern n:nat #:with expr #'(~a n))
+  (pattern (p1:expr p2:expr) #:with expr #'(rql-column-pair p1 'p2)))
 
 (define-syntax-class join-expr 
   #:description "rql join expression"
   #:literals (join left-join right-join)
-  (pattern (join table:id rql:rql-expr) #:with (expr ...) 
-           #'("join " (rql-table-name 'table) " on " rql.expr ... " "))
-  (pattern (left-join table:id rql:rql-expr) #:with (expr ...) 
-           #'("left outer join " (rql-table-name 'table) " on " rql.expr ... " "))
-  (pattern (right-join table:id rql:rql-expr) #:with (expr ...) 
-           #'("right outer join " (rql-table-name 'table) " on " rql.expr ... " ")))
+  (pattern (join table:id rql:rql-expr) #:with expr 
+           #'(string-append "join " (rql-table-name 'table) " on " rql.expr " "))
+  (pattern (left-join table:id rql:rql-expr) #:with expr 
+           #'(string-append "left outer join " (rql-table-name 'table) " on " rql.expr " "))
+  (pattern (right-join table:id rql:rql-expr) #:with expr 
+           #'(string-append "right outer join " (rql-table-name 'table) " on " rql.expr " ")))
 
 (define-syntax-class where-expr 
   #:description "rql where expression"
   #:literals (where)
-  (pattern (where rql:rql-expr) #:with (expr ...) #'("where " rql.expr ...)))
+  (pattern (where rql:rql-expr) #:with expr #'(string-append "where " rql.expr)))
 
 
 ;;;; DATA CLASS SYNTAX CLASSES
@@ -151,8 +146,7 @@
                                #:defaults ([card #''one-to-many])) where:where-expr rest:expr ...) 
            #:with expr #'(jcol #f) 
            #:attr j-row #'((eq? jn-fld 'jcol) 
-                           (query-rows con (make-select-statement con jn-cls 
-                                                                  (string-append where.expr ...)) 
+                           (query-rows con (make-select-statement con jn-cls where.expr) 
                                        rest ...))
            #:attr j-def #'(list 'jcol jcls card)))
 

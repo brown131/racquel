@@ -810,9 +810,9 @@
          [obj (new address%)])
     (test-eq? "address class metadata added?" (length (hash->list *data-class-metadata*)) 2)
     (test-eq? "address class metadata ok?" (get-class-metadata table-name address%) "address")
-
+    
     (test-equal? "select sql ok?" (select-data-object *con* address% #:print? #t 
-                                                      (where (and (= id ?) (= city ?))) 1 "Chicago") 
+                                                      (where (and (= id ?) (= city ?))) 1 'Chicago) 
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code from address where (id = ? and city = ?)" *test-dbsys-type*))
     (test-true "rql select runs?" 
@@ -820,6 +820,10 @@ address.state, address.zip_code from address where (id = ? and city = ?)" *test-
                                          (where (and (= id ?) (= city ?))) 1 "Chicago") address%))
     (test-case "selected with rql?"
                (let ([a (select-data-object *con* address% (where (= id 1)))])
+                 (check-equal? (get-field city a) "Chicago")
+                 (check-eq? (data-object-state a) 'loaded)))
+    (test-case "selected with string arg"
+               (let ([a (select-data-object *con* address% (where (= id "1")))])
                  (check-equal? (get-field city a) "Chicago")
                  (check-eq? (data-object-state a) 'loaded)))
     (test-case "selected with sql?"
@@ -863,7 +867,15 @@ where id = ?"
 address.state, address.zip_code from address right outer join person on person.id = person_id \
 where id = ?"
                  *test-dbsys-type*))
-     
+    (test-equal? "select joins sql ok?" 
+                 (select-data-object *con* address% #:print? #t 
+                                     (join person% (= (person% id) (address% person-id))) 
+                                     (join address% (= (person% id) (address% person-id))) 
+                                     (where (= (address% id) 1)))
+                 "select address.city, address.id, address.line, address.person_id, address.state, \
+address.zip_code from address join person on person.id = address.person_id \
+join address on person.id = address.person_id where address.id = 1")
+    
     (test-equal? "select = ok?" (select-data-object *con* address% #:print? #t (where (= city ?)))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code \
@@ -898,6 +910,11 @@ from address where city like ?" *test-dbsys-type*))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code \
 from address where city like '%test%'" *test-dbsys-type*))
+    (test-equal? "select in  ok?" 
+                 (select-data-object *con* address% #:print? #t (where (in id '(? ? ?))))
+                 (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
+address.state, address.zip_code \
+from address where id in (?,?,?)" *test-dbsys-type*))
     (test-equal? "select in with parameters ok?" 
                  (select-data-object *con* address% #:print? #t (where (in id (make-list 3 '?))))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
@@ -922,7 +939,6 @@ from address where id in (4,5,6)" *test-dbsys-type*))
                  (sql-placeholder "select address.city, address.id, address.line, address.person_id, \
 address.state, address.zip_code \
 from address where id between 1 and 3" *test-dbsys-type*))
-
      ))
 
 
