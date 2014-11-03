@@ -508,9 +508,12 @@
                    (check-eq? (data-object-state a) 'loaded)))
       
       (test-case "object selected?"
-                 (let ([a (select-data-object *con* auto% (where (= name ?)) (get-field name obj))])
-                   (check-equal? (get-field name a) "test2")
-                   (check-eq? (data-object-state a) 'loaded)))
+                 (~a (select-data-object *con* auto% (where (= name ?)) (get-field name obj)))
+                 "#(struct:object:auto% this is a test 282 test2 #f #f loaded)")
+      
+      (test-case "object selected with sql?"
+                 (~a (select-data-object *con* auto% "where name='test2';"))
+                 "#(struct:object:auto% this is a test 282 test2 #f #f loaded)")
       
       (test-case "objects selected?"
                  (let ([a (select-data-objects *con* auto%)])

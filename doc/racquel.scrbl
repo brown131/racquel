@@ -353,6 +353,10 @@ is useful for debugging.
 The optional @racket[#:prepare?] keyword if true, will force the SQL statement generated to not be 
 cached as a prepared statement. This is useful for RQL that may have variable inputs, such a list in 
 an RQL @racket[in] cause.
+
+The join clauses and and where clauses use RQL defined below. Optionally a SQL string may be used 
+rather than RQL. This may be done in situations where some advanced SQL feature needs to be used 
+that currently cannot be coded in RQL.
 }
  
 @defproc[(select-data-objects [db-connection connection?] [data-class data-class?] 
@@ -369,6 +373,14 @@ is useful for debugging.
 The optional @racket[#:prepare?] keyword if true, will force the SQL statement generated to not be 
 cached as a prepared statement. This is useful for RQL that may have variable inputs, such a list in 
 an RQL @racket[in] cause.
+
+The join clauses and and where clauses use RQL defined below. Optionally a SQL string may be used 
+rather than RQL. This may be done in situations where some advanced SQL feature needs to be used 
+that currently cannot be coded in RQL.
+@verbatim|{
+(select-data-objects con address% "join person p on person-id = p.id \
+where lastname in (select lastname from employee where active = 1)")
+}|
 }
   
 @defproc[(data-object-state [data-object data-object?]) (or/c 'new 'loaded 'saved 'deleted)]{

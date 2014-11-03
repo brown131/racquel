@@ -42,7 +42,7 @@
                          ((_ a ...) (string-append "(" (string-join (list a ...) " and " ) ")"))])
 (define-syntax rql-or [syntax-rules () 
                         ((_ a ...) (string-append "(" (string-join (list a ...) " or " ) ")"))])
-(define-syntax rql-not [syntax-rules () ((_ a ...) (string-append "(not " a ... ")"))])
+(define-syntax rql-not [syntax-rules () ((_ a) (string-append "(not " a ")"))])
 (define-syntax rql-= [syntax-rules () ((_ a b) (string-append a " = " b))])
 (define-syntax rql-<> [syntax-rules () ((_ a b) (string-append a " <> " b))])
 (define-syntax rql->= [syntax-rules () ((_ a b) (string-append a " >= " b))])

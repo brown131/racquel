@@ -344,20 +344,12 @@
        #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? 
                                            (string-append join.expr ... where.expr))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
-    ;; Select with where-clause and arguments.
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr)) 
-        where:where-expr rest:expr ...)
-     (with-syntax ([prnt? (or (attribute prnt) #'#f)]
-                   [prep? (not (or (attribute prep) #'#f))])
-       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? 
-                                           (string-append where.expr))])
-           (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     ;; Select with SQL string.
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr)) 
-        where-clause:expr rest:expr ...)
+        where-sql:expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
-       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? where-clause)])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? where-sql)])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     ))
 
@@ -373,15 +365,6 @@
                                            (string-append join.expr ... where.expr))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) 
                               (query-rows con sql rest ...)))))]
-    ;; Select with where-clause and arguments.
-    [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr))
-        where:where-expr rest:expr ...)
-     (with-syntax ([prnt? (or (attribute prnt) #'#f)]
-                   [prep? (not (or (attribute prep) #'#f))])
-       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? 
-                                           (string-append where.expr))])
-           (if prnt? sql (map (lambda (r) (create-data-object con cls r)) 
-                              (query-rows con sql rest ...)))))]
     ;; Select all.
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr)))
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
@@ -390,10 +373,10 @@
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) (query-rows con sql)))))]
     ;; Select with SQL string.
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr)) 
-        where-clause:expr rest:expr ...)
+        where-sql:expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
-       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? where-clause)])
+       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? where-sql)])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     ))
 
