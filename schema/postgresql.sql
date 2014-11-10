@@ -46,6 +46,8 @@ grant all privileges on sequence auto_id_seq to test;
 create table multipartkey (
   simple_id int not null references simple (id),
   auto_id int not null references auto (id),
+  name varchar(30) default null,
+  description varchar(500) default null,
   primary key (simple_id, auto_id),
   unique (simple_id)
 );
@@ -79,11 +81,14 @@ grant all privileges on sequence address_id_seq to test;
 insert into simple (id, name, description, x)
 values (1, 'join test', 'join test', 2.1);
 
+insert into simple (id, name, description, x)
+values (2, 'join test 2', 'join test 2', 3);
+
 insert into auto (name, description)
 values ('join test', 'join test');
 
-insert into multipartkey (simple_id, auto_id)
-values (1, 1);
+insert into multipartkey (simple_id, auto_id, name, description)
+values (1, 1, 'multi', 'multi part key');
 
 insert into person (id, first_name, last_name, age)
 values (1, 'john', 'smith', 25);

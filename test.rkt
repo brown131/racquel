@@ -413,7 +413,7 @@
    
     (test-case "object loaded?"
                (let ([s (make-data-object *con* simple% (get-field id obj))])
-                 (check-equal? (get-field id s) 23)
+                 (check-equal? (get-field id s) (get-field id obj))
                  (check-equal? (get-field name s) "test2")
                  (check-equal? (get-field description s) "this is a test")
                  (check-true (= (get-field x s) x-val))))
@@ -450,7 +450,7 @@
                                '((description "description" "description") (id "id""id") 
                                  (name "name" "name")))
                  (check-equal? j-defs '((multipartkeys multipartkey% one-to-many)))
-                 (check-eq? pkey 'id)
+                 (check-equal? pkey 'id)
                  (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? auto-key "auto_id_seq")]
                        [(eq? *test-dbsys-type* 'oracle) (check-equal? auto-key "auto_id_seq")]
                        [else (check-true auto-key)])
@@ -525,6 +525,125 @@
                                              (sql-placeholder "select count(*) from auto where id=?" 
                                                               *test-dbsys-type*) 
                                              (get-field id obj)) 0))
+                 (check-eq? (data-object-state obj) 'deleted)) 
+      )))
+
+
+;;;; TEST MULTI-PART KEYS
+
+
+(define-test-suite test-multi-part-keys
+  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (let ([multipartkey% (gen-data-class *con* "multipartkey" #:schema-name *schema-name*)])
+    (test-case "multipartkey class created?" (check-not-eq? multipartkey% #f))
+    (test-true "multipartkey class is a data class?" (data-class? multipartkey%))
+    (test-case "multipartkey class ok?" 
+               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) 
+                             (class-info multipartkey%)]) 
+                 (check-eq? cls-nm 'multipartkey%)))
+   
+    (test-eq? "multipartkey class metadata added?" (length (hash->list *data-class-metadata*)) 1)
+    (test-eq? "multipartkey class metadata ok?" 
+              (get-class-metadata table-name multipartkey%) "multipartkey")
+   
+    (test-case "multipartkey class metadata set?" 
+               (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
+                             (data-class-info multipartkey%)])
+                 (check-eq? tbl-nm "multipartkey")
+                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                               '((auto-id "auto_id" "auto_id")
+                                 (description "description" "description")
+                                 (name "name" "name")
+                                 (simple-id "simple_id" "simple_id")))
+                 (check-equal? j-defs '((simple simple% one-to-one) (autos auto% one-to-many)))
+                 (check-equal? pkey '(simple-id auto-id))
+                 (cond [(eq? *test-dbsys-type* 'postgresql) 
+                        (check-equal? auto-key "multipartkey_id_seq")]
+                       [(eq? *test-dbsys-type* 'oracle) (check-equal? auto-key "multipartkey_id_seq")]
+                       [else (check-false auto-key)])
+                 (check-eq? ext-nm "multipartkey")
+                 (check-not-eq? st-key #f)
+                 ))
+   
+    (let ([obj (new multipartkey%)])
+      (test-case "multipartkey object created?" (check-not-eq? obj #f))
+      (test-equal? "object class ok?" (object-class obj) multipartkey%)
+      
+      (test-equal? "savable field ok?" (savable-fields *con* multipartkey%) 
+                   '(auto-id description name simple-id))
+      (test-equal? "where clause ok?" 
+                   (key-where-clause-sql *con* multipartkey% (primary-key-fields multipartkey%)) 
+                   (sql-placeholder " where auto_id=? and simple_id=?" *test-dbsys-type*))
+      (test-equal? "insert sql ok?" (insert-sql *con* multipartkey%) 
+                   (sql-placeholder "insert into multipartkey \
+(auto_id, description, name, simple_id) values (?, ?, ?, ?)" *test-dbsys-type*))
+      (test-equal? "update sql ok?" (update-sql *con* multipartkey%) 
+                   (sql-placeholder "update multipartkey \
+set auto_id=?, description=?, name=?, simple_id=? where auto_id=? and simple_id=?" *test-dbsys-type*))
+      (test-equal? "delete sql ok?" (delete-sql *con* multipartkey%) 
+                   (sql-placeholder "delete from multipartkey where auto_id=? and simple_id=?" 
+                                    *test-dbsys-type*))
+      (test-equal? "select sql ok?" 
+                   (make-select-statement *con* multipartkey% #:print? #t 
+                                          "where auto=? and simple_id=?") 
+                   (sql-placeholder "select multipartkey.auto_id, multipartkey.description, \
+multipartkey.name, multipartkey.simple_id from multipartkey where auto=? and simple_id=?" 
+                                    *test-dbsys-type*))
+      (test-equal? "select all sql ok?" (make-select-statement *con* multipartkey% #:print? #t "") 
+                   (sql-placeholder "select multipartkey.auto_id, multipartkey.description, \
+multipartkey.name, multipartkey.simple_id from multipartkey " *test-dbsys-type*))
+      
+      (test-case "columns set?"
+                 (set-column! auto-id obj 1)
+                 (set-column! simple-id obj 2)
+                 (set-column! name obj "test2")
+                 (set-column! description obj "this is a test")
+
+                 (check-eq? (get-column auto-id obj) 1)
+                 (check-eq? (get-column simple-id obj) 2)
+                 (check-eq? (data-object-state obj) 'new))
+      
+      (test-case "object inserted?" 
+                 (insert-data-object *con* obj)
+                 (check-not-eq? (get-field auto-id obj) #f)
+                 (check-not-eq? (get-field simple-id obj) #f)
+                 (check-eq? (data-object-state obj) 'saved))
+      
+      (test-case "object changed?" 
+                 (set-field! name obj "test2")
+                 (check-eq? (get-field name obj) "test2"))
+      
+      (test-case "object updated?"
+                 (update-data-object *con* obj)
+                 (check-equal? (query-value *con* (sql-placeholder "select name from multipartkey \
+where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get-field simple-id obj))
+                                            "test2"))
+      
+      (test-case "object loaded?"
+                 (let ([a (make-data-object *con* multipartkey% 
+                                            (list (get-field auto-id obj) 
+                                                  (get-field simple-id obj)))])
+                   (check-equal? (get-field name a) "test2")
+                   (check-eq? (data-object-state a) 'loaded)))
+      
+      (test-case "object selected?"
+                 (~a (select-data-object *con* multipartkey% (where (= name ?)) (get-field name obj)))
+                 "#(struct:object:amultipartkey% this is a test 282 test2 #f #f loaded)")
+      
+      (test-case "object selected with sql?"
+                 (~a (select-data-object *con* multipartkey% "where name='multi';"))
+                 "#(struct:object:multipartkey% this is a test 282 test2 #f #f loaded)")
+      
+      (test-case "objects selected?"
+                 (let ([a (select-data-objects *con* multipartkey%)])
+                   (check-eq? (length a) 2)))
+      
+      (test-case "object deleted?" 
+                 (delete-data-object *con* obj)
+                 (check-true (= (query-value *con* 
+                                             (sql-placeholder "select count(*) from multipartkey \
+where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get-field simple-id obj))
+                                0))
                  (check-eq? (data-object-state obj) 'deleted)) 
       )))
 
@@ -986,9 +1105,6 @@ from address where id between 1 and 3" *test-dbsys-type*))
   ))
 
 
-;;;; TEST MULTI-PART KEYS
-
-
 ;;;; TEST MULTIPLE KEYS IN SAME TABLE
 
  
@@ -1002,6 +1118,7 @@ from address where id between 1 and 3" *test-dbsys-type*))
 (run-tests test-schema 'verbose)
 (run-tests test-make-data-object 'verbose)
 (run-tests test-autoincrement-data-object 'verbose)
+(run-tests test-multi-part-keys 'verbose)
 (run-tests test-joins 'verbose)
 (run-tests test-generate-join 'verbose)
 (run-tests test-generate-reverse-join 'verbose)

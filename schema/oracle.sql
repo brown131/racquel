@@ -66,6 +66,8 @@ alter trigger auto_id_trg enable;
 create table multipartkey (
 	simple_id number(*,0) not null enable, 
 	auto_id number(*,0) not null enable, 
+	name varchar2(30) default null, 
+	description varchar2(500) default null, 
 	primary key (simple_id, auto_id) enable, 
 	unique (simple_id) enable
 );
@@ -111,11 +113,14 @@ alter trigger address_id_trg enable;
 insert into simple (id, name, description, x)
 values (1, 'join test', 'join test', 2.1);
 
+insert into simple (id, name, description, x)
+values (2, 'join test 2', 'join test 2', 3);
+
 insert into auto (name, description)
 values ('join test', 'join test');
 
-insert into multipartkey (simple_id, auto_id)
-values (1, 1);
+insert into multipartkey (simple_id, auto_id, name, description)
+values (1, 1, 'multi', 'multi part key');
 
 insert into person (id, first_name, last_name, age)
 values (1, 'john', 'smith', 25);

@@ -327,7 +327,11 @@
 ;;; Create a data object from a database row.
 (define (create-data-object con cls row #:primary-key (primary-key #f))
   (let ([pkey (if primary-key primary-key (create-primary-key cls row))])
-    (if (multi-hash-has-key? *data-objects* con cls pkey) (multi-hash-ref *data-objects* con cls pkey)
+    (if (multi-hash-has-key? *data-objects* con cls pkey) 
+        (let* ([obj (multi-hash-ref *data-objects* con cls pkey)])
+          (define-member-name data-object-state (get-class-metadata state-key (object-class obj)))
+          (set-field! data-object-state obj 'loaded)
+          obj)
         (let* ([obj (new cls)])
           (set-data-object! obj row)
           (multi-hash-set! *data-objects* obj con cls pkey)
@@ -383,9 +387,14 @@
 ;;; Load a data object from the database by primary key.
 (define (make-data-object con cls pkey) 
   (create-data-object con cls 
-    (query-row con (make-select-statement con cls 
-                                          (key-where-clause-sql con cls (primary-key-fields cls))) 
-               pkey) #:primary-key pkey))
+    (if (list? pkey)
+        (apply query-row con (make-select-statement con cls 
+                                                    (key-where-clause-sql con cls 
+                                                                          (primary-key-fields cls))) 
+               pkey)
+        (query-row con (make-select-statement con cls 
+                                              (key-where-clause-sql con cls (primary-key-fields cls)))
+                   pkey)) #:primary-key pkey))
 
 ;;; Save a data object.
 (define (save-data-object con obj) 

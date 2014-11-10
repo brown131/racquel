@@ -38,6 +38,8 @@ create table auto (
 create table if not exists multipartkey
   simple_id integer not null,
   auto_id integer not null,
+  name varchar(30) default null,
+  description varchar(500) default null
   primary key (simple_id, auto_id),
   constraint multipartkey_simple_id_fkey foreign key (simple_id) references simple (id),
   constraint multipartkey_auo_id_fkey foreign key (auto_id) references auto (id)
@@ -65,11 +67,14 @@ create table if not exists address (
 insert into simple (id, name, description, x)
 values (1, 'join test', 'join test', 2.1);
 
+insert into simple (id, name, description, x)
+values (2, 'join test 2', 'join test 2', 3);
+
 insert into auto (name, description)
 values ('join test', 'join test');
 
-insert into multipartkey (simple_id, auto_id)
-values (1, 1);
+insert into multipartkey (simple_id, auto_id, name, description)
+values (1, 1, 'multi', 'multi part key');
 
 insert into person (id, first_name, last_name, age)
 values (1, 'john', 'smith', 25);
