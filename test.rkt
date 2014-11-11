@@ -385,7 +385,7 @@
                (check-eq? (get-column name obj) "test")
                (check-eq? (get-column description obj) "this is a test")
                (check-eq? (get-column x obj) x-val))
-   
+
     (test-case "object inserted?" 
                (insert-data-object *con* obj)
                (check-not-eq? (get-field id obj) #f))
@@ -605,9 +605,11 @@ multipartkey.name, multipartkey.simple_id from multipartkey " *test-dbsys-type*)
       
       (test-case "object inserted?" 
                  (insert-data-object *con* obj)
-                 (check-not-eq? (get-field auto-id obj) #f)
-                 (check-not-eq? (get-field simple-id obj) #f)
-                 (check-eq? (data-object-state obj) 'saved))
+                 (check-eq? (data-object-state obj) 'saved)
+                 (set! obj (make-data-object *con* multipartkey% '(1 2)))
+                 (check-eq? (get-field auto-id obj) 1)
+                 (check-eq? (get-field simple-id obj) 2)
+                 (check-eq? (data-object-state obj) 'loaded))
       
       (test-case "object changed?" 
                  (set-field! name obj "test2")
@@ -759,6 +761,8 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
 
 
 ;;;; TEST NULL COLUMNS
+
+
 (define-test-suite test-null-columns
   (let* ([person% (gen-data-class *con* "person" 
                                   #:schema-name *schema-name*
@@ -779,6 +783,7 @@ values (?, ?, ?, ?)" *test-dbsys-type*))
    
     (test-case "object inserted?" 
                (insert-data-object *con* nobj)
+               (set! nobj (make-data-object *con* person% 23))
                (check-not-eq? (get-field id nobj) #f))
    
     (test-case "object updated?" 
@@ -788,6 +793,7 @@ values (?, ?, ?, ?)" *test-dbsys-type*))
                (set-column! first-name nobj #f)
                (set-column! age nobj #f)
                (update-data-object *con* nobj)
+               (set! nobj (make-data-object *con* person% 23))
                (check-eq? (get-column first-name nobj) #f)
                (check-eq? (get-column age nobj) #f))
                

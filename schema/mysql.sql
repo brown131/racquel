@@ -79,7 +79,7 @@ values (2, 'join test 2', 'join test 2', 3);
 insert auto (`name`, description)
 values ('join test', 'join test');
 
-insert multipartkey (simple_id, auto_id, 'name', description)
+insert multipartkey (simple_id, auto_id, `name`, description)
 values (1, 1, 'multi', 'multi part key');
 
 insert person (id, first_name, last_name, age)
