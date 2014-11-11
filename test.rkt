@@ -422,7 +422,7 @@
                (delete-data-object *con* obj)
                (check-true 
                 (= (query-value *con* (sql-placeholder "select count(*) from simple where id=?" 
-                                                       *test-dbsys-type*) (get-field id obj)) 0)))
+                                                       *test-dbsys-type*) (get-field id obj)) 0)))   
     ))
 
 
@@ -655,14 +655,14 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
   (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
   (let* ([person% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
                       (data-class object% 
-                                  (table-name "person" "Person")  
-                                  (column (id 1 "id") (first-name #f "first_name") 
+                                  (table-name "person" "Person")
+                                  (column (id 1 "id") (first-name #f "first_name")
                                           (last-name #f "last_name") (age #f "age"))
                                   (primary-key id #:autoincrement "auto_id_seq")
                                   (join (addresses 'address% (where (= ('address% person-id) ?)) id))
                                   (super-new))
                       (data-class object% 
-                                  (table-name "person" "Person")  
+                                  (table-name "person" "Person")
                                   (column (id 1 "id") (first-name #f "first_name") 
                                           (last-name #f "last_name") (age #f "age"))
                                   (primary-key id #:autoincrement #t)
@@ -670,7 +670,7 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                                   (super-new)))]
         [address% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
                       (data-class object% 
-                                  (table-name "address"  "Address")  
+                                  (table-name "address"  "Address")
                                   (column (id 1 "id") (person-id 1 "person_id") (line #f "line") 
                                           (city #f "city") (state #f "state") 
                                           (zip-code #f "zip_code"))
@@ -679,7 +679,7 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                                                 (where (= (person% id) ?)) person-id))
                                   (super-new))
                       (data-class object% 
-                                  (table-name "address"  "Address")  
+                                  (table-name "address"  "Address")
                                   (column (id 1 "id") (person-id 1 "person_id") (line #f "line") 
                                           (city #f "city") (state #f "state") 
                                           (zip-code #f "zip_code"))
@@ -756,6 +756,47 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
     (test-eq? "person not joined?" (get-field person address-obj) #f)
     (test-true "person joined?" (is-a? (get-join person address-obj *con*) person%))
     ))
+
+
+;;;; TEST NULL COLUMNS
+(define-test-suite test-null-columns
+  (let* ([person% (gen-data-class *con* "person" 
+                                  #:schema-name *schema-name*
+                                  #:table-name-normalizer table-name-normalizer
+                                  #:column-name-normalizer column-name-normalizer
+                                  #:table-name-externalizer name-externalizer)]
+         [nobj (new person%)])         
+    (test-case "columns null?"
+               (set-column! id nobj 23)
+               (check-eq? (get-column id nobj) 23)
+               (check-eq? (get-column first-name nobj) #f)
+               (check-eq? (get-column last-name nobj) #f)
+               (check-eq? (get-column age nobj) #f))
+    
+    (test-equal? "insert sql ok?" (insert-sql *con* person%) 
+                 (sql-placeholder "insert into person (age, first_name, id, last_name) \
+values (?, ?, ?, ?)" *test-dbsys-type*))
+   
+    (test-case "object inserted?" 
+               (insert-data-object *con* nobj)
+               (check-not-eq? (get-field id nobj) #f))
+   
+    (test-case "object updated?" 
+               (set-column! first-name nobj "test")
+               (set-column! age nobj 23)
+               (update-data-object *con* nobj)
+               (set-column! first-name nobj #f)
+               (set-column! age nobj #f)
+               (update-data-object *con* nobj)
+               (check-eq? (get-column first-name nobj) #f)
+               (check-eq? (get-column age nobj) #f))
+               
+    (test-case "object deleted?" 
+               (delete-data-object *con* nobj)
+               (check-true 
+                (= (query-value *con* (sql-placeholder "select count(*) from simple where id=?" 
+                                                       *test-dbsys-type*) (get-field id nobj)) 0)))
+  ))
 
 
 ;;;; TEST JOIN GENERATION
@@ -1120,6 +1161,7 @@ from address where id between 1 and 3" *test-dbsys-type*))
 (run-tests test-autoincrement-data-object 'verbose)
 (run-tests test-multi-part-keys 'verbose)
 (run-tests test-joins 'verbose)
+(run-tests test-null-columns 'verbose)
 (run-tests test-generate-join 'verbose)
 (run-tests test-generate-reverse-join 'verbose)
 (run-tests test-rql-parsing 'verbose)

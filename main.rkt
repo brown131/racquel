@@ -405,7 +405,8 @@
 (define (insert-data-object con obj) 
   (let* ([cls (object-class obj)]
          [pst (virtual-statement (insert-sql con cls))]
-         [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))])
+         [flds (map (lambda (f) (false->sql-null (dynamic-get-field f obj))) 
+                    (savable-fields con cls))])
     (apply query-exec con pst flds)
     (set-autoincrement-id! con obj)
     (define-member-name data-object-state (get-class-metadata state-key cls))
@@ -416,8 +417,10 @@
 (define (update-data-object con obj) 
   (let* ([cls (object-class obj)]
          [pst (virtual-statement (update-sql con cls))]
-         [flds (map (lambda (f) (dynamic-get-field f obj)) (savable-fields con cls))]
-         [pkey (map (lambda (f) (dynamic-get-field f obj)) (primary-key-fields cls))])
+         [flds (map (lambda (f) (false->sql-null (dynamic-get-field f obj))) 
+                    (savable-fields con cls))]
+         [pkey (map (lambda (f) (false->sql-null (dynamic-get-field f obj))) 
+                    (primary-key-fields cls))])
     (apply query-exec con pst (append flds pkey))
     (define-member-name data-object-state (get-class-metadata state-key cls))
     (set-field! data-object-state obj 'saved)))
@@ -426,7 +429,7 @@
 (define (delete-data-object con obj)
   (let* ([cls (object-class obj)]
          [pst (virtual-statement (delete-sql con cls))]
-         [pkey (map (lambda (f) (dynamic-get-field f obj)) 
+         [pkey (map (lambda (f) (false->sql-null (dynamic-get-field f obj))) 
                     (primary-key-fields (object-class obj)))])
     (apply query-exec con pst pkey)
     (define-member-name data-object-state (get-class-metadata state-key cls))
