@@ -49,7 +49,7 @@
 (define (schema-constraint-type row) (vector-ref row 1))
 (define (schema-join-column row) (vector-ref row 5))
 (define (schema-join-table row) (vector-ref row 4))
-(define (schema-ordinal-position row) (vector-ref row 2))
+(define (schema-ordinal-position row) (vector-ref row 2)) 
 
 ;;; Load MySQL schema.
 (define (load-mysql-schema con schema-nm tbl-nm rev-jn?)
@@ -184,7 +184,7 @@ where fkey.table_name='" tbl-nm "'")))
                          [fkp (findf (lambda (f) (equal? (vector-ref tblp 1) (vector-ref f 3))) 
                                      fk-pragma)])
                      (vector-set! row 0 (vector-ref tblp 1))
-                     (vector-set! row 1 (if (eq? (vector-ref tblp 5) 1) "P" (if fkp "F" sql-null)))
+                     (vector-set! row 1 (if (> (vector-ref tblp 5) 0) "P" (if fkp "F" sql-null)))
                      (vector-set! row 2 (vector-ref tblp 0))
                      (vector-set! row 3 (query-value con 
                                                      (string-append 
@@ -384,4 +384,4 @@ where rcols.tabname='" (string-upcase tbl-nm) "'")))
                       (let ([val (vector-ref r i)])
                         (if (and (member i '(0 4 5 6)) (string? val)) (string-downcase val) val)))) 
                   rows))
-    ));)
+    ))

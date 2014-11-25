@@ -91,7 +91,8 @@
 (define test-interface<%> (interface ()))
 
 (define-test-suite test-define-data-object
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  
   (let* ([test-class% (data-class* object% (test-interface<%>)
                                    (table-name "test")
                                    (column [id #f ("id" "Id")] 
@@ -176,7 +177,8 @@
 ;(define (join-name-normalizer n c) (default-join-name-normalizer n c))
                                      
 (define-test-suite test-schema
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  
   (let* ([simple-schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f 
                                      #:db-system-type *test-dbsys-type*)]
          [address-schema (load-schema *con* *schema-name* "address" #:reverse-join? #f 
@@ -310,7 +312,8 @@
                                              (lambda (s) (substring (string-upcase s) 1 2))) 1)))
 
 (define-test-suite test-make-data-object
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  
   (let* ([test-class% (data-class* object% (test-interface<%>)
                                    (table-name "test")
                                    (column [id #f ("id" "Id")] 
@@ -430,7 +433,9 @@
 
 
 (define-test-suite test-autoincrement-data-object
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  (hash-clear! *data-class-schema*)
+
   (let ([auto% (gen-data-class *con* "auto" #:schema-name *schema-name*)])
     (test-case "auto class created?" (check-not-eq? auto% #f))
     (test-true "auto class is a data class?" (data-class? auto%))
@@ -441,7 +446,7 @@
    
     (test-eq? "auto class metadata added?" (length (hash->list *data-class-metadata*)) 1)
     (test-eq? "auto class metadata ok?" (get-class-metadata table-name auto%) "auto")
-   
+
     (test-case "auto class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info auto%)])
@@ -525,7 +530,7 @@
                                              (sql-placeholder "select count(*) from auto where id=?" 
                                                               *test-dbsys-type*) 
                                              (get-field id obj)) 0))
-                 (check-eq? (data-object-state obj) 'deleted)) 
+                 (check-eq? (data-object-state obj) 'deleted))
       )))
 
 
@@ -533,8 +538,12 @@
 
 
 (define-test-suite test-multi-part-keys
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
-  (let ([multipartkey% (gen-data-class *con* "multipartkey" #:schema-name *schema-name*)])
+  (hash-clear! *data-class-metadata*)
+  (hash-clear! *data-class-schema*)
+  
+  (let ([multipartkey% (gen-data-class *con* "multipartkey" #:schema-name *schema-name*)]
+        [simple% (gen-data-class *con* "simple" #:schema-name *schema-name*)]
+        [auto% (gen-data-class *con* "auto" #:schema-name *schema-name*)])
     (test-case "multipartkey class created?" (check-not-eq? multipartkey% #f))
     (test-true "multipartkey class is a data class?" (data-class? multipartkey%))
     (test-case "multipartkey class ok?" 
@@ -542,10 +551,10 @@
                              (class-info multipartkey%)]) 
                  (check-eq? cls-nm 'multipartkey%)))
    
-    (test-eq? "multipartkey class metadata added?" (length (hash->list *data-class-metadata*)) 1)
+    (test-eq? "class metadata added?" (length (hash->list *data-class-metadata*)) 3)
     (test-eq? "multipartkey class metadata ok?" 
               (get-class-metadata table-name multipartkey%) "multipartkey")
-   
+
     (test-case "multipartkey class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info multipartkey%)])
@@ -555,12 +564,11 @@
                                  (description "description" "description")
                                  (name "name" "name")
                                  (simple-id "simple_id" "simple_id")))
-                 (check-equal? j-defs '((simple simple% one-to-one) (autos auto% one-to-many)))
                  (check-equal? pkey '(simple-id auto-id))
-                 (cond [(eq? *test-dbsys-type* 'postgresql) 
-                        (check-equal? auto-key "multipartkey_id_seq")]
-                       [(eq? *test-dbsys-type* 'oracle) (check-equal? auto-key "multipartkey_id_seq")]
-                       [else (check-false auto-key)])
+                 (check-eqv? auto-key #f)
+                 (check-equal? (sort j-defs (λ (x y) (string<? (symbol->string (first x))
+                                                               (symbol->string (first y)))))
+                               '((auto auto% one-to-one) (simple simple% one-to-one)))
                  (check-eq? ext-nm "multipartkey")
                  (check-not-eq? st-key #f)
                  ))
@@ -654,7 +662,8 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
 
 
 (define-test-suite test-joins
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  
   (let* ([person% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
                       (data-class object% 
                                   (table-name "person" "Person")
@@ -809,8 +818,8 @@ values (?, ?, ?, ?)" *test-dbsys-type*))
 
 
 (define-test-suite test-generate-join
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
-  (map (lambda (k) (hash-remove! *data-class-schema* k)) (hash-keys *data-class-schema*))
+  (hash-clear! *data-class-metadata*)
+  (hash-clear! *data-class-schema*)
   
   (let* ([address% (gen-data-class *con* "address" 
                                    #:schema-name *schema-name*
@@ -895,8 +904,8 @@ values (?, ?, ?, ?)" *test-dbsys-type*))
 
 
 (define-test-suite test-generate-reverse-join
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
-  (map (lambda (k) (hash-remove! *data-class-schema* k)) (hash-keys *data-class-schema*))
+  (hash-clear! *data-class-metadata*)
+  (hash-clear! *data-class-schema*)
   
   (let* ([person% (gen-data-class *con* "person" 
                                   #:schema-name *schema-name*
@@ -965,7 +974,8 @@ values (?, ?, ?, ?)" *test-dbsys-type*))
 
  
 (define-test-suite test-rql-parsing
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  
   (let* ([person% (gen-data-class *con* "person" 
                                   #:schema-name *schema-name*
                                   #:generate-reverse-joins? #t
@@ -1115,7 +1125,8 @@ from address where id between 1 and 3" *test-dbsys-type*))
 
 
 (define-test-suite test-serialization
-  (map (lambda (k) (hash-remove! *data-class-metadata* k)) (hash-keys *data-class-metadata*))
+  (hash-clear! *data-class-metadata*)
+  
   (let* ([test-class% (data-class object%
                                  (table-name "test" "Test")
                                  (column [id 1 ("id" "Id")] 

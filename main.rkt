@@ -205,17 +205,15 @@
 ;;; Get the cardinality of a join based on schema metadata.
 (define (join-cardinality con schema-nm dbsys-type jn-tbl-nm jn-key) 
   (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
-         [row (findf (lambda (r) (equal? (schema-column r) 
-                                         (if (list? jn-key) (first jn-key) jn-key))) jn-schema)])
+         [row (findf (lambda (r) (equal? (schema-column r) jn-key)) jn-schema)]
+         [spk (eq? (count (λ (r) (equal? (schema-constraint-type r) "P")) jn-schema) 1)])
     (unless row (error 'join-cardinality "row not found for join table: ~a key: ~a" jn-tbl-nm jn-key))
-    (if (equal? (schema-constraint-type row) "P") #''one-to-one #''one-to-many)))
- 
+    (if (and (equal? (schema-constraint-type row) "P") spk) #''one-to-one #''one-to-many)))
+
 ;;; Join information from the schema.
 (define (get-join-schema schema)
   (foldl (lambda (r l) 
-           (if (and (not (sql-null? (schema-join-table r))) 
-                    (or (equal? (schema-constraint-type r) "F") 
-                        (equal? (schema-constraint-type r) "R")))
+           (if (sql-null? (schema-join-table r)) l
                (let ([jn-def (findf (lambda (m) (string=? (schema-constraint r) (first m))) l)]) 
                  (if jn-def (cons (append (take jn-def 4) 
                                           (list (append (last jn-def) (list (schema-join-column r)))))
@@ -224,7 +222,7 @@
                                  (schema-join-table r)
                                  (schema-join-column r) 
                                  (schema-column r) 
-                                 (list (schema-join-column r))) l))) l)) null schema))
+                                 (list (schema-join-column r))) l))))) null schema))
 
 ;;; Find primary key fields in a table schema.
 (define (find-primary-key-fields schema col-nm-norm)
