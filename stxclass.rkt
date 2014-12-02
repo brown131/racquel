@@ -156,15 +156,13 @@
   #:attributes (cls-expr meta-expr col-defs jn-rows jn-defs)
   (pattern (table-name tbl-nm:str) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) 
-                                     (set-field! external-name m tbl-nm))
+           #:attr meta-expr #'(set-tbl-nm-m-data! tbl-nm tbl-nm)
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (table-name tbl-nm:str extern-nm:str) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! table-name m tbl-nm) 
-                                     (set-field! external-name m extern-nm))
+           #:attr meta-expr #'(set-tbl-nm-m-data! tbl-nm extern-nm)
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
@@ -188,27 +186,25 @@
            #:attr jn-defs #'(list jn-def.j-def ...))
   (pattern (primary-key pkey:id #:autoincrement flag:expr) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! primary-key m 'pkey) 
-                                     (when flag (set-field! autoincrement-key m flag)))
+           #:attr meta-expr #'(set-auto-pkey! 'pkey flag)
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:expr #:autoincrement flag:expr) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(begin (set-field! primary-key m pkey) 
-                                     (when flag (set-field! autoincrement-key m flag)))
+           #:attr meta-expr #'(set-auto-pkey! pkey flag)
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:id) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(set-field! primary-key m 'pkey)
+           #:attr meta-expr #'(set-pkey! 'pkey)
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)
   (pattern (primary-key pkey:expr) 
            #:attr cls-expr #'#f
-           #:attr meta-expr #'(set-field! primary-key m pkey) 
+           #:attr meta-expr #'(set-pkey! pkey) 
            #:attr col-defs #'null 
            #:attr jn-rows #'null 
            #:attr jn-defs #'null)

@@ -31,6 +31,12 @@
         (if (equal? sql new-sql) sql (sql-placeholder new-sql dbsys-type (+ i 1))))
       sql))
 
+;;; Escape a SQL object name.
+(define (sql-escape sql-object dbsys-type)
+  (cond [(eq? dbsys-type 'mysql) (string-append "`" sql-object "`")]
+        [(eq? dbsys-type 'sqlserver) (string-append "[" sql-object "]")]
+        [else (string-append "\"" sql-object "\"")]))
+
 ;;; Set auto-increment value retrieval SQL string by database system type.
 (define (sql-autoincrement dbsys-type (seq #f)) 
     (cond [(eq? dbsys-type 'mysql) "select last_insert_id()"]

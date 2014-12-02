@@ -31,12 +31,13 @@
   (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
     (if (equal? dbsys-type 'odbc) *odbc-dbsystem-type* dbsys-type)))
 
+;;; Set the ODBC database system type.
 (define (set-odbc-dbsystem-type! odbc-dbsys-type) (set! *odbc-dbsystem-type* odbc-dbsys-type))
 
-; Create a multi-dimensional hash table.
+;;; Create a multi-dimensional hash table.
 (define (make-multi-hash #:weak? (wk? #f)) (if wk? (make-weak-hash) (make-hash)))
 
-; Set a value given a sequence of keys.
+;;; Set a value given a sequence of keys.
 (define (multi-hash-set! hash-tbl value . keys)
   (if (null? (cdr keys)) (hash-set! hash-tbl (car keys) value)
       (if (hash-has-key? hash-tbl (car keys)) 
@@ -44,13 +45,13 @@
           (let ([h (make-multi-hash #:weak? (hash-weak? hash-tbl))]) 
             (hash-set! hash-tbl (car keys) h) (multi-hash-set! h value (cdr keys))))))
           
-; Retrieve a value given a sequence of keys.
+;;; Retrieve a value given a sequence of keys.
 (define (multi-hash-ref hash-tbl . keys) 
   (if (null? (cdr keys)) (if (hash-has-key? hash-tbl (car keys)) (hash-ref hash-tbl (car keys)) #f)
       (if (hash-has-key? hash-tbl (car keys)) 
           (multi-hash-ref (hash-ref hash-tbl (car keys)) (cdr keys)) #f)))
           
-; Test if the hash contains the given sequence of keys.
+;;; Test if the hash contains the given sequence of keys.
 (define (multi-hash-has-key? hash-tbl . keys) 
   (if (null? (cdr keys)) (hash-has-key? hash-tbl (car keys))
       (if (hash-has-key? hash-tbl (car keys)) 
@@ -78,8 +79,10 @@
          (~optional (~seq #:prepare? prep)) where-clause:expr)
       (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                     [prep? (not (or (attribute prep) #'#f))])
-        #`(let* ([tbl-nm (get-class-metadata table-name cls)]
-                 [col-nms (sort (get-column-names cls) string<?)]
+        #`(let* ([dbsys-type (dbsystem-type con)]
+                 [tbl-nm (sql-escape (get-class-metadata table-name cls) dbsys-type)]
+                 [col-nms (sort (map (λ (n) (sql-escape n dbsys-type)) 
+                                     (get-column-names cls)) string<?)]
                  [sql (string-append "select " 
                                      (string-join (map (lambda (c) (string-append tbl-nm "." c))
                                                        col-nms) ", ") 

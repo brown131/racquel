@@ -61,87 +61,66 @@
 
 ;;; SQL where-clause for a key.
 (define (key-where-clause-sql con cls key)
-  (string-append " where " 
-                 (sql-placeholder (string-join 
-                                   (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
-                                        (if (list? key) key (list key))) " and ") 
-                                  (dbsystem-type con))))
+  (let ([dbsys-type (dbsystem-type con)])
+        (string-append " where " 
+                       (sql-placeholder (string-join 
+                                         (map (lambda (f) (string-append (sql-escape 
+                                                                          (get-column-name f cls)
+                                                                          dbsys-type) "=?")) 
+                                              (if (list? key) key (list key))) " and ") 
+                                        dbsys-type))))
 
 ;;; Insert SQL.
 (define (insert-sql con cls)
-  (let ([col-nms (map (lambda (f) (get-column-name f cls)) (savable-fields con cls))])
-    (string-append "insert into " (get-class-metadata table-name cls)
+  (let* ([dbsys-type (dbsystem-type con)]
+         [col-nms (map (lambda (f) (sql-escape (get-column-name f cls) dbsys-type)) 
+                       (savable-fields con cls))])
+    (string-append "insert into " (sql-escape (get-class-metadata table-name cls) dbsys-type)
                    " (" (string-join col-nms ", ") ")"
                    " values (" (sql-placeholder (string-join (make-list (length col-nms) "?") ", ") 
-                                                (dbsystem-type con)) ")")))
+                                                dbsys-type) ")")))
 
 ;;; Update SQL.
 (define (update-sql con cls)
-  (let ([key (primary-key-fields cls)]
-        [values (sort (foldr (lambda (f l) (cons (string-append (get-column-name f cls) "=?") l)) 
-                       null (savable-fields con cls)) string<?)])
+  (let* ([dbsys-type (dbsystem-type con)]
+         [key (primary-key-fields cls)]
+         [values (sort (foldr (lambda (f l) (cons (string-append (sql-escape (get-column-name f cls)
+                                                                             dbsys-type) "=?") l)) 
+                              null (savable-fields con cls)) string<?)])
     (sql-placeholder 
-     (string-append "update " (get-class-metadata table-name cls)
+     (string-append "update " (sql-escape (get-class-metadata table-name cls) dbsys-type)
                     " set " (string-join values ", ")
                     " where " (string-join 
-                               (map (lambda (f) (string-append (get-column-name f cls) "=?")) 
+                               (map (lambda (f) (string-append (sql-escape (get-column-name f cls) 
+                                                                           dbsys-type) "=?")) 
                                     (if (list? key) key (list key))) " and ")) 
-     (dbsystem-type con))))
+     dbsys-type)))
 
 ;;; Delete SQL.
 (define (delete-sql con cls)
-  (string-append "delete from " (get-class-metadata table-name cls)
+  (string-append "delete from " (sql-escape (get-class-metadata table-name cls) (dbsystem-type con))
                  (key-where-clause-sql con cls (primary-key-fields cls))))
-
-;;; Define a data class.
-(define-syntax (data-class stx)
-  (syntax-parse stx 
-    [(_ base-cls:id elem:data-class-element ...)
-     (with-syntax ([cls-id (generate-temporary #'class-id-)])
-       #'(let* ([m (new data-class-metadata%)])
-           (unless (hash-has-key? *data-class-metadata* 'cls-id)
-             elem.meta-expr ...
-             (set-field! columns m (sort (append elem.col-defs ...) string<? 
-                                         #:key (lambda (k) (symbol->string (first k)))))
-             (set-field! joins m (append elem.jn-defs ...))
-             (hash-set! *data-class-metadata* 'cls-id m))
-           (define-member-name cls-id (get-field class-id-key m))
-           (define-member-name data-object-state (get-field state-key m))
-           (class* base-cls (data-class<%>)
-             elem.cls-expr ...
-             (field [cls-id #f]
-                    [data-object-state 'new])
-             (inspect #f)
-             (define/public (set-data-join! con jn-fld jn-cls)
-               (let* ([rows (append elem.jn-rows ...)])
-                 (map (lambda (r) (let ([obj (new jn-cls)])
-                                    (map (lambda (f v) (dynamic-set-field! f obj v)) 
-                                         (get-column-ids jn-cls) (vector->list r))
-                                    (define-member-name data-object-state 
-                                      (get-class-metadata state-key jn-cls))
-                                    (set-field! data-object-state obj 'loaded)
-                                    obj)) rows)))
-             (define/private (base-data-class cls)
-               (let-values ([(cls-nm fld-cnt fld-nms fld-acc fld-mut sup-cls skpd?) (class-info cls)])
-                 (if (data-class? cls) (if sup-cls (base-data-class sup-cls) cls) cls)))
-             (unless (get-field class (hash-ref *data-class-metadata* 'cls-id))
-               (set-field! class (hash-ref *data-class-metadata* 'cls-id) 
-                           (base-data-class this%))))))]))
 
 ;;; Define a data class with interfaces.
 (define-syntax (data-class* stx)
   (syntax-parse stx 
     [(_ base-cls:id (i-face:id ...) elem:data-class-element ...) 
-     (with-syntax ([cls-id (generate-temporary #'class-id-)])
-       #'(let* ([m (new data-class-metadata%)])
+     (with-syntax ([cls-id (generate-temporary #'class-id-)]
+                   [m-data (generate-temporary #'metadata-)])
+       #'(let* ([m-data (new data-class-metadata%)]
+                [set-tbl-nm-m-data! (λ (tbl-nm extern-nm) (set-field! table-name m-data tbl-nm) 
+                                      (set-field! external-name m-data extern-nm))]
+                [set-auto-pkey! (λ (pkey flag) (set-field! primary-key m-data pkey) 
+                                  (when flag (set-field! autoincrement-key m-data flag)))]
+                [set-pkey! (λ (pkey) (set-field! primary-key m-data pkey))])
            (unless (hash-has-key? *data-class-metadata* 'cls-id)
              elem.meta-expr ...
-             (set-field! columns m (sort (append elem.col-defs ...) string<? 
+             (set-field! columns m-data (sort (append elem.col-defs ...) string<? 
                                          #:key (lambda (k) (symbol->string (first k)))))
-             (set-field! joins m (append elem.jn-defs ...))
-             (hash-set! *data-class-metadata* 'cls-id m))
-           (define-member-name cls-id (get-field class-id-key m))
-           (define-member-name data-object-state (get-field state-key m))
+             (set-field! joins m-data (append elem.jn-defs ...))
+             (hash-set! *data-class-metadata* 'cls-id m-data))
+           (define-member-name cls-id (get-field class-id-key m-data))
+           (define-member-name data-object-state (get-field state-key m-data))
            (class* base-cls (data-class<%> i-face ...) 
              elem.cls-expr ...
              (field [cls-id #f]
@@ -162,6 +141,9 @@
              (unless (get-field class (hash-ref *data-class-metadata* 'cls-id))
                (set-field! class (hash-ref *data-class-metadata* 'cls-id) 
                            (base-data-class this%))))))]))
+
+;;; Define a data class.
+(define-syntax-rule (data-class base-cls elem ...) (data-class* base-cls (data-class<%>) elem ...))
 
 ;;; Get a data column.
 (define-syntax-rule (get-column col obj) (get-field col obj))
@@ -286,15 +268,14 @@
                                     col-nm-norm) null)]
          [auto-key (get-autoincrement-key schema dbsys-type)]
          [stx #`(let ([#,cls-nm
-                       (data-class #,base-cls
-                                   (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))
-                                   #,(append '(column) (get-schema-columns schema col-nm-norm))
-                                   (primary-key '#,pkey #:autoincrement #,auto-key)
-                                   #,(if (and gen-joins? (list? jns) (> (length jns) 0)) 
-                                         (append '(join) jns) '(begin #f))
-                                   (super-new)
-                                   #,@rest
-                                   )])
+                       (data-class* #,base-cls (data-class<%>)
+                                    (table-name #,tbl-nm #,(tbl-nm-extern tbl-nm))
+                                    #,(append '(column) (get-schema-columns schema col-nm-norm))
+                                    (primary-key '#,pkey #:autoincrement #,auto-key)
+                                    #,(if (and gen-joins? (list? jns) (> (length jns) 0)) 
+                                          (append '(join) jns) '(begin #f))
+                                    (super-new)
+                                    #,@rest)])
                   (get-class-metadata-object #,cls-nm)
                   #,cls-nm)])
     (if prnt? (syntax->datum stx) (eval-syntax stx racquel-namespace))))

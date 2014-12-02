@@ -50,12 +50,14 @@
 (define-syntax rql-> [syntax-rules () ((_ a b) (string-append a " > " b))])
 (define-syntax rql-< [syntax-rules () ((_ a b) (string-append a " < " b))])
 (define-syntax rql-like [syntax-rules () ((_ a b) (string-append a " like " b))])
-(define-syntax rql-in [syntax-rules () 
-                        ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
+(define-syntax rql-in 
+  [syntax-rules ()  ((_ a b) (string-append (~a a) " in (" (string-join (map ~a b) ",") ")"))])
 (define-syntax rql-between [syntax-rules () ((_ a b c)  (string-append a " between " b " and " c))])
 (define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
-(define-syntax rql-table-name [syntax-rules () ((_ a) (get-class-metadata table-name (get-class a)))])
-(define-syntax rql-column-name [syntax-rules () ((_ a) (get-column-name b (get-class a)))])
-(define-syntax rql-column-pair [syntax-rules () 
-                                 ((_ a b) (string-append (get-class-metadata table-name (get-class a))
-                                                         "." (get-column-name b (get-class a))))])
+(define-syntax rql-table-name 
+  [syntax-rules () ((_ a) (string-append "`" (get-class-metadata table-name (get-class a)) "`"))])
+;(define-syntax rql-column-name 
+;  [syntax-rules () ((_ a) (string-append "`" (get-column-name b (get-class a)) "`"))])
+(define-syntax rql-column-pair 
+  [syntax-rules () ((_ a b) (string-append "`" (get-class-metadata table-name (get-class a))
+                                           "`.`" (get-column-name b (get-class a)) "`"))])
