@@ -94,7 +94,7 @@
     (sql-placeholder
      (cond [(eq? *test-dbsys-type* 'mysql) sql]
            [(eq? *test-dbsys-type* 'sqlserver) 
-            (string-replace (string-replace sql "[" "\"") "]" "\"")]
+            (string-replace (string-replace sql "[" "`") "]" "`")]
            [else (string-replace sql "\"" "`")]) *test-dbsys-type*))
 
 (define-test-suite test-define-data-object
@@ -155,23 +155,22 @@
     (test-equal? "savable field ok?" (savable-fields *con* test-class%) '(description id name x))
     (test-equal? "primary key fields ok?" (primary-key-fields test-class%) '(id))
     (test-equal? "where clause ok?" 
-                 (key-where-clause-sql *con* test-class% (primary-key-fields test-class%)) 
-                 (standardize-sql" where `id`=?"))
-    (test-equal? "insert sql ok?" (insert-sql *con* test-class%) 
-                 (standardize-sql "insert into `test` (`description`, `id`, `name`, `x`) \
-values (?, ?, ?, ?)"))
-    (test-equal? "update sql ok?" (update-sql *con* test-class%) 
-                 (standardize-sql "update `test` set `description`=?, `id`=?, `name`=?, `x`=? \
-where `id`=?"))
-    (test-equal? "delete sql ok?" (delete-sql *con* test-class%) 
-                 (standardize-sql "delete from `test` where `id`=?"))
-    (test-equal? "select sql ok?" (make-select-statement *con* test-class% #:print? #t "where id=?") 
-                 (standardize-sql 
+                 (standardize-sql (key-where-clause-sql *con* test-class% 
+                                                        (primary-key-fields test-class%))) 
+                 " where `id`=?")
+    (test-equal? "insert sql ok?" (standardize-sql (insert-sql *con* test-class%))
+                 "insert into `test` (`description`, `id`, `name`, `x`) values (?, ?, ?, ?)")
+    (test-equal? "update sql ok?" (standardize-sql (update-sql *con* test-class%))
+                 "update `test` set `description`=?, `id`=?, `name`=?, `x`=? where `id`=?")
+    (test-equal? "delete sql ok?" (standardize-sql (delete-sql *con* test-class%))
+                 "delete from `test` where `id`=?")
+    (test-equal? "select sql ok?" 
+                 (standardize-sql (make-select-statement *con* test-class% #:print? #t "where id=?"))
                   "select `test`.`description`, `test`.`id`, `test`.`name`, `test`.`x` \
-from `test` where id=?"))
-    (test-equal? "select all sql ok?" (make-select-statement *con* test-class% #:print? #t "") 
-                 (standardize-sql "select `test`.`description`, `test`.`id`, `test`.`name`, \
-`test`.`x` from `test` "))
+from `test` where id=?")
+    (test-equal? "select all sql ok?" 
+                 (standardize-sql (make-select-statement *con* test-class% #:print? #t ""))
+                 "select `test`.`description`, `test`.`id`, `test`.`name`, `test`.`x` from `test` ")
     ))
 
 
@@ -369,20 +368,19 @@ from `test` where id=?"))
     (test-equal? "savable field ok?" 
                  (sort (savable-fields *con* simple%) string<? #:key symbol->string) 
                  '(description id name x))
-    (test-equal? "where clause ok?" (key-where-clause-sql *con* simple% (primary-key-fields simple%)) 
-                 (standardize-sql " where `id`=?"))
-    (test-equal? "insert sql ok?" (insert-sql *con* simple%) 
-                 (standardize-sql "insert into `simple` (`description`, `id`, `name`, `x`) \
-values (?, ?, ?, ?)"))
-    (test-equal? "update sql ok?" (update-sql *con* simple%) 
-                 (standardize-sql "update `simple` set `description`=?, `id`=?, `name`=?, `x`=? \
-where `id`=?"))
-    (test-equal? "delete sql ok?" (delete-sql *con* simple%) 
-                 (standardize-sql "delete from `simple` where `id`=?"))
-    (test-equal? "select sql ok?" (make-select-statement *con* simple% #:print? #t "where id=?") 
-                 (standardize-sql 
-                  "select `simple`.`description`, `simple`.`id`, `simple`.`name`, `simple`.`x` \
-from `simple` where id=?"))
+    (test-equal? "where clause ok?" 
+                 (standardize-sql (key-where-clause-sql *con* simple% (primary-key-fields simple%))) 
+                 " where `id`=?")
+    (test-equal? "insert sql ok?" (standardize-sql (insert-sql *con* simple%))
+                 "insert into `simple` (`description`, `id`, `name`, `x`) values (?, ?, ?, ?)")
+    (test-equal? "update sql ok?" (standardize-sql (update-sql *con* simple%))
+                 "update `simple` set `description`=?, `id`=?, `name`=?, `x`=? where `id`=?")
+    (test-equal? "delete sql ok?" (standardize-sql (delete-sql *con* simple%))
+                 "delete from `simple` where `id`=?")
+    (test-equal? "select sql ok?" 
+                 (standardize-sql (make-select-statement *con* simple% #:print? #t "where id=?"))
+                 "select `simple`.`description`, `simple`.`id`, `simple`.`name`, `simple`.`x` \
+from `simple` where id=?")
   
     (define x-val (if (eq? (dbsystem-name (connection-dbsystem *con*)) 'odbc) 15 1.5))
     
@@ -475,20 +473,21 @@ from `simple` where id=?"))
       (test-equal? "object class ok?" (object-class obj) auto%)
       
       (test-equal? "savable field ok?" (savable-fields *con* auto%) '(description name))
-      (test-equal? "where clause ok?" (key-where-clause-sql *con* auto% (primary-key-fields auto%)) 
-                   (standardize-sql " where `id`=?"))
-      (test-equal? "insert sql ok?" (insert-sql *con* auto%) 
-                   (standardize-sql "insert into `auto` (`description`, `name`) values (?, ?)"))
-      (test-equal? "update sql ok?" (update-sql *con* auto%) 
-                   (standardize-sql "update `auto` set `description`=?, `name`=? where `id`=?"))
-      (test-equal? "delete sql ok?" (delete-sql *con* auto%) 
-                   (standardize-sql "delete from `auto` where `id`=?"))
-      (test-equal? "select sql ok?" (make-select-statement *con* auto% #:print? #t "where id=?") 
-                   (standardize-sql "select `auto`.`description`, `auto`.`id`, `auto`.`name` \
-from `auto` where id=?"))
-      (test-equal? "select all sql ok?" (make-select-statement *con* auto% #:print? #t "") 
-                   (standardize-sql "select `auto`.`description`, `auto`.`id`, `auto`.`name` \
-from `auto` "))
+      (test-equal? "where clause ok?" 
+                   (standardize-sql (key-where-clause-sql *con* auto% (primary-key-fields auto%))) 
+                   " where `id`=?")
+      (test-equal? "insert sql ok?" (standardize-sql (insert-sql *con* auto%))
+                   "insert into `auto` (`description`, `name`) values (?, ?)")
+      (test-equal? "update sql ok?" (standardize-sql (update-sql *con* auto%))
+                   "update `auto` set `description`=?, `name`=? where `id`=?")
+      (test-equal? "delete sql ok?" (standardize-sql (delete-sql *con* auto%)) 
+                   "delete from `auto` where `id`=?")
+      (test-equal? "select sql ok?" 
+                   (standardize-sql (make-select-statement *con* auto% #:print? #t "where id=?")) 
+                   "select `auto`.`description`, `auto`.`id`, `auto`.`name` from `auto` where id=?")
+      (test-equal? "select all sql ok?" 
+                   (standardize-sql (make-select-statement *con* auto% #:print? #t "")) 
+                   "select `auto`.`description`, `auto`.`id`, `auto`.`name` from `auto` ")
       
       (test-case "columns set?"
                  (set-column! name obj "test")
@@ -585,24 +584,26 @@ from `auto` "))
       (test-equal? "savable field ok?" (savable-fields *con* multipartkey%) 
                    '(auto-id description name simple-id))
       (test-equal? "where clause ok?" 
-                   (key-where-clause-sql *con* multipartkey% (primary-key-fields multipartkey%)) 
-                   (standardize-sql " where `auto_id`=? and `simple_id`=?"))
-      (test-equal? "insert sql ok?" (insert-sql *con* multipartkey%) 
-                   (standardize-sql "insert into `multipartkey` \
-(`auto_id`, `description`, `name`, `simple_id`) values (?, ?, ?, ?)"))
-      (test-equal? "update sql ok?" (update-sql *con* multipartkey%) 
-                   (standardize-sql "update `multipartkey` \
-set `auto_id`=?, `description`=?, `name`=?, `simple_id`=? where `auto_id`=? and `simple_id`=?"))
-      (test-equal? "delete sql ok?" (delete-sql *con* multipartkey%) 
-                   (standardize-sql "delete from `multipartkey` where `auto_id`=? and `simple_id`=?"))
+                   (standardize-sql (key-where-clause-sql *con* multipartkey% 
+                                                          (primary-key-fields multipartkey%))) 
+                   " where `auto_id`=? and `simple_id`=?")
+      (test-equal? "insert sql ok?" (standardize-sql (insert-sql *con* multipartkey%))
+                   "insert into `multipartkey` (`auto_id`, `description`, `name`, `simple_id`) \
+values (?, ?, ?, ?)")
+      (test-equal? "update sql ok?" (standardize-sql (update-sql *con* multipartkey%))
+                   "update `multipartkey` set `auto_id`=?, `description`=?, `name`=?, `simple_id`=? \
+where `auto_id`=? and `simple_id`=?")
+      (test-equal? "delete sql ok?" (standardize-sql (delete-sql *con* multipartkey%))
+                   "delete from `multipartkey` where `auto_id`=? and `simple_id`=?")
       (test-equal? "select sql ok?" 
-                   (make-select-statement *con* multipartkey% #:print? #t 
-                                          "where auto=? and simple_id=?") 
-                   (standardize-sql "select `multipartkey`.`auto_id`, `multipartkey`.`description`, \
-`multipartkey`.`name`, `multipartkey`.`simple_id` from `multipartkey` where auto=? and simple_id=?"))
-      (test-equal? "select all sql ok?" (make-select-statement *con* multipartkey% #:print? #t "") 
-                   (standardize-sql "select `multipartkey`.`auto_id`, `multipartkey`.`description`, \
-`multipartkey`.`name`, `multipartkey`.`simple_id` from `multipartkey` "))
+                   (standardize-sql (make-select-statement *con* multipartkey% #:print? #t 
+                                                           "where auto=? and simple_id=?"))
+                   "select `multipartkey`.`auto_id`, `multipartkey`.`description`, \
+`multipartkey`.`name`, `multipartkey`.`simple_id` from `multipartkey` where auto=? and simple_id=?")
+      (test-equal? "select all sql ok?" 
+                   (standardize-sql (make-select-statement *con* multipartkey% #:print? #t ""))
+                   "select `multipartkey`.`auto_id`, `multipartkey`.`description`, \
+`multipartkey`.`name`, `multipartkey`.`simple_id` from `multipartkey` ")
       
       (test-case "columns set?"
                  (set-column! auto-id obj 1)
@@ -789,9 +790,8 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                (check-eq? (get-column last-name nobj) #f)
                (check-eq? (get-column age nobj) #f))
     
-    (test-equal? "insert sql ok?" (insert-sql *con* person%) 
-                 (standardize-sql "insert into `person` (`age`, `first_name`, `id`, `last_name`) \
-values (?, ?, ?, ?)"))
+    (test-equal? "insert sql ok?" (standardize-sql (insert-sql *con* person%))
+                 "insert into `person` (`age`, `first_name`, `id`, `last_name`) values (?, ?, ?, ?)")
    
     (test-case "object inserted?" 
                (insert-data-object *con* nobj)
@@ -995,11 +995,12 @@ values (?, ?, ?, ?)"))
     (test-eq? "address class metadata added?" (length (hash->list *data-class-metadata*)) 2)
     (test-eq? "address class metadata ok?" (get-class-metadata table-name address%) "address")
     
-    (test-equal? "select sql ok?" (select-data-object *con* address% #:print? #t 
-                                                      (where (and (= id ?) (= city ?))) 1 'Chicago) 
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
+    (test-equal? "select sql ok?" 
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (where (and (= id ?) (= city ?))) 1 'Chicago)) 
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where (`id` = ? and `city` = ?)"))
+from `address` where (`id` = ? and `city` = ?)")
     (test-true "rql select runs?" 
               (is-a? (select-data-object *con* address% 
                                          (where (and (= id ?) (= city ?))) 1 "Chicago") address%))
@@ -1016,114 +1017,127 @@ from `address` where (`id` = ? and `city` = ?)"))
                  (check-equal? (get-field city a) "Chicago")
                  (check-eq? (data-object-state a) 'loaded)))
 
-    (test-equal? "select with sql ok?"(select-data-object *con* address%  #:print? #t 
-                                                          "join person on person.id = \
-address.person_id where address.id = 1")
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` join person on person.id = address.person_id where address.id = 1"))
+    (test-equal? "select with sql ok?"
+                 (standardize-sql (select-data-object *con* address%  #:print? #t 
+                                                      "join person on person.id = \
+address.person_id where address.id = 1"))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` join person on person.id = address.person_id where address.id = 1")
 
     (test-equal? "select join sql ok?" 
-                 (select-data-object *con* address% #:print? #t 
-                                     (join person% (= id person-id)) 
-                                     (where (= (address% id) 1)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` join `person` on `id` = `person_id` where `address`.`id` = 1"))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (join person% (= id person-id)) 
+                                                      (where (= (address% id) 1))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` join `person` on `id` = `person_id` where `address`.`id` = 1")
     (test-equal? "select join sql ok?" 
-                 (select-data-object *con* address% #:print? #t 
-                                     (join person% (= (person% id) person-id)) 
-                                     (where (= id ?)) 2)
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` join `person` on `person`.`id` = `person_id` where `id` = ?"))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (join person% (= (person% id) person-id)) 
+                                                      (where (= id ?)) 2))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` join `person` on `person`.`id` = `person_id` where `id` = ?")
     (test-equal? "select left join sql ok?" 
-                 (select-data-object *con* address% #:print? #t 
-                                     (left-join person% (= (person% id) person-id)) 
-                                     (where (= id ?)) 2)
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` left outer join `person` on `person`.`id` = `person_id` where `id` = ?"))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (left-join person% (= (person% id) person-id)) 
+                                                      (where (= id ?)) 2))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` left outer join `person` on `person`.`id` = `person_id` where `id` = ?")
     (test-equal? "select right join sql ok?" 
-                 (select-data-object *con* address% #:print? #t 
-                                     (right-join person% (= (person% id) person-id)) 
-                                     (where (= id ?)) 2)
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` right outer join `person` on `person`.`id` = `person_id` where `id` = ?"))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (right-join person% (= (person% id) person-id)) 
+                                                      (where (= id ?)) 2))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` right outer join `person` on `person`.`id` = `person_id` where `id` = ?")
     (test-equal? "select joins sql ok?" 
-                 (select-data-object *con* address% #:print? #t 
-                                     (join person% (= (person% id) (address% person-id))) 
-                                     (join address% (= (person% id) (address% person-id))) 
-                                     (where (= (address% id) 1)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
+                 (standardize-sql 
+                  (select-data-object *con* address% #:print? #t 
+                                      (join person% (= (person% id) (address% person-id))) 
+                                      (join address% (= (person% id) (address% person-id))) 
+                                      (where (= (address% id) 1))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
 from `address` join `person` on `person`.`id` = `address`.`person_id` \
-join `address` on `person`.`id` = `address`.`person_id` where `address`.`id` = 1"))
+join `address` on `person`.`id` = `address`.`person_id` where `address`.`id` = 1")
     
-    (test-equal? "select = ok?" (select-data-object *con* address% #:print? #t (where (= city ?)))
-                 (standardize-sql  "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` = ?"))
-    (test-equal? "select <> ok?" (select-data-object *con* address% #:print? #t (where (<> city ?)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` <> ?"))
-    (test-equal? "select >= ok?" (select-data-object *con* address% #:print? #t (where (>= city ?)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` >= ?"))
-    (test-equal? "select <= ok?" (select-data-object *con* address% #:print? #t (where (<= city ?)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` <= ?"))
-    (test-equal? "select > ok?" (select-data-object *con* address% #:print? #t (where (> city ?)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` > ?"))
-    (test-equal? "select < ok?" (select-data-object *con* address% #:print? #t (where (< city ?)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` < ?"))                
-    (test-equal? "select like ok?" (select-data-object *con* address% #:print? #t 
-                                                       (where (like city ?)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` like ?"))
-    (test-equal? "select like literal ok?" (select-data-object *con* address% #:print? #t 
-                                                               (where (like city "'%test%'")))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `city` like '%test%'"))
-    (test-equal? "select in  ok?" 
-                 (select-data-object *con* address% #:print? #t (where (in id '(? ? ?))))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `id` in (?,?,?)"))
+    (test-equal? "select = ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                     (where (= city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` = ?")
+    (test-equal? "select <> ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                      (where (<> city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` <> ?")
+    (test-equal? "select >= ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                      (where (>= city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` >= ?")
+    (test-equal? "select <= ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                      (where (<= city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` <= ?")
+    (test-equal? "select > ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                     (where (> city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` > ?")
+    (test-equal? "select < ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                     (where (< city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` < ?")          
+    (test-equal? "select like ok?" (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                        (where (like city ?))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` like ?")
+    (test-equal? "select like literal ok?" 
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (where (like city "'%test%'"))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `city` like '%test%'")
+    (test-equal? "select in  ok?"  (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                                        (where (in id '(? ? ?)))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `id` in (?,?,?)")
     (test-equal? "select in with parameters ok?" 
-                 (select-data-object *con* address% #:print? #t (where (in id (make-list 3 '?))))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `id` in (?,?,?)"))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (where (in id (make-list 3 '?)))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `id` in (?,?,?)")
     (test-equal? "select in with literal ok?" 
-                 (select-data-object *con* address% #:print? #t (where (in (address% id) '(1 2 3))))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `address`.`id` in (1,2,3)"))
-    (define (test-in in-lst) (select-data-object *con* address% #:print? #t (where (in id in-lst))))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (where (in (address% id) '(1 2 3)))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `address`.`id` in (1,2,3)")
+    (define (test-in in-lst) 
+      (standardize-sql (select-data-object *con* address% #:print? #t (where (in id in-lst)))))
     (test-equal? "select in with list ok?" (test-in '(1 2 3))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `id` in (1,2,3)"))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `id` in (1,2,3)")
     (test-equal? "select in with list ok?" (test-in '(4 5 6))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `id` in (4,5,6)"))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `id` in (4,5,6)")
     (test-equal? "select between ok?" 
-                 (select-data-object *con* address% #:print? #t (where (between id 1 3)))
-                 (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
-`address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where `id` between 1 and 3"))
+                 (standardize-sql (select-data-object *con* address% #:print? #t 
+                                                      (where (between id 1 3))))
+                 "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
+`address`.`state`, `address`.`zip_code` \
+from `address` where `id` between 1 and 3")
      ))
 
 
