@@ -58,20 +58,20 @@
   (pattern (in a:rql-expr b:expr) #:with expr #'(rql-in a.expr b))
   (pattern (between a:rql-expr b:rql-expr c:rql-expr) #:with expr 
            #'(rql-between a.expr b.expr c.expr))
-  (pattern i:id #:with expr #'(~a 'i))
+  (pattern i:id #:with expr #'(get-column-name-from-context 'i ctxt))
   (pattern s:str #:with expr #'s)
   (pattern n:nat #:with expr #'(~a n))
-  (pattern (p1:expr p2:expr) #:with expr #'(rql-column-pair p1 'p2)))
+  (pattern (p1:expr p2:expr) #:with expr #'(rql-column-pair p1 'p2 ctxt)))
 
 (define-syntax-class join-expr 
   #:description "rql join expression"
   #:literals (join left-join right-join)
   (pattern (join table:id rql:rql-expr) #:with expr 
-           #'(string-append "join " (rql-table-name 'table) " on " rql.expr " "))
+           #'(string-append "join " (rql-table-name 'table ctxt) " on " rql.expr " "))
   (pattern (left-join table:id rql:rql-expr) #:with expr 
-           #'(string-append "left outer join " (rql-table-name 'table) " on " rql.expr " "))
+           #'(string-append "left outer join " (rql-table-name 'table ctxt) " on " rql.expr " "))
   (pattern (right-join table:id rql:rql-expr) #:with expr 
-           #'(string-append "right outer join " (rql-table-name 'table) " on " rql.expr " ")))
+           #'(string-append "right outer join " (rql-table-name 'table ctxt) " on " rql.expr " ")))
 
 (define-syntax-class where-expr 
   #:description "rql where expression"

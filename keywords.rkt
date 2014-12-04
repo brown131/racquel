@@ -55,9 +55,12 @@
 (define-syntax rql-between [syntax-rules () ((_ a b c)  (string-append a " between " b " and " c))])
 (define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
 (define-syntax rql-table-name 
-  [syntax-rules () ((_ a) (string-append "`" (get-class-metadata table-name (get-class a)) "`"))])
-;(define-syntax rql-column-name 
-;  [syntax-rules () ((_ a) (string-append "`" (get-column-name b (get-class a)) "`"))])
+  [syntax-rules () ((_ a b) (string-append "`" (begin (set! b (cons a b))
+                                                      (get-class-metadata table-name (get-class a))) 
+                                           "`"))])
+(define-syntax rql-column-name 
+  [syntax-rules () ((_ a) (string-append "`" (get-column-name-from-context a ctxt) "`"))])
 (define-syntax rql-column-pair 
-  [syntax-rules () ((_ a b) (string-append "`" (get-class-metadata table-name (get-class a))
-                                           "`.`" (get-column-name b (get-class a)) "`"))])
+  [syntax-rules () ((_ a b c) (string-append "`" (begin (set! c (cons a c))
+                                                        (get-class-metadata table-name (get-class a)))
+                                             "`.`" (get-column-name b (get-class a)) "`"))])

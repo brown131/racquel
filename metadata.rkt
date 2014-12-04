@@ -128,7 +128,15 @@
                      (if col-def (second col-def) 
                          (error (format "column name for id ~a class ~a not found" f cls))))
       (raise-argument-error 'get-column-name "argument ~a is not a class" cls)))
-         
+
+;;; Get a column name from the context list.
+(define (get-column-name-from-context col-fld ctxt)
+    (let ([col-nm (for*/first ([cls-nm ctxt]
+                               [col-def (get-class-metadata columns (get-class cls-nm))]
+                               #:when (equal? col-fld (first col-def)))
+                    (second col-def))])
+      (if col-nm (string-append "`" col-nm "`") (~a col-fld))))
+
 ;;; Get the column id for a column name in a class.
 (define (get-column-id col-nm cls)
     (if (class? cls) (let ([col-def (findf (lambda (c) (equal? col-nm (second c))) 

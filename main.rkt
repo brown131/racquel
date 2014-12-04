@@ -107,7 +107,8 @@
     [(_ base-cls:id (i-face:id ...) elem:data-class-element ...) 
      (with-syntax ([cls-id (generate-temporary #'class-id-)]
                    [m-data (generate-temporary #'metadata-)])
-       #'(let* ([m-data (new data-class-metadata%)]
+       #'(let* ([ctxt null]
+                [m-data (new data-class-metadata%)]
                 [set-tbl-nm-m-data! (λ (tbl-nm extern-nm) (set-field! table-name m-data tbl-nm) 
                                       (set-field! external-name m-data extern-nm))]
                 [set-auto-pkey! (λ (pkey flag) (set-field! primary-key m-data pkey) 
@@ -324,8 +325,9 @@
         join:join-expr ... where:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
-       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? 
-                                           (string-append join.expr ... where.expr))])
+       #'(let* ([ctxt (list cls)]
+                [sql (make-select-statement con cls #:print? prnt? #:prepare? prep? 
+                                            (string-append join.expr ... where.expr))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
     ;; Select with SQL string.
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr)) 
@@ -344,7 +346,8 @@
         join:join-expr ... where:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
-       #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? 
+       #'(let* ([ctxt (list cls)]
+                [sql (make-select-statement con cls #:print? prnt? #:prepare? prep? 
                                            (string-append join.expr ... where.expr))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) 
                               (query-rows con sql rest ...)))))]

@@ -999,7 +999,7 @@ values (?, ?, ?, ?)"))
                                                       (where (and (= id ?) (= city ?))) 1 'Chicago) 
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where (id = ? and city = ?)"))
+from `address` where (`id` = ? and `city` = ?)"))
     (test-true "rql select runs?" 
               (is-a? (select-data-object *con* address% 
                                          (where (and (= id ?) (= city ?))) 1 "Chicago") address%))
@@ -1025,32 +1025,32 @@ from `address` join person on person.id = address.person_id where address.id = 1
 
     (test-equal? "select join sql ok?" 
                  (select-data-object *con* address% #:print? #t 
-                                     (join person% (= (person% id) (address% person-id))) 
+                                     (join person% (= id person-id)) 
                                      (where (= (address% id) 1)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` join `person` on `person`.`id` = `address`.`person_id` where `address`.`id` = 1"))
+from `address` join `person` on `id` = `person_id` where `address`.`id` = 1"))
     (test-equal? "select join sql ok?" 
                  (select-data-object *con* address% #:print? #t 
-                                     (join person% (= (person% id) person_id)) 
+                                     (join person% (= (person% id) person-id)) 
                                      (where (= id ?)) 2)
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` join `person` on `person`.`id` = person_id where id = ?"))
+from `address` join `person` on `person`.`id` = `person_id` where `id` = ?"))
     (test-equal? "select left join sql ok?" 
                  (select-data-object *con* address% #:print? #t 
-                                     (left-join person% (= (person% id) person_id)) 
+                                     (left-join person% (= (person% id) person-id)) 
                                      (where (= id ?)) 2)
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` left outer join `person` on `person`.`id` = person_id where id = ?"))
+from `address` left outer join `person` on `person`.`id` = `person_id` where `id` = ?"))
     (test-equal? "select right join sql ok?" 
                  (select-data-object *con* address% #:print? #t 
-                                     (right-join person% (= (person% id) person_id)) 
+                                     (right-join person% (= (person% id) person-id)) 
                                      (where (= id ?)) 2)
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` right outer join `person` on `person`.`id` = person_id where id = ?"))
+from `address` right outer join `person` on `person`.`id` = `person_id` where `id` = ?"))
     (test-equal? "select joins sql ok?" 
                  (select-data-object *con* address% #:print? #t 
                                      (join person% (= (person% id) (address% person-id))) 
@@ -1064,47 +1064,47 @@ join `address` on `person`.`id` = `address`.`person_id` where `address`.`id` = 1
     (test-equal? "select = ok?" (select-data-object *con* address% #:print? #t (where (= city ?)))
                  (standardize-sql  "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city = ?"))
+from `address` where `city` = ?"))
     (test-equal? "select <> ok?" (select-data-object *con* address% #:print? #t (where (<> city ?)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city <> ?"))
+from `address` where `city` <> ?"))
     (test-equal? "select >= ok?" (select-data-object *con* address% #:print? #t (where (>= city ?)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city >= ?"))
+from `address` where `city` >= ?"))
     (test-equal? "select <= ok?" (select-data-object *con* address% #:print? #t (where (<= city ?)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city <= ?"))
+from `address` where `city` <= ?"))
     (test-equal? "select > ok?" (select-data-object *con* address% #:print? #t (where (> city ?)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city > ?"))
+from `address` where `city` > ?"))
     (test-equal? "select < ok?" (select-data-object *con* address% #:print? #t (where (< city ?)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city < ?"))                
+from `address` where `city` < ?"))                
     (test-equal? "select like ok?" (select-data-object *con* address% #:print? #t 
                                                        (where (like city ?)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city like ?"))
+from `address` where `city` like ?"))
     (test-equal? "select like literal ok?" (select-data-object *con* address% #:print? #t 
                                                                (where (like city "'%test%'")))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where city like '%test%'"))
+from `address` where `city` like '%test%'"))
     (test-equal? "select in  ok?" 
                  (select-data-object *con* address% #:print? #t (where (in id '(? ? ?))))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where id in (?,?,?)"))
+from `address` where `id` in (?,?,?)"))
     (test-equal? "select in with parameters ok?" 
                  (select-data-object *con* address% #:print? #t (where (in id (make-list 3 '?))))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where id in (?,?,?)"))
+from `address` where `id` in (?,?,?)"))
     (test-equal? "select in with literal ok?" 
                  (select-data-object *con* address% #:print? #t (where (in (address% id) '(1 2 3))))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
@@ -1114,16 +1114,16 @@ from `address` where `address`.`id` in (1,2,3)"))
     (test-equal? "select in with list ok?" (test-in '(1 2 3))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where id in (1,2,3)"))
+from `address` where `id` in (1,2,3)"))
     (test-equal? "select in with list ok?" (test-in '(4 5 6))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where id in (4,5,6)"))
+from `address` where `id` in (4,5,6)"))
     (test-equal? "select between ok?" 
                  (select-data-object *con* address% #:print? #t (where (between id 1 3)))
                  (standardize-sql "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
-from `address` where id between 1 and 3"))
+from `address` where `id` between 1 and 3"))
      ))
 
 
