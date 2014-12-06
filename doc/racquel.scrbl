@@ -20,13 +20,15 @@
 @;;;; You should have received a copy of the GNU General Public License
 @;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-@(require racquel
+@(require racquel 
           scribble/manual scribble/eval scribble/bnf
           (for-label racket)
           (for-syntax racket/base racket/class racket/serialize))
 
 @title{Racquel: An Object/Relational Mapper for Racket}
  
+@author{Scott Brown}
+
 Racquel is an object/relational mapper for Racket. It consists of several components.
 
 @itemlist[@item{An extension of Racket's class system that allows mapping of database tables to 
@@ -41,11 +43,12 @@ Racquel supports connectivity to all the database systems provided by Racket's
 @link["http://docs.racket-lang.org/db/"]{DB} package, which are: MySQL, PostgreSQL, SQLite3, and 
 through ODBC: SQL Server, Oracle, and DB/2.
 
-Racquel can be used by installing the package from 
-@link["https://github.com/brown131/racquel"]{GitHub}. Or, as of Racket 6.0, it can be downloaded 
-using the Package Manager in DrRacket.
+Racquel can be used by installing the package using the Package Manager in DrRacket or from
+@link["https://github.com/brown131/racquel"]{GitHub}.
 
 @defmodule[racquel]
+
+@table-of-contents[]
 
 @section[#:tag "dataclass"]{Data Class Mapping}
  
@@ -60,10 +63,10 @@ Below is an example of a @racket[data-class] with mapping expressions.
     (column (vehicle-id #f "Vehicle_Id") (make #f "Make") 
             (year 0 "Year") (axels 1 "Axels"))
     (primary-key vehicle-id)
-    (join owner customer% #:cardinality 'one-to-one  
-          (where (= (customer% customer-id) (vehicle% customer-id))))
+    (join [owner customer% #:cardinality 'one-to-one  
+                 (where (= (customer% id) (vehicle% customer-id)))])
     (define/public (wheels)
-      (* (get-field axels this) 2))
+      (* (get-column axels this) 2))
     (super-new)))]
 
 Here a database table named "Vehicle" is mapped to the @racket[vehicle%] data class. Columns are 
@@ -150,7 +153,7 @@ This is analagous to the @racket[class] definition, where the interface expressi
 }
  
 @defproc[(data-class? [v any/c]) boolean?]{
-Returns @racket[#t] if @racket[v] is a dtata class, @racket[#f] otherwise.
+Returns @racket[#t] if @racket[v] is a data class, @racket[#f] otherwise.
 }
   
 @defproc[(data-class-info [class data-class?])
@@ -383,7 +386,8 @@ where lastname in (select lastname from employee where active = 1)")
 }|
 }
   
-@defproc[(data-object-state [data-object data-object?]) (or/c 'new 'loaded 'saved 'deleted)]{
+@defproc[(data-object-state [data-object data-object?]) 
+         (or/c 'new 'loaded 'saved 'deleted 'deserialized)]{
 Returns the current state of the data object.
 
 @itemize[
@@ -393,6 +397,8 @@ Returns the current state of the data object.
   @item{@racket['saved]: the state of a data object that has been saved to the database after being 
          either newly created or loaded from the database;}
   @item{@racket['deleted]: the state of a data object that has been deleted from the database;}
+  @item{@racket['deserialized]: the state of a data object that has been deserialized from a JSON or 
+         XML expression.}
 ]
 }
   
@@ -491,9 +497,7 @@ A @racket[join] clause may also be defined in a @racket[data-class] declaration,
 a slightly different form (see @racket[data-class*] above. For instance, the @racket[join] clause, 
 expresses the equivalent of the SQL-expression "JOIN PERSON ON PERSON.ID = ADDRESS.PERSON_ID".
 
-@verbatim|{
-(join person% (= (person% id) (address% person-id)))
-}|
+@racketblock[(join person% (= (person% id) (address% person-id)))]
      
 @subsection[#:tag "where"]{The @racket[where] clause}
 
@@ -506,12 +510,41 @@ Currently only a subset of SQL is supported. Subqueries and existence functions 
 
 @subsection[#:tag "examples"]{RQL examples}
 
+Here is an example of a simple join which returns all address for a person with the last name 
+"O'Brien". A parameter is used so that the quote in the name is properly escaped in the generated SQL 
+statement.
+@racketblock[
+(select-data-object con address% 
+                    (join person% (= (person% person-id) 
+                                     (address% person-id))) 
+                    (where (= (person% last-name) ?)) "O'Brien")
+]
+
+Below is an example of an @racket[in] clause which loads three albums by title.
+@racketblock[
+(select-data-objects con album% (where (in title (make-list 3 '?))) 
+                     "Inflammable Material" "London Calling" "Ramones")
+]
+
+This @racket[in] clause uses a list of ids to retrieve the account data objects:
+@racketblock[
+(define account-ids '(5 23 17))
+(select-data-objects con account% (where (in id account-ids)))
+]
+
+Because the @racket[#:print?] keyword is true, the query will return the SQL that would be used to 
+select the objects from the database. The @racket[?] is the RQL parameter placeholder and will be 
+translated into the appropriate placeholder for the SQL dialect used by the connection, e.g. "$1".
+@racketblock[
+(select-data-objects con address% #:print? #t (where (>= id ?)) min-id)
+]
+
 Below is an example of a manually defined data class map. This class implements interface 
 @racket[my-interface,%>]. It also has
 a column @racket[x] which is required to be specified when a new instance of the class is created. 
 There is also a one-to-one join to an object of class @racket[object%] where the id column of the 
 object equals 1.
-@verbatim|{
+@racketblock[
 (define my-class% (data-class* object% (my-interface<%>)
                                    (table-name "test")
                                    (column [id #f ("id" "Id")] 
@@ -524,49 +557,18 @@ object equals 1.
                                    (primary-key id)
                                    (define/public (test) (x + 1))
                                    (super-new)))
-                                   }|
+]
 
 This creates an instance of the class above. Note that @racket[x] must be specified.
-@verbatim|{
-(define obj (new test-class% [x 2]))
-}|
+@racketblock[(define obj (new test-class% [x 2]))]
 
 Generate a class @racket[book%] from the table Book in the Library database, with joins and reverse 
 joins.
-@verbatim|{
+@racketblock[
 (define book% (gen-data-class con "Book" 
                #:schema-name "Library"
-               #:generate-joins? #t #:generate-reverse-joins? #t)
-}|
-
-Because the @racket[#:print?] keyword is true, the query will return the SQL that would be used to 
-select the objects from the database. The @racket[?] is the RQL parameter placeholder and will be 
-translated into the appropriate placeholder for the SQL dialect used by the connection, e.g. "$1".
-@verbatim|{
-(select-data-objects con address% #:print? #t (where (>= id ?)) min-id)
-}|
-
-Here is an example of a simple join which returns all address for a person with the last name 
-"O'Brien". A parameter is used so that the quote in the name is properly escaped in the generated SQL 
-statement.
-@verbatim|{
-(select-data-object con address% 
-                    (join person% (= (person% person-id) 
-                                     (address% person-id))) 
-                    (where (= (person% last-name) ?)) "O'Brien")
-}|
-
-Below is an example of an @racket[in] clause which loads three albums by title.
-@verbatim|{
-(select-data-objects con album% (where (in title (make-list 3 '?))) 
-                     "Inflammable Material" "London Calling" "Ramones")
-}|
-
-This @racket[in] clause uses a list of ids to retrieve the account data objects:
-@verbatim|{
-(define account-ids '(5 23 17))
-(select-data-objects con account% (where (in id account-ids)))) 
-}|
+               #:generate-joins? #t #:generate-reverse-joins? #t))
+]
 
 @section[#:tag "serialization"]{Data Object Serialization}
 
@@ -575,7 +577,7 @@ Serializes a data object into a JS-expression.
 }
 
 @defproc[(jsexpr->data-object [jsx jsexpr?]) (data-object?)]{
-Creates a data object from a JS-expression string.
+Creates a data object from a JS-expression.
 }
 
 @defproc[(data-object->xexpr [object data-object?]) (xexpr?)]{

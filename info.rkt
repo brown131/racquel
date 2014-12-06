@@ -27,6 +27,6 @@
 (define categories '(devtools))
 (define can-be-loaded-with 'all)
 (define required-core-version "5.3.16")
-(define scribblings '(("doc/racquel.scrbl")))
+(define scribblings '(("doc/racquel.scrbl" (multi-page))))
 (define primary-file "main.rkt")
 (define deps (list "base" "db-lib" "rackunit-lib"))
