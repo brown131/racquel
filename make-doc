@@ -1,2 +1,3 @@
 cd doc
-raco scribble --htmls racquel.scrbl
+scribble --htmls +m --redirect-main http://docs.racket-lang.org/ racquel.scrbl 
+

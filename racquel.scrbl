@@ -22,7 +22,7 @@
 
 @(require racquel 
           scribble/manual scribble/eval scribble/bnf
-          (for-label racket/base racket/class racket/serialize)
+          (for-label racket)
           (for-syntax racket/base racket/class racket/serialize))
 
 @title{Racquel: An Object/Relational Mapper for Racket}
