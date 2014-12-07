@@ -20,7 +20,7 @@
 ;;;; You should have received a copy of the GNU General Public License
 ;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-(require "metadata.rkt")
+(require "util.rkt" "metadata.rkt" "schema.rkt")
 
 (provide (all-defined-out))
  
@@ -55,12 +55,10 @@
 (define-syntax rql-between [syntax-rules () ((_ a b c)  (string-append a " between " b " and " c))])
 (define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
 (define-syntax rql-table-name 
-  [syntax-rules () ((_ a b) (string-append "`" (begin (set! b (cons a b))
-                                                      (get-class-metadata table-name (get-class a))) 
-                                           "`"))])
-(define-syntax rql-column-name 
-  [syntax-rules () ((_ a) (string-append "`" (get-column-name-from-context a ctxt) "`"))])
+  [syntax-rules () ((_ a b) (begin (set! b (cons a b))
 (define-syntax rql-column-pair 
-  [syntax-rules () ((_ a b c) (string-append "`" (begin (set! c (cons a c))
-                                                        (get-class-metadata table-name (get-class a)))
-                                             "`.`" (get-column-name b (get-class a)) "`"))])
+  [syntax-rules () ((_ a b c) (string-append 
+                               (sql-escape (begin (set! c (cons a c))
+                                                  (get-class-metadata table-name (get-class a))) 
+                                           dbsys-type) 
+                               "." (sql-escape (get-column-name b (get-class a)) dbsys-type)))])

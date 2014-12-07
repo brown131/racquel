@@ -130,12 +130,12 @@
       (raise-argument-error 'get-column-name "argument ~a is not a class" cls)))
 
 ;;; Get a column name from the context list.
-(define (get-column-name-from-context col-fld ctxt)
+(define (get-column-name-from-context col-fld ctxt dbsys-type)
     (let ([col-nm (for*/first ([cls-nm ctxt]
                                [col-def (get-class-metadata columns (get-class cls-nm))]
                                #:when (equal? col-fld (first col-def)))
                     (second col-def))])
-      (if col-nm (string-append "`" col-nm "`") (~a col-fld))))
+      (if col-nm (sql-escape col-nm dbsys-type) (~a col-fld))))
 
 ;;; Get the column id for a column name in a class.
 (define (get-column-id col-nm cls)

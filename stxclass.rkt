@@ -21,7 +21,7 @@
 ;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (require syntax/parse
-         (for-template db "keywords.rkt" "metadata.rkt" "util.rkt" racket))
+         (for-template db "keywords.rkt" "metadata.rkt" "util.rkt" "schema.rkt" racket))
 
 (provide (all-defined-out))
 
@@ -58,20 +58,27 @@
   (pattern (in a:rql-expr b:expr) #:with expr #'(rql-in a.expr b))
   (pattern (between a:rql-expr b:rql-expr c:rql-expr) #:with expr 
            #'(rql-between a.expr b.expr c.expr))
-  (pattern i:id #:with expr #'(get-column-name-from-context 'i ctxt))
+  (pattern i:id #:with expr #'(get-column-name-from-context 'i ctxt dbsys-type))
   (pattern s:str #:with expr #'s)
   (pattern n:nat #:with expr #'(~a n))
-  (pattern (p1:expr p2:expr) #:with expr #'(rql-column-pair p1 'p2 ctxt)))
+  (pattern (p1:expr p2:expr) #:with expr #'(string-append 
+                               (sql-escape (begin (set! ctxt (cons p1 ctxt))
+                                                  (get-class-metadata table-name (get-class p1))) 
+                                           dbsys-type) 
+                               "." (sql-escape (get-column-name 'p2 (get-class p1)) dbsys-type))))
 
 (define-syntax-class join-expr 
   #:description "rql join expression"
   #:literals (join left-join right-join)
   (pattern (join table:id rql:rql-expr) #:with expr 
-           #'(string-append "join " (rql-table-name 'table ctxt) " on " rql.expr " "))
+           #'(string-append "join " (sql-escape (rql-table-name 'table ctxt) dbsys-type) 
+                            " on " rql.expr " "))
   (pattern (left-join table:id rql:rql-expr) #:with expr 
-           #'(string-append "left outer join " (rql-table-name 'table ctxt) " on " rql.expr " "))
+           #'(string-append "left outer join " (sql-escape (rql-table-name 'table ctxt) dbsys-type) 
+                            " on " rql.expr " "))
   (pattern (right-join table:id rql:rql-expr) #:with expr 
-           #'(string-append "right outer join " (rql-table-name 'table ctxt) " on " rql.expr " ")))
+           #'(string-append "right outer join " (sql-escape (rql-table-name 'table ctxt) dbsys-type) 
+                            " on " rql.expr " ")))
 
 (define-syntax-class where-expr 
   #:description "rql where expression"

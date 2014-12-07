@@ -128,7 +128,8 @@
                     [data-object-state 'new])
              (inspect #f)
              (define/public (set-data-join! con jn-fld jn-cls)
-               (let* ([rows (append elem.jn-rows ...)])
+               (let* ([dbsys-type (dbsystem-type con)]
+                      [rows (append elem.jn-rows ...)])
                  (map (lambda (r) (let ([obj (new jn-cls)])
                                     (map (lambda (f v) (dynamic-set-field! f obj v)) 
                                          (get-column-ids jn-cls) (vector->list r))
@@ -326,6 +327,7 @@
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
        #'(let* ([ctxt (list cls)]
+                [dbsys-type (dbsystem-type con)]
                 [sql (make-select-statement con cls #:print? prnt? #:prepare? prep? 
                                             (string-append join.expr ... where.expr))])
            (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
@@ -347,6 +349,7 @@
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
        #'(let* ([ctxt (list cls)]
+                [dbsys-type (dbsystem-type con)]
                 [sql (make-select-statement con cls #:print? prnt? #:prepare? prep? 
                                            (string-append join.expr ... where.expr))])
            (if prnt? sql (map (lambda (r) (create-data-object con cls r)) 
