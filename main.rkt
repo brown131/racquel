@@ -189,7 +189,7 @@
 ;;; Get the cardinality of a join based on schema metadata.
 (define (join-cardinality con schema-nm dbsys-type jn-tbl-nm jn-key) 
   (let* ([jn-schema (load-schema con schema-nm jn-tbl-nm #:db-system-type dbsys-type)]
-         [row (findf (lambda (r) (equal? (schema-column r) jn-key)) jn-schema)]
+         [row (findf (lambda (r) (string-ci=? (schema-column r) jn-key)) jn-schema)]
          [spk (eq? (count (λ (r) (equal? (schema-constraint-type r) "P")) jn-schema) 1)])
     (unless row (error 'join-cardinality "row not found for join table: ~a key: ~a" jn-tbl-nm jn-key))
     (if (and (equal? (schema-constraint-type row) "P") spk) #''one-to-one #''one-to-many)))
@@ -244,8 +244,8 @@
 (define (join-name-normalizer s (c 'one-to-many)) 
   (string-append (column-name-normalizer s) 
                  (if (eq? c 'one-to-many) 
-                     (if (string=? (substring s (- (string-length s) 1) (string-length s)) "s") "es" 
-                         "s") "")))
+                     (if (string-ci=? (substring s (- (string-length s) 1) (string-length s)) "s") 
+                         "es" "s") "")))
 
 ;;; Generate a class using database schema information.
 (define (gen-data-class con tbl-nm 
@@ -471,6 +471,7 @@
 
 ;;;; CONTRACTS
 
+
 (provide data-class data-class* data-class-info gen-data-class select-data-object select-data-objects
          get-column set-column! get-join (all-from-out "keywords.rkt")
          (contract-out
@@ -490,5 +491,6 @@
           [jsexpr->data-object (jsexpr? . -> . data-object?)]
           [data-object->xexpr (data-object? . -> . xexpr?)]
           [xexpr->data-object (xexpr? . -> . data-object?)]
-          [set-odbc-dbsystem-type! (symbol? . -> . void?)]))
+          [set-odbc-dbsystem-type! (symbol? . -> . void?)]
+          [set-escape-sql-object-names! (boolean? . -> . void?)]))
  

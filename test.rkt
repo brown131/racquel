@@ -23,7 +23,7 @@
 (require rackunit rackunit/text-ui db json xml xml/xexpr "main.rkt"
          (except-in "metadata.rkt" get-class-metadata-object data-class-info)
          (except-in "util.rkt" set-odbc-dbsystem-type! data-object? data-class?)
-         "schema.rkt")
+         (except-in "schema.rkt" set-escape-sql-object-names!))
 
 (require/expose "main.rkt" (savable-fields 
                             key-where-clause-sql
@@ -41,62 +41,74 @@
                             get-autoincrement-key))
 
 
-;;;; SETUP
+;;;; GLOBALS FOR TESTING
  
-
 ;;; Database system to test.
-(define *test-dbsys-type* 
-  'mysql
-  ;'postgresql
-  ;'sqlite3
-  ;'sqlserver
-  ;'oracle
-  ;'db2
-  )
-
-(when (equal? *test-dbsys-type* 'oracle) (set-odbc-dbsystem-type! *test-dbsys-type*))
-(when (equal? *test-dbsys-type* 'db2) (set-odbc-dbsystem-type! *test-dbsys-type*))
+(define *dbsys-type* #f)
 
 ;;; Database connection for testing.
-(define *con* 
-  (cond [(eq? *test-dbsys-type* 'mysql) 
-         (mysql-connect #:server "localhost" #:port 3306 #:database "racquel_test" #:user "test"
-                        #:password "test")]
-        [(eq? *test-dbsys-type* 'postgresql) 
-         (postgresql-connect #:server "localhost" #:port 5432 #:database "racquel_test" #:user "test" 
-                             #:password "test")]
-        [(eq? *test-dbsys-type* 'sqlite3) 
-         (sqlite3-connect #:database "racquel_test.sqlite")]        
-        [(eq? *test-dbsys-type* 'sqlserver) 
-         (odbc-connect #:dsn "racquel_test" #:user "test" #:password "test")]
-        [(eq? *test-dbsys-type* 'oracle) 
-         (odbc-connect #:dsn "racquel_test_oracle" #:user "test" #:password "test")]
-        [(eq? *test-dbsys-type* 'db2) 
-         (odbc-connect #:dsn "racquel_test_db2" #:user "test" #:password "test")]
-        ))
-
-;;; Schema name for testing.
-(define *schema-name* 
-  (cond [(eq? *test-dbsys-type* 'mysql) "racquel_test"]
-        [(eq? *test-dbsys-type* 'postgresql) "public"]
-        [(eq? *test-dbsys-type* 'sqlserver) "dbo"]
-        [(eq? *test-dbsys-type* 'oracle) "TEST"]
-        [(eq? *test-dbsys-type* 'db2) "TEST"]
-        ))
+(define *con* #f)
   
+;;; Schema name for testing.
+(define *schema-name* #f)
 
-;;;; TEST DATA OBJECT DEFINITION
 
+;;;; SETUP
+
+
+;;; Setup a database system to testing.
+(define (setup-test-dbsys-type dbsys-type)
+  (set! *dbsys-type* dbsys-type)
+  
+  (set-odbc-dbsystem-type! dbsys-type)
+  
+  (set! *con* 
+        (cond [(eq? dbsys-type 'mysql) 
+               (mysql-connect #:server "racqueltest" #:port 3306 
+                              #:database "racquel_test" #:user "test" #:password "Kaese7*7")]
+              [(eq? dbsys-type 'postgresql) 
+               (postgresql-connect #:server "racqueltest" #:port 5432 
+                                   #:database "racquel_test" #:user "test" #:password "test")]
+              [(eq? dbsys-type 'sqlite3) 
+               (sqlite3-connect #:database "racquel_test.sqlite")]        
+              [(eq? dbsys-type 'sqlserver) 
+               (odbc-connect #:dsn "racquel_test" #:user "test" #:password "Kaese7*7")]
+              [(eq? dbsys-type 'oracle) 
+               (odbc-connect #:dsn "racquel_test_oracle" #:user "test" #:password "test")]
+              [(eq? dbsys-type 'db2) 
+               (odbc-connect #:dsn "test")]
+              ))
+
+  (set! *schema-name* 
+        (cond [(eq? dbsys-type 'mysql) "racquel_test"]
+              [(eq? dbsys-type 'postgresql) "public"]
+              [(eq? dbsys-type 'sqlserver) "dbo"]
+              [(eq? dbsys-type 'oracle) "TEST"]
+              [(eq? dbsys-type 'db2) "TEST"]
+              ))
+  )
 
 (define test-interface<%> (interface ()))
 
-(define (normalize-sql sql)
-  (cond [(eq? *test-dbsys-type* 'mysql) sql]
-        [(eq? *test-dbsys-type* 'postgresql) 
-         (regexp-replace* #rx"\\$[0-9]" (string-replace sql "\"" "`") "?")]
-        [(eq? *test-dbsys-type* 'sqlserver) 
+(define (std-sql sql)
+  (string-downcase
+   (cond [(not *escape-sql-object-names*) (string-replace sql "\"" "")]
+        [(eq? *dbsys-type* 'mysql) sql]
+        [(eq? *dbsys-type* 'postgresql) 
+         (regexp-replace* #rx"\\$[0-9]" (string-replace sql "\"" 
+                                                        (if *escape-sql-object-names* "`" "")) "?")]
+        [(eq? *dbsys-type* 'sqlserver) 
          (string-replace (string-replace sql "[" "`") "]" "`")]
-        [else (string-replace sql "\"" "`")]))
+        [else (string-replace sql "\"" "`")])))
+
+(define (downcase-list lst) (map (λ (i) (cond [(string? i) (string-downcase i)]
+                                              [(list? i) (downcase-list i)]
+                                              [else i])) lst))
+(define (schema-case s) (if (eq? *dbsys-type* 'oracle) (string-upcase s) s))
+                                     
+
+;;;; TEST DATA OBJECT DEFINITION
+
 
 (define-test-suite test-define-data-object
   (hash-clear! *data-class-metadata*)
@@ -156,21 +168,21 @@
     (test-equal? "savable field ok?" (savable-fields *con* test-class%) '(description id name x))
     (test-equal? "primary key fields ok?" (primary-key-fields test-class%) '(id))
     (test-equal? "where clause ok?" 
-                 (normalize-sql (key-where-clause-sql *con* test-class% 
-                                                        (primary-key-fields test-class%))) 
+                 (std-sql (key-where-clause-sql *con* test-class% 
+                                                (primary-key-fields test-class%))) 
                  " where `id`=?")
-    (test-equal? "insert sql ok?" (normalize-sql (insert-sql *con* test-class%))
+    (test-equal? "insert sql ok?" (std-sql (insert-sql *con* test-class%))
                  "insert into `test` (`description`, `id`, `name`, `x`) values (?, ?, ?, ?)")
-    (test-equal? "update sql ok?" (normalize-sql (update-sql *con* test-class%))
+    (test-equal? "update sql ok?" (std-sql (update-sql *con* test-class%))
                  "update `test` set `description`=?, `id`=?, `name`=?, `x`=? where `id`=?")
-    (test-equal? "delete sql ok?" (normalize-sql (delete-sql *con* test-class%))
+    (test-equal? "delete sql ok?" (std-sql (delete-sql *con* test-class%))
                  "delete from `test` where `id`=?")
     (test-equal? "select sql ok?" 
-                 (normalize-sql (make-select-statement *con* test-class% #:print? #t "where id=?"))
+                 (std-sql (make-select-statement *con* test-class% #:print? #t "where id=?"))
                   "select `test`.`description`, `test`.`id`, `test`.`name`, `test`.`x` \
 from `test` where id=?")
     (test-equal? "select all sql ok?" 
-                 (normalize-sql (make-select-statement *con* test-class% #:print? #t ""))
+                 (std-sql (make-select-statement *con* test-class% #:print? #t ""))
                  "select `test`.`description`, `test`.`id`, `test`.`name`, `test`.`x` from `test` ")
     ))
 
@@ -182,49 +194,50 @@ from `test` where id=?")
 ;  (string-downcase (string-append (regexp-replace* "([a-z])([A-Z])" n "\\1-\\2") "%")))
 ;(define (column-name-normalizer n) (string-downcase (string-replace n "_" "-")))
 ;(define (join-name-normalizer n c) (default-join-name-normalizer n c))
-                                     
+
 (define-test-suite test-schema
   (hash-clear! *data-class-metadata*)
   
-  (let* ([simple-schema (load-schema *con* *schema-name* "simple" #:reverse-join? #f 
-                                     #:db-system-type *test-dbsys-type*)]
-         [address-schema (load-schema *con* *schema-name* "address" #:reverse-join? #f 
-                                      #:db-system-type *test-dbsys-type*)])
+  (let* ([simple-schema (load-schema *con* *schema-name* (schema-case "simple") #:reverse-join? #f 
+                                     #:db-system-type *dbsys-type*)]
+         [address-schema (load-schema *con* *schema-name* (schema-case "address") #:reverse-join? #f 
+                                      #:db-system-type *dbsys-type*)])
     (test-eq? "simple schema loaded?" (length simple-schema) 4)
     (test-equal? "simple schema columns ok?" 
-                 (sort (get-schema-columns simple-schema column-name-normalizer) 
+                 (sort (downcase-list (get-schema-columns simple-schema column-name-normalizer))
                        string<? #:key (lambda (k) (symbol->string (first k))))
                  '((description #f "description") (id #f "id") (name #f "name") (x #f "x")))
     (test-equal? "simple schema joins ok?" 
-                 (get-schema-joins *con* *schema-name* simple-schema *test-dbsys-type* 
+                 (get-schema-joins *con* *schema-name* simple-schema *dbsys-type* 
                                    table-name-normalizer
                                    join-name-normalizer column-name-normalizer) null)
     (test-eq? "simple primary key fields found?" 
               (find-primary-key-fields simple-schema column-name-normalizer) 'id)
     (test-false "simple autoincrement key found?" 
-                (get-autoincrement-key simple-schema *test-dbsys-type*))
+                (get-autoincrement-key simple-schema *dbsys-type*))
     
     (test-eq? "address schema loaded?" (length address-schema) 6)
     (test-equal? "address schema columns ok?" 
-                 (sort (get-schema-columns address-schema column-name-normalizer) 
+                 (sort(downcase-list (get-schema-columns address-schema column-name-normalizer))
                        string<? #:key (lambda (k) (symbol->string (first k))))
                  '((city #f "city") (id #f "id") (line #f "line")
                    (person-id #f "person_id")(state #f "state") (zip-code #f "zip_code")))
     
     (test-equal? "address join schema ok?" 
-                 (get-join-schema address-schema)
+                 (downcase-list (get-join-schema address-schema))
                  '(("address_person_id_fkey" "person" "id" "person_id" ("id"))))
     (test-equal? "address join cardinality ok?" 
-                 (eval-syntax (join-cardinality *con* *schema-name* *test-dbsys-type* "person" "id"))
+                 (eval-syntax (join-cardinality *con* *schema-name* *dbsys-type* 
+                                                (schema-case "person") (schema-case "id")))
                  'one-to-one)
     (test-eq? "address schema join name ok?" 
-               (first (first (get-schema-joins *con* *schema-name* address-schema *test-dbsys-type* 
+               (first (first (get-schema-joins *con* *schema-name* address-schema *dbsys-type* 
                                                table-name-normalizer join-name-normalizer 
                                                column-name-normalizer))) 
                           'person)
     (test-equal? "address schema join cardinality ok?" 
                  (eval-syntax (fourth (first (get-schema-joins *con* *schema-name* address-schema 
-                                                               *test-dbsys-type* 
+                                                               *dbsys-type* 
                                                                table-name-normalizer 
                                                                join-name-normalizer 
                                                                column-name-normalizer))) 
@@ -232,7 +245,7 @@ from `test` where id=?")
                  'one-to-one)
     (test-equal? "address schema join cardinality ok?" 
                  (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* address-schema
-                                                                    *test-dbsys-type* 
+                                                                    *dbsys-type* 
                                                                     table-name-normalizer 
                                                                     join-name-normalizer
                                                                     column-name-normalizer))))
@@ -240,13 +253,13 @@ from `test` where id=?")
     (test-eq? "address primary key fields found?" 
               (find-primary-key-fields address-schema column-name-normalizer) 'id)
     (test-case "address autoincrement key found?" 
-               (cond [(eq? *test-dbsys-type* 'postgresql) 
-                      (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) 
+               (cond [(eq? *dbsys-type* 'postgresql) 
+                      (check-equal? (get-autoincrement-key address-schema *dbsys-type*) 
                                     "address_id_seq")]
-                     [(eq? *test-dbsys-type* 'oracle) 
-                      (check-equal? (get-autoincrement-key address-schema *test-dbsys-type*) 
+                     [(eq? *dbsys-type* 'oracle) 
+                      (check-equal? (get-autoincrement-key address-schema *dbsys-type*) 
                                     "address_id_seq")]
-                     [else (check-true (get-autoincrement-key address-schema *test-dbsys-type*))]))
+                     [else (check-true (get-autoincrement-key address-schema *dbsys-type*))]))
     
     (let ([test-schema (list (vector "id" "P" 1 1 sql-null sql-null "PK")
                              (vector "join1_id" "F" 1 sql-null "Joined" "id" "FK_Join1")
@@ -254,18 +267,19 @@ from `test` where id=?")
                              (vector "join2_id" "F" 1 sql-null "Joined" "id" "FK_Join2")
                              (vector "join2_str" "F" 2 sql-null "Joined" "str" "FK_Join2")
                              (vector "simple_id" "F" 1 sql-null "Employer" "id" "FK_Employer")
-                             (vector "id" "F" 1 sql-null "address" "person_id" "FK_Person"))])
+                             (vector "id" "F" 1 sql-null (schema-case "address")
+                                     (schema-case "person_id") "FK_Person"))])
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* 
                        *schema-name* "Employer")
       (multi-hash-set! *data-class-schema* (list (vector "id" "P" 1 1 sql-null sql-null "PK")) *con* 
                        *schema-name* "Joined")
       
       (test-equal? "address join schema ok?" 
-                 (get-join-schema test-schema) 
-                 '(("FK_Person" "address" "person_id" "id" ("person_id"))
-                   ("FK_Employer" "Employer" "id" "simple_id" ("id"))
-                   ("FK_Join2" "Joined" "id" "join2_id" ("id" "str"))
-                   ("FK_Join1" "Joined" "id" "join1_id" ("id" "str"))))
+                 (downcase-list (get-join-schema test-schema))
+                 '(("fk_person" "address" "person_id" "id" ("person_id"))
+                   ("fk_employer" "employer" "id" "simple_id" ("id"))
+                   ("fk_join2" "joined" "id" "join2_id" ("id" "str"))
+                   ("fk_join1" "joined" "id" "join1_id" ("id" "str"))))
     
       (test-equal? "key-where-clause-rql ok?" 
                    (syntax->datum #`#,(key-where-clause-rql "Joined" '("id") table-name-normalizer 
@@ -278,29 +292,30 @@ from `test` where id=?")
                    '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
 
       (test-equal? "test schema 1st join cardinality ok?" 
-                   (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* test-schema 
-                                                                      *test-dbsys-type* 
+                   (syntax->datum #`#,(fifth (first (get-schema-joins *con* *schema-name* 
+                                                                      test-schema
+                                                                      *dbsys-type* 
                                                                       table-name-normalizer 
                                                                       join-name-normalizer 
                                                                       column-name-normalizer))))
                    '(where (= ('address% person-id) ?)))
       (test-equal? "test schema 2nd join cardinality ok?" 
                    (syntax->datum #`#,(fifth (second (get-schema-joins *con* *schema-name* test-schema
-                                                                       *test-dbsys-type* 
+                                                                       *dbsys-type* 
                                                                        table-name-normalizer 
                                                                        join-name-normalizer 
                                                                        column-name-normalizer))))
                    '(where (= ('employer% id) ?)))
       (test-equal? "test schema 3rd join cardinality ok?" 
                    (syntax->datum #`#,(fifth (third (get-schema-joins *con* *schema-name* test-schema 
-                                                                      *test-dbsys-type* 
+                                                                      *dbsys-type* 
                                                                       table-name-normalizer 
                                                                       join-name-normalizer 
                                                                       column-name-normalizer))))
                    '(where (and (= ('joined% id) ?) (= ('joined% str) ?))))
       (test-equal? "test schema 4th join cardinality ok?" 
                    (syntax->datum #`#,(fifth (fourth (get-schema-joins *con* *schema-name* test-schema
-                                                                       *test-dbsys-type* 
+                                                                       *dbsys-type* 
                                                                        table-name-normalizer 
                                                                        join-name-normalizer 
                                                                        column-name-normalizer))))
@@ -314,12 +329,13 @@ from `test` where id=?")
 ;;; Name externalizer. Returns mixed case.
 (define mixed-case-extern-regexp (regexp "-[a-z]"))
 (define (name-externalizer s) 
-  (string-append (string-upcase (substring s 0 1)) 
+  (string-append (schema-case (substring s 0 1)) 
                  (substring (regexp-replace* mixed-case-extern-regexp s 
-                                             (lambda (s) (substring (string-upcase s) 1 2))) 1)))
+                                             (lambda (s) (substring (schema-case s) 1 2))) 1)))
 
 (define-test-suite test-make-data-object
   (hash-clear! *data-class-metadata*)
+  (hash-clear! *data-class-schema*)
   
   (let* ([test-class% (data-class* object% (test-interface<%>)
                                    (table-name "test")
@@ -332,7 +348,7 @@ from `test` where id=?")
                                    (primary-key id)
                                    (define/public (test) (x + 1))
                                    (super-new))]
-         [simple% (gen-data-class *con* "simple" 
+         [simple% (gen-data-class *con* (schema-case "simple") 
                                   #:schema-name *schema-name*
                                   #:generate-joins? #t #:generate-reverse-joins? #t
                                   #:table-name-normalizer table-name-normalizer
@@ -348,19 +364,21 @@ from `test` where id=?")
                  (check-eq? cls-nm 'simple%)))
    
     (test-eq? "simple class metadata added?" (length (hash->list *data-class-metadata*)) 2)
-    (test-eq? "simple class metadata ok?" (get-class-metadata table-name simple%) "simple")
+    (test-equal? "simple class metadata ok?" (get-class-metadata table-name simple%) 
+                 (schema-case "simple"))
    
     (test-case "simple class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm ) 
                              (data-class-info simple%)])
-                 (check-eq? tbl-nm "simple")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                 (check-equal? tbl-nm (schema-case "simple"))
+                 (check-equal? (sort (downcase-list col-defs) string<? 
+                                     #:key (lambda (k) (symbol->string (first k))))
                                '((description "description" "description") 
                                  (id "id" "id") (name "name" "name") (x "x" "x")))
-                 (check-eq? (length j-defs) 0)
+                 (check-equal? j-defs '((multipartkeys multipartkey% one-to-many)))
                  (check-eq? pkey 'id)
                  (check-eqv? auto-key #f)
-                 (check-eq? ext-nm "Simple")
+                 (check-equal? ext-nm (schema-case "simple"))
                  (check-not-eq? st-key #f)
                  ))
    
@@ -370,16 +388,16 @@ from `test` where id=?")
                  (sort (savable-fields *con* simple%) string<? #:key symbol->string) 
                  '(description id name x))
     (test-equal? "where clause ok?" 
-                 (normalize-sql (key-where-clause-sql *con* simple% (primary-key-fields simple%))) 
+                 (std-sql (key-where-clause-sql *con* simple% (primary-key-fields simple%))) 
                  " where `id`=?")
-    (test-equal? "insert sql ok?" (normalize-sql (insert-sql *con* simple%))
+    (test-equal? "insert sql ok?" (std-sql (insert-sql *con* simple%))
                  "insert into `simple` (`description`, `id`, `name`, `x`) values (?, ?, ?, ?)")
-    (test-equal? "update sql ok?" (normalize-sql (update-sql *con* simple%))
+    (test-equal? "update sql ok?" (std-sql (update-sql *con* simple%))
                  "update `simple` set `description`=?, `id`=?, `name`=?, `x`=? where `id`=?")
-    (test-equal? "delete sql ok?" (normalize-sql (delete-sql *con* simple%))
+    (test-equal? "delete sql ok?" (std-sql (delete-sql *con* simple%))
                  "delete from `simple` where `id`=?")
     (test-equal? "select sql ok?" 
-                 (normalize-sql (make-select-statement *con* simple% #:print? #t "where id=?"))
+                 (std-sql (make-select-statement *con* simple% #:print? #t "where id=?"))
                  "select `simple`.`description`, `simple`.`id`, `simple`.`name`, `simple`.`x` \
 from `simple` where id=?")
   
@@ -406,18 +424,33 @@ from `simple` where id=?")
     (test-case "object updated?"
                (update-data-object *con* obj)
                (check-equal? 
-                (query-value *con* (sql-placeholder "select id from simple where id=?" 
-                                                    *test-dbsys-type*) (get-field id obj)) 23)
+                (query-value *con* (schema-case
+                                    (string-append "select " (sql-escape "id" *dbsys-type*) 
+                                                   " from " (sql-escape "simple" *dbsys-type*) 
+                                                   " where " (sql-escape "id" *dbsys-type*)
+                                                   (sql-placeholder "=?" *dbsys-type*)))
+                             (get-field id obj)) 23)
                (check-equal? 
-                (query-value *con* (sql-placeholder "select name from simple where id=?" 
-                                                    *test-dbsys-type*) (get-field id obj)) "test2")
+                (query-value *con* (schema-case
+                                    (string-append "select " (sql-escape "name" *dbsys-type*) 
+                                                   " from " (sql-escape "simple" *dbsys-type*) 
+                                                   " where " (sql-escape "id" *dbsys-type*)
+                                                   (sql-placeholder "=?" *dbsys-type*)))
+                             (get-field id obj)) "test2")
                (check-equal? 
-                (query-value *con* (sql-placeholder "select description from simple where id=?" 
-                                                    *test-dbsys-type*) (get-field id obj)) 
-                "this is a test")
+                (query-value *con* (schema-case
+                                    (string-append "select " (sql-escape "description" *dbsys-type*) 
+                                                   " from " (sql-escape "simple" *dbsys-type*) 
+                                                   " where " (sql-escape "id" *dbsys-type*)
+                                                   (sql-placeholder "=?" *dbsys-type*)))
+                             (get-field id obj)) "this is a test")
                (check-true 
-                (= (query-value *con* (sql-placeholder "select x from simple where id=?" 
-                                                       *test-dbsys-type*) (get-field id obj)) x-val))
+                (= (query-value *con* (schema-case
+                                       (string-append "select " (sql-escape "x" *dbsys-type*) 
+                                                      " from " (sql-escape "simple" *dbsys-type*) 
+                                                      " where " (sql-escape "id" *dbsys-type*)
+                                                      (sql-placeholder "=?" *dbsys-type*)))
+                                (get-field id obj)) x-val))
                )  
    
     (test-case "object loaded?"
@@ -430,8 +463,12 @@ from `simple` where id=?")
     (test-case "object deleted?" 
                (delete-data-object *con* obj)
                (check-true 
-                (= (query-value *con* (sql-placeholder "select count(*) from simple where id=?" 
-                                                       *test-dbsys-type*) (get-field id obj)) 0)))   
+                (= (query-value *con* (schema-case
+                                       (string-append "select count(*) from "
+                                                      (sql-escape "simple" *dbsys-type*) 
+                                                      " where " (sql-escape "id" *dbsys-type*)
+                                                      (sql-placeholder "=?" *dbsys-type*)))
+                                (get-field id obj)) 0)))   
     ))
 
 
@@ -442,7 +479,7 @@ from `simple` where id=?")
   (hash-clear! *data-class-metadata*)
   (hash-clear! *data-class-schema*)
 
-  (let ([auto% (gen-data-class *con* "auto" #:schema-name *schema-name*)])
+  (let ([auto% (gen-data-class *con*(schema-case  "auto") #:schema-name *schema-name*)])
     (test-case "auto class created?" (check-not-eq? auto% #f))
     (test-true "auto class is a data class?" (data-class? auto%))
     (test-case "auto class ok?" 
@@ -451,21 +488,23 @@ from `simple` where id=?")
                  (check-eq? cls-nm 'auto%)))
    
     (test-eq? "auto class metadata added?" (length (hash->list *data-class-metadata*)) 1)
-    (test-eq? "auto class metadata ok?" (get-class-metadata table-name auto%) "auto")
+    (test-equal? "auto class metadata ok?" (get-class-metadata table-name auto%) 
+                 (schema-case "auto"))
 
     (test-case "auto class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info auto%)])
-                 (check-eq? tbl-nm "auto")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
-                               '((description "description" "description") (id "id""id") 
+                 (check-equal? tbl-nm (schema-case "auto"))
+                 (check-equal? (sort (downcase-list col-defs) string<? 
+                                     #:key (lambda (k) (symbol->string (first k))))
+                               '((description "description" "description") (id "id" "id") 
                                  (name "name" "name")))
                  (check-equal? j-defs '((multipartkeys multipartkey% one-to-many)))
                  (check-equal? pkey 'id)
-                 (cond [(eq? *test-dbsys-type* 'postgresql) (check-equal? auto-key "auto_id_seq")]
-                       [(eq? *test-dbsys-type* 'oracle) (check-equal? auto-key "auto_id_seq")]
+                 (cond [(eq? *dbsys-type* 'postgresql) (check-equal? auto-key "auto_id_seq")]
+                       [(eq? *dbsys-type* 'oracle) (check-equal? auto-key "auto_id_seq")]
                        [else (check-true auto-key)])
-                 (check-eq? ext-nm "auto")
+                 (check-equal? ext-nm (schema-case "auto"))
                  (check-not-eq? st-key #f)
                  ))
    
@@ -475,19 +514,19 @@ from `simple` where id=?")
       
       (test-equal? "savable field ok?" (savable-fields *con* auto%) '(description name))
       (test-equal? "where clause ok?" 
-                   (normalize-sql (key-where-clause-sql *con* auto% (primary-key-fields auto%))) 
+                   (std-sql (key-where-clause-sql *con* auto% (primary-key-fields auto%))) 
                    " where `id`=?")
-      (test-equal? "insert sql ok?" (normalize-sql (insert-sql *con* auto%))
+      (test-equal? "insert sql ok?" (std-sql (insert-sql *con* auto%))
                    "insert into `auto` (`description`, `name`) values (?, ?)")
-      (test-equal? "update sql ok?" (normalize-sql (update-sql *con* auto%))
+      (test-equal? "update sql ok?" (std-sql (update-sql *con* auto%))
                    "update `auto` set `description`=?, `name`=? where `id`=?")
-      (test-equal? "delete sql ok?" (normalize-sql (delete-sql *con* auto%)) 
+      (test-equal? "delete sql ok?" (std-sql (delete-sql *con* auto%)) 
                    "delete from `auto` where `id`=?")
       (test-equal? "select sql ok?" 
-                   (normalize-sql (make-select-statement *con* auto% #:print? #t "where id=?")) 
+                   (std-sql (make-select-statement *con* auto% #:print? #t "where id=?")) 
                    "select `auto`.`description`, `auto`.`id`, `auto`.`name` from `auto` where id=?")
       (test-equal? "select all sql ok?" 
-                   (normalize-sql (make-select-statement *con* auto% #:print? #t "")) 
+                   (std-sql (make-select-statement *con* auto% #:print? #t "")) 
                    "select `auto`.`description`, `auto`.`id`, `auto`.`name` from `auto` ")
       
       (test-case "columns set?"
@@ -508,9 +547,13 @@ from `simple` where id=?")
       
       (test-case "object updated?"
                  (update-data-object *con* obj)
-                 (check-equal? (query-value *con* (sql-placeholder "select name from auto where id=?"
-                                                                   *test-dbsys-type*) 
-                                            (get-field id obj)) "test2"))  
+                 (check-equal? 
+                  (query-value *con* (schema-case
+                                      (string-append "select " (sql-escape "name" *dbsys-type*) 
+                                                     " from " (sql-escape "auto" *dbsys-type*) 
+                                                     " where " (sql-escape "id" *dbsys-type*)
+                                                     (sql-placeholder "=?" *dbsys-type*))) 
+                               (get-field id obj)) "test2"))  
       
       (test-case "object loaded?"
                  (let ([a (make-data-object *con* auto% (get-field id obj))])
@@ -523,7 +566,10 @@ from `simple` where id=?")
                  "#(struct:object:auto% this is a test 282 test2 #f #f loaded)")
       
       (test-case "object selected with sql?"
-                 (~a (select-data-object *con* auto% "where name='test2';"))
+                 (~a (select-data-object *con* auto% 
+                                         (string-append "where " 
+                                                        (sql-escape (schema-case "name") *dbsys-type*)
+                                                        "='test2';")))
                  "#(struct:object:auto% this is a test 282 test2 #f #f loaded)")
       
       (test-case "objects selected?"
@@ -533,8 +579,11 @@ from `simple` where id=?")
       (test-case "object deleted?" 
                  (delete-data-object *con* obj)
                  (check-true (= (query-value *con* 
-                                             (sql-placeholder "select count(*) from auto where id=?" 
-                                                              *test-dbsys-type*) 
+                                             (schema-case
+                                              (string-append "select count(*) from "
+                                                             (sql-escape "auto" *dbsys-type*)
+                                                             " where " (sql-escape "id" *dbsys-type*)
+                                                             (sql-placeholder "=?" *dbsys-type*)))
                                              (get-field id obj)) 0))
                  (check-eq? (data-object-state obj) 'deleted))
       )))
@@ -547,9 +596,10 @@ from `simple` where id=?")
   (hash-clear! *data-class-metadata*)
   (hash-clear! *data-class-schema*)
   
-  (let ([multipartkey% (gen-data-class *con* "multipartkey" #:schema-name *schema-name*)]
-        [simple% (gen-data-class *con* "simple" #:schema-name *schema-name*)]
-        [auto% (gen-data-class *con* "auto" #:schema-name *schema-name*)])
+  (let ([multipartkey% (gen-data-class *con* (schema-case "multipartkey") 
+                                       #:schema-name *schema-name*)]
+        [simple% (gen-data-class *con* (schema-case "simple") #:schema-name *schema-name*)]
+        [auto% (gen-data-class *con* (schema-case "auto") #:schema-name *schema-name*)])
     (test-case "multipartkey class created?" (check-not-eq? multipartkey% #f))
     (test-true "multipartkey class is a data class?" (data-class? multipartkey%))
     (test-case "multipartkey class ok?" 
@@ -558,24 +608,26 @@ from `simple` where id=?")
                  (check-eq? cls-nm 'multipartkey%)))
    
     (test-eq? "class metadata added?" (length (hash->list *data-class-metadata*)) 3)
-    (test-eq? "multipartkey class metadata ok?" 
-              (get-class-metadata table-name multipartkey%) "multipartkey")
+    (test-equal? "multipartkey class metadata ok?" 
+                 (get-class-metadata table-name multipartkey%) (schema-case "multipartkey"))
 
     (test-case "multipartkey class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info multipartkey%)])
-                 (check-eq? tbl-nm "multipartkey")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                 (check-equal? tbl-nm (schema-case "multipartkey"))
+                 (check-equal? (sort (downcase-list col-defs) string<? 
+                                     #:key (lambda (k) (symbol->string (first k))))
                                '((auto-id "auto_id" "auto_id")
                                  (description "description" "description")
                                  (name "name" "name")
                                  (simple-id "simple_id" "simple_id")))
-                 (check-equal? pkey '(simple-id auto-id))
+                 (check-equal? (sort pkey  string<? #:key (lambda (k) (symbol->string k)))
+                               '(auto-id simple-id))
                  (check-eqv? auto-key #f)
                  (check-equal? (sort j-defs (λ (x y) (string<? (symbol->string (first x))
                                                                (symbol->string (first y)))))
                                '((auto auto% one-to-one) (simple simple% one-to-one)))
-                 (check-eq? ext-nm "multipartkey")
+                 (check-equal? ext-nm (schema-case "multipartkey"))
                  (check-not-eq? st-key #f)
                  ))
    
@@ -586,24 +638,24 @@ from `simple` where id=?")
       (test-equal? "savable field ok?" (savable-fields *con* multipartkey%) 
                    '(auto-id description name simple-id))
       (test-equal? "where clause ok?" 
-                   (normalize-sql (key-where-clause-sql *con* multipartkey% 
-                                                          (primary-key-fields multipartkey%))) 
+                   (std-sql (key-where-clause-sql *con* multipartkey% 
+                                                  (primary-key-fields multipartkey%))) 
                    " where `auto_id`=? and `simple_id`=?")
-      (test-equal? "insert sql ok?" (normalize-sql (insert-sql *con* multipartkey%))
+      (test-equal? "insert sql ok?" (std-sql (insert-sql *con* multipartkey%))
                    "insert into `multipartkey` (`auto_id`, `description`, `name`, `simple_id`) \
 values (?, ?, ?, ?)")
-      (test-equal? "update sql ok?" (normalize-sql (update-sql *con* multipartkey%))
+      (test-equal? "update sql ok?" (std-sql (update-sql *con* multipartkey%))
                    "update `multipartkey` set `auto_id`=?, `description`=?, `name`=?, `simple_id`=? \
 where `auto_id`=? and `simple_id`=?")
-      (test-equal? "delete sql ok?" (normalize-sql (delete-sql *con* multipartkey%))
+      (test-equal? "delete sql ok?" (std-sql (delete-sql *con* multipartkey%))
                    "delete from `multipartkey` where `auto_id`=? and `simple_id`=?")
       (test-equal? "select sql ok?" 
-                   (normalize-sql (make-select-statement *con* multipartkey% #:print? #t 
-                                                           "where auto=? and simple_id=?"))
+                   (std-sql (make-select-statement *con* multipartkey% #:print? #t 
+                                                   "where auto=? and simple_id=?"))
                    "select `multipartkey`.`auto_id`, `multipartkey`.`description`, \
 `multipartkey`.`name`, `multipartkey`.`simple_id` from `multipartkey` where auto=? and simple_id=?")
       (test-equal? "select all sql ok?" 
-                   (normalize-sql (make-select-statement *con* multipartkey% #:print? #t ""))
+                   (std-sql (make-select-statement *con* multipartkey% #:print? #t ""))
                    "select `multipartkey`.`auto_id`, `multipartkey`.`description`, \
 `multipartkey`.`name`, `multipartkey`.`simple_id` from `multipartkey` ")
       
@@ -631,9 +683,16 @@ where `auto_id`=? and `simple_id`=?")
       
       (test-case "object updated?"
                  (update-data-object *con* obj)
-                 (check-equal? (query-value *con* (sql-placeholder "select name from multipartkey \
-where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get-field simple-id obj))
-                                            "test2"))
+                 (check-equal? 
+                  (query-value *con* (schema-case (sql-placeholder
+                                      (string-append "select " 
+                                                     (sql-escape "name" *dbsys-type*)
+                                                     " from " (sql-escape "multipartkey" *dbsys-type*)
+                                                     "where " (sql-escape "auto_id"  *dbsys-type*)
+                                                      "=? and " (sql-escape "simple_id" *dbsys-type*)
+                                                      "=?") *dbsys-type*))
+                               (get-field auto-id obj) (get-field simple-id obj))
+                  "test2"))
       
       (test-case "object loaded?"
                  (let ([a (make-data-object *con* multipartkey% 
@@ -647,7 +706,11 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                  "#(struct:object:amultipartkey% this is a test 282 test2 #f #f loaded)")
       
       (test-case "object selected with sql?"
-                 (~a (select-data-object *con* multipartkey% "where name='multi';"))
+                 (~a (select-data-object *con* multipartkey% 
+                                         (string-append "where "
+                                                        (schema-case (sql-escape "name"
+                                                                                 *dbsys-type*))
+                                                        "='multi';")))
                  "#(struct:object:multipartkey% this is a test 282 test2 #f #f loaded)")
       
       (test-case "objects selected?"
@@ -657,9 +720,15 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
       (test-case "object deleted?" 
                  (delete-data-object *con* obj)
                  (check-true (= (query-value *con* 
-                                             (sql-placeholder "select count(*) from multipartkey \
-where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get-field simple-id obj))
-                                0))
+                                             (schema-case (sql-placeholder
+                                              (string-append "select count(*) from " 
+                                                             (sql-escape "multipartkey" *dbsys-type*)
+                                                             "where "
+                                                             (sql-escape "auto_id"  *dbsys-type*)
+                                                             "=? and " (sql-escape "simple_id" 
+                                                                                   *dbsys-type*)
+                                                             "=?") *dbsys-type*))
+                                (get-field auto-id obj) (get-field simple-id obj)) 0))
                  (check-eq? (data-object-state obj) 'deleted)) 
       )))
 
@@ -670,40 +739,62 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
 (define-test-suite test-joins
   (hash-clear! *data-class-metadata*)
   
-  (let* ([person% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
+  (let* ([person% (cond
+                    [(eq? *dbsys-type* 'postgresql)
                       (data-class object% 
                                   (table-name "person" "Person")
                                   (column (id 1 "id") (first-name #f "first_name")
                                           (last-name #f "last_name") (age #f "age"))
                                   (primary-key id #:autoincrement "auto_id_seq")
                                   (join (addresses 'address% (where (= ('address% person-id) ?)) id))
-                                  (super-new))
-                      (data-class object% 
-                                  (table-name "person" "Person")
-                                  (column (id 1 "id") (first-name #f "first_name") 
-                                          (last-name #f "last_name") (age #f "age"))
-                                  (primary-key id #:autoincrement #t)
+                                  (super-new))]
+                      [(eq? *dbsys-type* 'oracle)
+                       (data-class object% 
+                                  (table-name "PERSON" "Person")
+                                  (column (id 1 "ID") (first-name #f "FIRST_NAME")
+                                          (last-name #f "LAST_NAME") (age #f "AGE"))
+                                  (primary-key id #:autoincrement "auto_id_seq")
                                   (join (addresses 'address% (where (= ('address% person-id) ?)) id))
-                                  (super-new)))]
-        [address% (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
-                      (data-class object% 
-                                  (table-name "address"  "Address")
-                                  (column (id 1 "id") (person-id 1 "person_id") (line #f "line") 
-                                          (city #f "city") (state #f "state") 
-                                          (zip-code #f "zip_code"))
-                                  (primary-key id #:autoincrement "address_id_seq")
-                                  (join (person person% #:cardinality 'one-to-one 
-                                                (where (= (person% id) ?)) person-id))
-                                  (super-new))
-                      (data-class object% 
-                                  (table-name "address"  "Address")
+                                  (super-new))]
+                      [else 
+                       (data-class object% 
+                                   (table-name "person" "Person")
+                                   (column (id 1 "id") (first-name #f "first_name") 
+                                           (last-name #f "last_name") (age #f "age"))
+                                   (primary-key id #:autoincrement #t)
+                                   (join (addresses 'address% (where (= ('address% person-id) ?)) id))
+                                   (super-new))])]
+        [address% (cond
+                    [(eq? *dbsys-type* 'postgresql) 
+                     (data-class object% 
+                                 (table-name "address" "Address")
+                                 (column (id 1 "id") (person-id 1 "person_id") (line #f "line") 
+                                         (city #f "city") (state #f "state") 
+                                         (zip-code #f "zip_code"))
+                                 (primary-key id #:autoincrement "address_id_seq")
+                                 (join (person person% #:cardinality 'one-to-one 
+                                               (where (= (person% id) ?)) person-id))
+                                 (super-new))]
+                    [(eq? *dbsys-type* 'oracle)
+                     (data-class object% 
+                                 (table-name "ADDRESS" "Address")
+                                 (column (id 1 "ID") (person-id 1 "PERSON_ID") (line #f "LINE") 
+                                         (city #f "CITY") (state #f "STATE") 
+                                         (zip-code #f "ZIP_CODE"))
+                                 (primary-key id #:autoincrement "address_id_seq")
+                                 (join (person person% #:cardinality 'one-to-one 
+                                               (where (= (person% id) ?)) person-id))
+                                 (super-new))]
+                      [else
+                       (data-class object% 
+                                  (table-name "address" "Address")
                                   (column (id 1 "id") (person-id 1 "person_id") (line #f "line") 
                                           (city #f "city") (state #f "state") 
                                           (zip-code #f "zip_code"))
                                   (primary-key 'id #:autoincrement #t)
                                   (join (person person% #:cardinality 'one-to-one 
                                                 (where (= (person% id) ?)) person-id))
-                                  (super-new)))]
+                                  (super-new))])]
         [person-obj (new person%)]
         [address-obj (new address%)])
 
@@ -714,22 +805,25 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                  (check-equal? fld-nms '(id first-name last-name age addresses))))
     
     (test-eq? "class metadata added?" (length (hash->list *data-class-metadata*)) 2)
-    (test-eq? "person class metadata ok?" (get-class-metadata table-name person%) "person")
-    (test-eq? "address class metadata ok?" (get-class-metadata table-name address%) "address")
+    (test-equal? "person class metadata ok?" (get-class-metadata table-name person%)
+                 (schema-case "person"))
+    (test-equal? "address class metadata ok?" (get-class-metadata table-name address%) 
+                 (schema-case "address"))
    
     (test-case "person class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info person%)])
-                 (check-eq? tbl-nm "person")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                 (check-equal? tbl-nm (schema-case "person"))
+                 (check-equal? (sort (downcase-list col-defs) string<? #:key 
+                                     (lambda (k) (symbol->string (first k))))
                                '((age "age" "age") (first-name "first_name" "first_name") 
                                  (id "id" "id") (last-name "last_name" "last_name")))
                  (check-equal? (map first j-defs) '(addresses))
                  (check-equal? (first (map second j-defs)) 'address%)
                  (check-equal? (first (map third j-defs)) 'one-to-many)
                  (check-eq? pkey 'id)
-                 (check-eq? auto-key (cond [(eq? *test-dbsys-type* 'postgresql) "auto_id_seq"]
-                                           [(eq? *test-dbsys-type* 'oracle) "auto_id_seq"]
+                 (check-eq? auto-key (cond [(eq? *dbsys-type* 'postgresql) "auto_id_seq"]
+                                           [(eq? *dbsys-type* 'oracle) "auto_id_seq"]
                                            [else #t]))
                  (check-eq? ext-nm "Person")
                  (check-not-eq? st-key #f)
@@ -754,17 +848,21 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
     (test-case "address class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info address%)])
-                 (check-eq? tbl-nm "address")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
-                               '((city "city" "city") (id "id" "id") (line "line" "line") 
-                                 (person-id "person_id" "person_id") (state "state" "state") 
+                 (check-equal? tbl-nm (schema-case "address"))
+                 (check-equal? (sort (downcase-list col-defs) string<?
+                                     #:key (lambda (k) (symbol->string (first k))))
+                               '((city "city" "city")
+                                 (id "id" "id")
+                                 (line "line" "line")
+                                 (person-id "person_id" "person_id")
+                                 (state "state" "state")
                                  (zip-code "zip_code" "zip_code")))
                  (check-equal? (map first j-defs) '(person))
                  (check-equal? (first (map second j-defs)) person%)
                  (check-equal? (first (map third j-defs)) 'one-to-one)
                  (check-eq? pkey 'id)
-                 (check-eq? auto-key (cond [(eq? *test-dbsys-type* 'postgresql) "address_id_seq"]
-                                           [(eq? *test-dbsys-type* 'oracle) "address_id_seq"]
+                 (check-eq? auto-key (cond [(eq? *dbsys-type* 'postgresql) "address_id_seq"]
+                                           [(eq? *dbsys-type* 'oracle) "address_id_seq"]
                                            [else #t]))
                  (check-eq? ext-nm "Address")
                  (check-not-eq? st-key #f)
@@ -779,7 +877,7 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
 
 
 (define-test-suite test-null-columns
-  (let* ([person% (gen-data-class *con* "person" 
+  (let* ([person% (gen-data-class *con* (schema-case "person")
                                   #:schema-name *schema-name*
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer
@@ -792,30 +890,38 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                (check-eq? (get-column last-name nobj) #f)
                (check-eq? (get-column age nobj) #f))
     
-    (test-equal? "insert sql ok?" (normalize-sql (insert-sql *con* person%))
+    (test-equal? "insert sql ok?" (std-sql (insert-sql *con* person%))
                  "insert into `person` (`age`, `first_name`, `id`, `last_name`) values (?, ?, ?, ?)")
+    
+    ;;; Skip null tests if using an ODBC driver due to a bug in the DB package.
+    (unless (equal? (dbsystem-name (connection-dbsystem *con*)) 'odbc)
+      (begin
+        (test-case "object inserted?" 
+                   (set-column! age nobj 0)
+                   (insert-data-object *con* nobj)
+                   (set! nobj (make-data-object *con* person% 23))
+                   (check-not-eq? (get-field id nobj) #f))
    
-    (test-case "object inserted?" 
-               (insert-data-object *con* nobj)
-               (set! nobj (make-data-object *con* person% 23))
-               (check-not-eq? (get-field id nobj) #f))
-   
-    (test-case "object updated?" 
-               (set-column! first-name nobj "test")
-               (set-column! age nobj 23)
-               (update-data-object *con* nobj)
-               (set-column! first-name nobj #f)
-               (set-column! age nobj #f)
-               (update-data-object *con* nobj)
-               (set! nobj (make-data-object *con* person% 23))
-               (check-eq? (get-column first-name nobj) #f)
-               (check-eq? (get-column age nobj) #f))
+        (test-case "object updated?" 
+                   (set-column! first-name nobj "test")
+                   (set-column! age nobj 23)
+                   (update-data-object *con* nobj)
+                   (set-column! first-name nobj #f)
+                   (set-column! age nobj #f)
+                   (update-data-object *con* nobj)
+                   (set! nobj (make-data-object *con* person% 23))
+                   (check-eq? (get-column first-name nobj) #f)
+                   (check-eq? (get-column age nobj) #f))
                
-    (test-case "object deleted?" 
-               (delete-data-object *con* nobj)
-               (check-true 
-                (= (query-value *con* (sql-placeholder "select count(*) from simple where id=?" 
-                                                       *test-dbsys-type*) (get-field id nobj)) 0)))
+        (test-case "object deleted?" 
+                   (delete-data-object *con* nobj)
+                   (check-true 
+                    (= (query-value *con* (schema-case
+                                           (string-append "select count(*) from "
+                                                          (sql-escape "simple" *dbsys-type*) 
+                                                          " where " (sql-escape "id" *dbsys-type*)
+                                                          (sql-placeholder "=?" *dbsys-type*)))
+                                    (get-field id nobj)) 0)))))
   ))
 
 
@@ -826,24 +932,24 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
   (hash-clear! *data-class-metadata*)
   (hash-clear! *data-class-schema*)
   
-  (let* ([address% (gen-data-class *con* "address" 
+  (let* ([address% (gen-data-class *con* (schema-case "address") 
                                    #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
                                    #:column-name-normalizer column-name-normalizer
                                    #:table-name-externalizer name-externalizer)]
          [obj (new address%)])   
     (test-equal? "generated class ok?" 
-               (gen-data-class *con* "address" #:print? #t
-                               #:schema-name *schema-name*
-                               #:table-name-normalizer table-name-normalizer
-                               #:column-name-normalizer column-name-normalizer
-                               #:table-name-externalizer name-externalizer)
-               (if (or (eq? *test-dbsys-type* 'postgresql) (eq? *test-dbsys-type* 'oracle))
+               (downcase-list (gen-data-class *con* (schema-case "address") #:print? #t
+                                              #:schema-name *schema-name*
+                                              #:table-name-normalizer table-name-normalizer
+                                              #:column-name-normalizer column-name-normalizer
+                                              #:table-name-externalizer name-externalizer))
+               (if (or (eq? *dbsys-type* 'postgresql) (eq? *dbsys-type* 'oracle))
                    '(let ((address%
                            (data-class*
                             object%
                             (data-class<%>)
-                            (table-name "address" "Address")
+                            (table-name "address" "address")
                             (column
                              (city #f "city")
                              (id #f "id")
@@ -866,7 +972,7 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                            (data-class*
                             object%
                             (data-class<%>)
-                            (table-name "address" "Address")
+                            (table-name "address" "address")
                             (column
                              (city #f "city")
                              (id #f "id")
@@ -889,22 +995,24 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
                  (check-eq? cls-nm 'address%)))
     
     (test-eq? "address class metadata added?" (length (hash->list *data-class-metadata*)) 1)
-    (test-eq? "address class metadata ok?" (get-class-metadata table-name address%) "address")
+    (test-equal? "address class metadata ok?" (get-class-metadata table-name address%) 
+              (schema-case "address"))
     
     (test-case "address class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info address%)])
-                 (check-eq? tbl-nm "address")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                 (check-equal? tbl-nm (schema-case "address"))
+                 (check-equal? (sort (downcase-list col-defs) string<? 
+                                     #:key (lambda (k) (symbol->string (first k))))
                                '((city "city" "city") (id "id" "id") (line "line" "line") 
                                  (person-id "person_id" "person_id") (state "state" "state") 
                                  (zip-code "zip_code" "zip_code")))
                  (check-equal? (caar j-defs) 'person)
                  (check-eq? pkey 'id)
-                 (check-eq? auto-key (cond [(eq? *test-dbsys-type* 'postgresql) "address_id_seq"]
-                                           [(eq? *test-dbsys-type* 'oracle) "address_id_seq"]
+                 (check-eq? auto-key (cond [(eq? *dbsys-type* 'postgresql) "address_id_seq"]
+                                           [(eq? *dbsys-type* 'oracle) "address_id_seq"]
                                            [else #t]))
-                 (check-eq? ext-nm "Address")
+                 (check-equal? ext-nm (schema-case "address"))
                  (check-not-eq? st-key #f)
                  ))
     
@@ -919,26 +1027,26 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
   (hash-clear! *data-class-metadata*)
   (hash-clear! *data-class-schema*)
   
-  (let* ([person% (gen-data-class *con* "person" 
+  (let* ([person% (gen-data-class *con* (schema-case "person")
                                   #:schema-name *schema-name*
                                   #:generate-reverse-joins? #t
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer)]
-         [person-schema (load-schema *con* *schema-name* "person" #:reverse-join? #t 
-                                     #:db-system-type *test-dbsys-type*)]
+         [person-schema (load-schema *con* *schema-name* (schema-case "person") #:reverse-join? #t 
+                                     #:db-system-type *dbsys-type*)]
          [obj (new person%)])
     (test-equal? "generated class ok?" 
-                 (gen-data-class *con* "person" #:print? #t
-                                 #:schema-name *schema-name*
-                                 #:generate-reverse-joins? #t
-                                 #:table-name-normalizer table-name-normalizer
-                                 #:column-name-normalizer column-name-normalizer
-                                 #:table-name-externalizer name-externalizer)
+                 (downcase-list (gen-data-class *con* (schema-case "person") #:print? #t
+                                                #:schema-name *schema-name*
+                                                #:generate-reverse-joins? #t
+                                                #:table-name-normalizer table-name-normalizer
+                                                #:column-name-normalizer column-name-normalizer
+                                                #:table-name-externalizer name-externalizer))
                  '(let ((person%
                          (data-class*
                           object%
                           (data-class<%>)
-                          (table-name "person" "Person")
+                          (table-name "person" "person")
                           (column
                            (age #f "age")
                            (first-name #f "first_name")
@@ -967,14 +1075,15 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
     (test-case "person class metadata set?" 
                (let-values ([(cls cls-id-key st-key tbl-nm col-defs j-defs pkey auto-key ext-nm) 
                              (data-class-info person%)])
-                 (check-eq? tbl-nm "person")
-                 (check-equal? (sort col-defs string<? #:key (lambda (k) (symbol->string (first k))))
+                 (check-equal? tbl-nm (schema-case "person"))
+                 (check-equal? (sort (downcase-list col-defs) string<? 
+                                     #:key (lambda (k) (symbol->string (first k))))
                                '((age "age" "age") (first-name "first_name""first_name") 
                                  (id "id" "id") (last-name "last_name" "last_name")))
                  (check-equal? (caar j-defs) 'addresses)
                  (check-eq? pkey 'id)
                  (check-eqv? auto-key #f)
-                 (check-eq? ext-nm "person")
+                 (check-equal? ext-nm (schema-case "person"))
                  (check-not-eq? st-key #f)
                  ))
    
@@ -989,23 +1098,24 @@ where auto_id=? and simple_id=?" *test-dbsys-type*) (get-field auto-id obj) (get
 (define-test-suite test-rql-parsing
   (hash-clear! *data-class-metadata*)
   
-  (let* ([person% (gen-data-class *con* "person" 
+  (let* ([person% (gen-data-class *con* (schema-case "person") 
                                   #:schema-name *schema-name*
                                   #:generate-reverse-joins? #t
                                   #:table-name-normalizer table-name-normalizer
                                   #:column-name-normalizer column-name-normalizer)]
-         [address% (gen-data-class *con* "address" 
+         [address% (gen-data-class *con* (schema-case "address")
                                    #:schema-name *schema-name*
                                    #:table-name-normalizer table-name-normalizer
                                    #:column-name-normalizer column-name-normalizer)]
          [person (new person%)]
          [obj (new address%)])
     (test-eq? "address class metadata added?" (length (hash->list *data-class-metadata*)) 2)
-    (test-eq? "address class metadata ok?" (get-class-metadata table-name address%) "address")
+    (test-equal? "address class metadata ok?" (get-class-metadata table-name address%) 
+                 (schema-case "address"))
     
     (test-equal? "select sql ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (where (and (= id ?) (= city ?))) 1 'Chicago)) 
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (where (and (= id ?) (= city ?))) 1 'Chicago)) 
                  "select `address`.`city`, `address`.`id`, `address`.`line`, \
 `address`.`person_id`, `address`.`state`, `address`.`zip_code` \
 from `address` where (`id` = ? and `city` = ?)")
@@ -1021,117 +1131,120 @@ from `address` where (`id` = ? and `city` = ?)")
                  (check-equal? (get-field city a) "Chicago")
                  (check-eq? (data-object-state a) 'loaded)))
     (test-case "selected with sql?"
-               (let ([a (select-data-object *con* address% (string-append "where id = " "1"))])
+               (let ([a (select-data-object *con* address% 
+                                            (string-append "where " 
+                                                           (schema-case (sql-escape "id" 
+                                                                                    *dbsys-type*))
+                                                           "=1"))])
                  (check-equal? (get-field city a) "Chicago")
                  (check-eq? (data-object-state a) 'loaded)))
 
     (test-equal? "select with sql ok?"
-                 (normalize-sql (select-data-object *con* address%  #:print? #t 
-                                                      "join person on person.id = \
+                 (std-sql (select-data-object *con* address%  #:print? #t 
+                                              "join person on person.id = \
 address.person_id where address.id = 1"))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` join person on person.id = address.person_id where address.id = 1")
 
     (test-equal? "select join sql ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (join person% (= id person-id)) 
-                                                      (where (= (address% id) 1))))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (join person% (= id person-id)) 
+                                              (where (= (address% id) 1))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` join `person` on `id` = `person_id` where `address`.`id` = 1")
     (test-equal? "select join sql ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (join person% (= (person% id) person-id)) 
-                                                      (where (= id ?)) 2))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (join person% (= (person% id) person-id)) 
+                                              (where (= id ?)) 2))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` join `person` on `person`.`id` = `person_id` where `id` = ?")
     (test-equal? "select left join sql ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (left-join person% (= (person% id) person-id)) 
-                                                      (where (= id ?)) 2))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (left-join person% (= (person% id) person-id)) 
+                                              (where (= id ?)) 2))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` left outer join `person` on `person`.`id` = `person_id` where `id` = ?")
     (test-equal? "select right join sql ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (right-join person% (= (person% id) person-id)) 
-                                                      (where (= id ?)) 2))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (right-join person% (= (person% id) person-id)) 
+                                              (where (= id ?)) 2))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` right outer join `person` on `person`.`id` = `person_id` where `id` = ?")
     (test-equal? "select joins sql ok?" 
-                 (normalize-sql 
-                  (select-data-object *con* address% #:print? #t 
-                                      (join person% (= (person% id) (address% person-id))) 
-                                      (join address% (= (person% id) (address% person-id))) 
-                                      (where (= (address% id) 1))))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (join person% (= (person% id) (address% person-id))) 
+                                              (join address% (= (person% id) (address% person-id))) 
+                                              (where (= (address% id) 1))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` join `person` on `person`.`id` = `address`.`person_id` \
 join `address` on `person`.`id` = `address`.`person_id` where `address`.`id` = 1")
     
-    (test-equal? "select = ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                     (where (= city ?))))
+    (test-equal? "select = ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                             (where (= city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` = ?")
-    (test-equal? "select <> ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                      (where (<> city ?))))
+    (test-equal? "select <> ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                              (where (<> city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` <> ?")
-    (test-equal? "select >= ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                      (where (>= city ?))))
+    (test-equal? "select >= ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                              (where (>= city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` >= ?")
-    (test-equal? "select <= ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                      (where (<= city ?))))
+    (test-equal? "select <= ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                              (where (<= city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` <= ?")
-    (test-equal? "select > ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                     (where (> city ?))))
+    (test-equal? "select > ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                             (where (> city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` > ?")
-    (test-equal? "select < ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                     (where (< city ?))))
+    (test-equal? "select < ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                             (where (< city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` < ?")          
-    (test-equal? "select like ok?" (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                        (where (like city ?))))
+    (test-equal? "select like ok?" (std-sql (select-data-object *con* address% #:print? #t 
+                                                                (where (like city ?))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` like ?")
     (test-equal? "select like literal ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (where (like city "'%test%'"))))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (where (like city "'%test%'"))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `city` like '%test%'")
-    (test-equal? "select in  ok?"  (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                                        (where (in id '(? ? ?)))))
+    (test-equal? "select in  ok?"  (std-sql (select-data-object *con* address% #:print? #t 
+                                                                (where (in id '(? ? ?)))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `id` in (?,?,?)")
     (test-equal? "select in with parameters ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (where (in id (make-list 3 '?)))))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (where (in id (make-list 3 '?)))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `id` in (?,?,?)")
     (test-equal? "select in with literal ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
-                                                      (where (in (address% id) '(1 2 3)))))
+                 (std-sql (select-data-object *con* address% #:print? #t 
+                                              (where (in (address% id) '(1 2 3)))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
 from `address` where `address`.`id` in (1,2,3)")
     (define (test-in in-lst) 
-      (normalize-sql (select-data-object *con* address% #:print? #t (where (in id in-lst)))))
+      (std-sql (select-data-object *con* address% #:print? #t (where (in id in-lst)))))
     (test-equal? "select in with list ok?" (test-in '(1 2 3))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
@@ -1141,7 +1254,7 @@ from `address` where `id` in (1,2,3)")
 `address`.`state`, `address`.`zip_code` \
 from `address` where `id` in (4,5,6)")
     (test-equal? "select between ok?" 
-                 (normalize-sql (select-data-object *con* address% #:print? #t 
+                 (std-sql (select-data-object *con* address% #:print? #t 
                                                       (where (between id 1 3))))
                  "select `address`.`city`, `address`.`id`, `address`.`line`, `address`.`person_id`, \
 `address`.`state`, `address`.`zip_code` \
@@ -1191,29 +1304,24 @@ from `address` where `id` between 1 and 3")
   ))
 
 
-;;;; TEST MULTIPLE KEYS IN SAME TABLE
+;;;; RUN ALL TESTS ON ALL DATABASE SYSTEMS
 
+
+(for ([dbsys-type '(sqlite3 mysql postgresql sqlserver oracle db2)])
+  (displayln dbsys-type)
+  
+  (setup-test-dbsys-type dbsys-type)
  
-;;;; TEST INHERITANCE
-
-
-;;;; RUN ALL TESTS
-
-
-(run-tests test-define-data-object 'verbose)
-(run-tests test-schema 'verbose)
-(run-tests test-make-data-object 'verbose)
-(run-tests test-autoincrement-data-object 'verbose)
-(run-tests test-multi-part-keys 'verbose)
-(run-tests test-joins 'verbose)
-(run-tests test-null-columns 'verbose)
-(run-tests test-generate-join 'verbose)
-(run-tests test-generate-reverse-join 'verbose)
-(run-tests test-rql-parsing 'verbose)
-(run-tests test-serialization 'verbose)
-
-
-;;;; TEAR-DOWN
-
-
-(disconnect *con*)
+  (run-tests test-define-data-object 'verbose)
+  (run-tests test-schema 'verbose)
+  (run-tests test-make-data-object 'verbose)
+  (run-tests test-autoincrement-data-object 'verbose)
+  (run-tests test-multi-part-keys 'verbose)
+  (run-tests test-joins 'verbose)
+  (run-tests test-null-columns 'verbose)
+  (run-tests test-generate-join 'verbose)
+  (run-tests test-generate-reverse-join 'verbose)
+  (run-tests test-rql-parsing 'verbose)
+  (run-tests test-serialization 'verbose)
+  
+  (disconnect *con*))

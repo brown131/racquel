@@ -23,13 +23,13 @@
 
 (provide (all-defined-out))
 
-;;; ODBC database system type. Values are: 'sqlserver, 'oracle, or 'db2.
-(define *odbc-dbsystem-type* 'sqlserver)
-
 ;;; Database system type.
 (define (dbsystem-type con) 
   (let ([dbsys-type (dbsystem-name (connection-dbsystem con))])
     (if (equal? dbsys-type 'odbc) *odbc-dbsystem-type* dbsys-type)))
+
+;;; ODBC database system type. Values are: 'sqlserver, 'oracle, or 'db2.
+(define *odbc-dbsystem-type* 'sqlserver)
 
 ;;; Set the ODBC database system type.
 (define (set-odbc-dbsystem-type! odbc-dbsys-type) (set! *odbc-dbsystem-type* odbc-dbsys-type))

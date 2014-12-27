@@ -55,7 +55,8 @@
 (define-syntax rql-between [syntax-rules () ((_ a b c)  (string-append a " between " b " and " c))])
 (define-syntax rql-unquote [syntax-rules () ((_ x) (eval-syntax #`x))])
 (define-syntax rql-table-name 
-  [syntax-rules () ((_ a b) (begin (set! b (cons a b))))])
+  [syntax-rules () ((_ a b) (begin (set! b (cons a b))
+                                    (get-class-metadata table-name (get-class a))))])
 (define-syntax rql-column-pair 
   [syntax-rules () ((_ a b c) (string-append 
                                (sql-escape (begin (set! c (cons a c))

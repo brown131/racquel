@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* Create Database */
 create user test
-identified by test;
+identified by test
 default tablespace users
 temporary tablespace temp
 quota 10M on users;
@@ -33,7 +33,7 @@ grant create session to test;
 grant create table to test;
 grant create view to test;
 
-connect test/test
+connect test/test;
 
 /* DDL */
 
@@ -54,13 +54,14 @@ create table auto (
 	primary key (id) enable
 );
 grant all privileges on table auto to test;
+--/
 create or replace trigger auto_id_trg 
 before insert on auto 
 for each row
 begin
   select auto_id_seq.nextval into :new.id from dual;
 end;
-/
+--/
 alter trigger auto_id_trg enable;
 
 create table multipartkey (
@@ -97,15 +98,14 @@ create table address (
 alter table address add constraint address_person_id_fkey foreign key (person_id)
 	  references  person (id) on delete cascade enable;
 grant all privileges on table address to test;
+--/
 create or replace trigger address_id_trg
 before insert on address              
 for each row  
 begin   
-  if :new.id is null then 
-    select address_id_seq.nextval into :new.id from dual; 
-  end if; 
+  select address_id_seq.nextval into :new.id from dual; 
 end; 
-/
+--/
 alter trigger address_id_trg enable;
 
 /* DML */

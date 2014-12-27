@@ -73,7 +73,7 @@ create table address (
   primary key (id),
   unique (person_id)
 );
-grant all privileges on table person to test;
+grant all privileges on table address to test;
 grant all privileges on sequence address_id_seq to test;
 
 /* DML */
