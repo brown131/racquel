@@ -2,3 +2,6 @@
 *~
 compiled/
 *.bak
+**/.AppleDouble
+**/.imap
+**/:2eDS_Store
