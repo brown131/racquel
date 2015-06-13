@@ -30,3 +30,4 @@
 (define scribblings '(("doc/racquel.scrbl" (multi-page))))
 (define primary-file "main.rkt")
 (define deps (list "base" "db-lib" "rackunit-lib"))
+(define build-deps '("racket-doc"))
