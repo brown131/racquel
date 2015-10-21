@@ -41,6 +41,16 @@
                     (get-field id obj))
 |#
 
+(define ctxt-id #'ctxt)
+(define con-id #'con)
+(define dbsys-type-id #'dbsys-type)
+(define jn-fld-id #'jn-fld)
+(define jn-def-id #'jn-def)
+(define jn-cls-id #'jn-cls)
+(define set-tbl-nm-m-data!-id #'set-tbl-nm-m-data!)
+(define set-pkey!-id #'set-pkey!)
+(define set-auto-pkey!-id #'set-auto-pkey!)
+
 ;;; Parse an RQL expression.
 (define-syntax-class rql-expr
   #:description "rql expression"

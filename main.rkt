@@ -106,7 +106,15 @@
   (syntax-parse stx 
     [(_ base-cls:id (i-face:id ...) elem:data-class-element ...) 
      (with-syntax ([cls-id (generate-temporary #'class-id-)]
-                   [m-data (generate-temporary #'metadata-)])
+                   [m-data (generate-temporary #'metadata-)]
+                   [ctxt ctxt-id]
+                   [set-auto-pkey! set-auto-pkey!-id]
+                   [set-pkey! set-pkey!-id]
+                   [set-tbl-nm-m-data! set-tbl-nm-m-data!-id]
+                   [jn-fld jn-fld-id]
+                   [jn-cls jn-cls-id]
+                   [con con-id]
+                   [dbsys-type dbsys-type-id])
        #'(let* ([ctxt null]
                 [m-data (new data-class-metadata%)]
                 [set-tbl-nm-m-data! (λ (tbl-nm extern-nm) (set-field! table-name m-data tbl-nm) 
@@ -157,6 +165,8 @@
 (define-syntax (get-join stx)
   (syntax-case stx ()
     ([_ jn-fld obj con] 
+     (with-syntax ([jn-def jn-def-id]
+                   [jn-cls jn-cls-id])
      #'(begin
          (when (eq? (get-field jn-fld obj) #f)
            (let* ([jn-def (get-join-definition jn-fld (object-class obj))]     
@@ -167,7 +177,7 @@
              (when (and (equal? (join-definition-cardinality jn-def) 'one-to-one) 
                         (> (length (get-field jn-fld obj)) 0))
                (set-field! jn-fld obj (first (get-field jn-fld obj))))))
-         (get-field jn-fld obj)))))
+         (get-field jn-fld obj))))))
 
 
 ;;; DATA CLASS GENERATION
@@ -325,7 +335,9 @@
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr)) 
         join:join-expr ... where:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
-                   [prep? (not (or (attribute prep) #'#f))])
+                   [prep? (not (or (attribute prep) #'#f))]
+                   [ctxt ctxt-id]
+                   [dbsys-type dbsys-type-id])
        #'(let* ([ctxt (list cls)]
                 [dbsys-type (dbsystem-type con)]
                 [sql (make-select-statement con cls #:print? prnt? #:prepare? prep? 
@@ -347,7 +359,9 @@
     [(_ con:id cls:id (~optional (~seq #:print? prnt:expr)) (~optional (~seq #:prepare? prep:expr))
         join:join-expr ... where:where-expr rest:expr ...)
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
-                   [prep? (not (or (attribute prep) #'#f))])
+                   [prep? (not (or (attribute prep) #'#f))]
+                   [ctxt ctxt-id]
+                   [dbsys-type dbsys-type-id])
        #'(let* ([ctxt (list cls)]
                 [dbsys-type (dbsystem-type con)]
                 [sql (make-select-statement con cls #:print? prnt? #:prepare? prep? 
