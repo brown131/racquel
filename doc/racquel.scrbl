@@ -313,7 +313,7 @@ set to distinguish the ODBC connection from a SQL Server connection, which is as
 connection is it is not specified using this procedure.
 }
 
-@section[#:tag "persistence"]{Data Object Persistence}
+@section[#:tag "persistence"]{Data Object Persistence and Restoration}
  
 @defproc[(make-data-object [db-connection connection?] 
                            [data-class data-class?]
@@ -343,12 +343,17 @@ Deletes a data object from the connected database. The object's state will be ch
 }
  
 @defproc[(select-data-object [db-connection connection?] [data-class data-class?] 
-                             [print-kw (code:line) (code:line #:print? (or/c #t #f))]
-                             [prepare-kw (code:line) (code:line #:prepare? (or/c #t #f))]
-                             [join-clause any/c] ... [where-clause any/c] [rest any/c] ...) 
+                             [#:print? print-sql (or/c #t #f) #f]
+                             [#:prepare? prepare-sql (or/c #t #f) #f]
+                             [select-criteria
+                              (or/c [rql-criteria (listof [join-clause any/c] ...
+                                                          [where-clause any/c]
+                                                          [rest any/c] ...)]
+                                    [sql-criteria string?])])
          (data-object?)]{
-Loads a data object from the database connected to using the criteria defined by the where and/or
-join RQL clauses. The object's initial state will be @racket['loaded].
+Loads a data object from the connected database using the criteria defined by either the
+@racket[where] and/or @racket[join] RQL clauses, or by a string containing SQL clauses. The object's
+initial state will be @racket['loaded].
 
 The optional @racket[#:print?] keyword if true, will return only the SQL generated from the RQL. This 
 is useful for debugging.
@@ -357,18 +362,23 @@ The optional @racket[#:prepare?] keyword if true, will force the SQL statement g
 cached as a prepared statement. This is useful for RQL that may have variable inputs, such a list in 
 an RQL @racket[in] cause.
 
-The join clauses and and where clauses use RQL defined below. Optionally a SQL string may be used 
-rather than RQL. This may be done in situations where some advanced SQL feature needs to be used 
-that currently cannot be coded in RQL.
+The @racket[join] clauses and @racket[where] clauses use RQL defined below. Optionally a SQL string
+may be used rather than RQL. This may be done in situations where some advanced SQL feature needs to
+ be used that currently cannot be coded in RQL.
 }
  
 @defproc[(select-data-objects [db-connection connection?] [data-class data-class?] 
-                              [print-kw (code:line) (code:line #:print? (or/c #t #f))]
-                              [prepare-kw (code:line) (code:line #:prepare? (or/c #t #f))]
-                              [join-clause any/c] ... [where-clause any/c] [rest any/c] ...) 
+                             [#:print? print-sql (or/c #t #f) #f]
+                             [#:prepare? prepare-sql (or/c #t #f) #f]
+                             [select-criteria
+                              (or/c [rql-criteria (listof [join-clause any/c] ...
+                                                          [where-clause any/c]
+                                                          [rest any/c] ...)]
+                                    [sql-criteria string?])])
          (listof data-object?)]{
-Loads data objects from the database connected to using the criteria defined by the where and/or
-join RQL clauses. Each object's initial state will be @racket['loaded].
+Loads data objects from the connected database using the criteria defined by either the
+@racket[where] and/or @racket[join] RQL clauses, or by a string containing SQL clauses. Each object's
+initial state will be @racket['loaded].
 
 The optional @racket[#:print?] keyword if true, will return only the SQL generated from the RQL. This 
 is useful for debugging.
@@ -377,9 +387,9 @@ The optional @racket[#:prepare?] keyword if true, will force the SQL statement g
 cached as a prepared statement. This is useful for RQL that may have variable inputs, such a list in 
 an RQL @racket[in] cause.
 
-The join clauses and and where clauses use RQL defined below. Optionally a SQL string may be used 
-rather than RQL. This may be done in situations where some advanced SQL feature needs to be used 
-that currently cannot be coded in RQL.
+The @racket[join] clauses and @racket[where] clauses use RQL defined below. Optionally a SQL string
+may be used rather than RQL. This may be done in situations where some advanced SQL feature needs to
+be used that currently cannot be coded in RQL.
 @verbatim|{
 (select-data-objects con address% "join person p on person-id = p.id \
 where lastname in (select lastname from employee where active = 1)")
