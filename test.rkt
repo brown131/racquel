@@ -56,7 +56,7 @@
 ;;;; SETUP
 
 
-;;; Setup a database system to testing.
+;;; Setup a database system for testing.
 (define (setup-test-dbsys-type dbsys-type)
   (set! *dbsys-type* dbsys-type)
   

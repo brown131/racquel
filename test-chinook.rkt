@@ -67,9 +67,11 @@
                                       (join album% (and (= (album% album-id) (track% album-id)) 
                                                         (like (album% title) ?))) 
                                       (where (like (track% name) ?)) "A%" "B%")
-                "select Track.AlbumId, Track.Bytes, Track.Composer, Track.GenreId, \
-Track.MediaTypeId, Track.Milliseconds, Track.Name, Track.TrackId, Track.UnitPrice from Track \
-join Album on (Album.AlbumId = Track.AlbumId and Album.Title like ?) where Track.Name like ?")
+                "select `Track`.`AlbumId`, `Track`.`Bytes`, `Track`.`Composer`, `Track`.`GenreId`, \
+`Track`.`MediaTypeId`, `Track`.`Milliseconds`, `Track`.`Name`, `Track`.`TrackId`, \
+`Track`.`UnitPrice` from `Track` \
+join `Album` on (`Album`.`AlbumId` = `Track`.`AlbumId` and `Album`.`Title` like ?) \
+where `Track`.`Name` like ?")
 
     (test-equal? "Tracks starting 'D' from albums starting with 'B' found?" 
                  (map (λ (a) (cons (get-column title (first (get-join albums a *con*))) 
@@ -103,6 +105,13 @@ join Album on (Album.AlbumId = Track.AlbumId and Album.Title like ?) where Track
                                            "For Those About To Rock We Salute You" 
                                            "Restless and Wild" "Big Ones"))
                  '(1 3 5))
+
+    (test-equal? "all albums selected?" (length (select-data-objects *con* album%)) 347)
+    
+    (test-equal? "albums sorted by title?"
+                 (map (λ (a) (get-column title a)) 
+                      (take (select-data-objects *con* album% "order by title desc") 3))
+                 '("[1997] Black Light Syndrome" "Zooropa" "Worlds"))
     ))
 
 

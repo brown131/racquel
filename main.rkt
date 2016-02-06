@@ -380,7 +380,8 @@
      (with-syntax ([prnt? (or (attribute prnt) #'#f)]
                    [prep? (not (or (attribute prep) #'#f))])
        #'(let ([sql (make-select-statement con cls  #:print? prnt? #:prepare? prep? where-sql)])
-           (if prnt? sql (create-data-object con cls (query-row con sql rest ...)))))]
+           (if prnt? sql (map (lambda (r) (create-data-object con cls r)) 
+                              (query-rows con sql rest ...)))))]
     ))
 
 ;;; Load a data object from the database by primary key.
