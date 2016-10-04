@@ -21,7 +21,8 @@
 ;;;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (require rackunit rackunit/text-ui db json xml xml/xexpr "main.rkt"
-         (except-in "metadata.rkt" get-class-metadata-object data-class-info)
+         (except-in "metadata.rkt" get-class-metadata-object set-class-metadata-object!
+                    data-class-info)
          (except-in "util.rkt" set-odbc-dbsystem-type! data-object? data-class?)
          (except-in "schema.rkt" set-escape-sql-object-names!))
 
@@ -1307,7 +1308,13 @@ from `address` where `id` between 1 and 3")
 ;;;; RUN ALL TESTS ON ALL DATABASE SYSTEMS
 
 
-(for ([dbsys-type '(sqlite3 mysql postgresql sqlserver oracle db2)])
+(for ([dbsys-type '(sqlite3
+                    ;mysql
+                    ;postgresql
+                    ;sqlserver
+                    ;oracle
+                    ;db2
+                    )])
   (displayln dbsys-type)
   
   (setup-test-dbsys-type dbsys-type)
