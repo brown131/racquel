@@ -22,14 +22,14 @@
 
 (require racket/base rackunit rackunit/text-ui db racquel)
 
-(define *con* (mysql-connect #:server "localhost" #:port 3306 #:database "Chinook" #:user "test" 
-                             #:password "test"))
+
+(define *con* (sqlite3-connect #:database "Chinook_Sqlite_AutoIncrementPKs.sqlite"))
 
 ;;; Define classes for all the tables.
-(define-values (album% artist% customer% employee% genre% invoice% invoice-line% media-type% 
-                playlist% playlist-track% track%)
-  (apply values (map (lambda (t) (gen-data-class *con* t #:schema-name "Chinook"
-                                                 #:generate-joins? #t #:generate-reverse-joins? #t)) 
+(define-values (album% sqlite_sequence% artist% customer% employee% genre% invoice% invoice-line%
+                media-type% playlist% playlist-track% track%)
+  (apply values (map (λ (t) (gen-data-class *con* t #:schema-name #f
+                                            #:generate-joins? #t #:generate-reverse-joins? #t)) 
                      (list-tables *con*))))
 
 
@@ -67,15 +67,14 @@
                                       (join album% (and (= (album% album-id) (track% album-id)) 
                                                         (like (album% title) ?))) 
                                       (where (like (track% name) ?)) "A%" "B%")
-                "select `Track`.`AlbumId`, `Track`.`Bytes`, `Track`.`Composer`, `Track`.`GenreId`, \
-`Track`.`MediaTypeId`, `Track`.`Milliseconds`, `Track`.`Name`, `Track`.`TrackId`, \
-`Track`.`UnitPrice` from `Track` \
-join `Album` on (`Album`.`AlbumId` = `Track`.`AlbumId` and `Album`.`Title` like ?) \
-where `Track`.`Name` like ?")
+                "select \"Track\".\"AlbumId\", \"Track\".\"Bytes\", \"Track\".\"Composer\", \
+\"Track\".\"GenreId\", \"Track\".\"MediaTypeId\", \"Track\".\"Milliseconds\", \"Track\".\"Name\", \
+\"Track\".\"TrackId\", \"Track\".\"UnitPrice\" from \"Track\" \
+join \"Album\" on (\"Album\".\"AlbumId\" = \"Track\".\"AlbumId\" and \"Album\".\"Title\" like ?) \
+where \"Track\".\"Name\" like ?")
 
     (test-equal? "Tracks starting 'D' from albums starting with 'B' found?" 
-                 (map (λ (a) (cons (get-column title (first (get-join albums a *con*))) 
-                                        (get-column name a))) 
+                 (map (λ (a) (cons (get-column title (get-join album a *con*)) (get-column name a))) 
                       (select-data-objects *con* track% 
                                            (join album% (and (= (album% album-id) (track% album-id)) 
                                                              (like (album% title) ?))) 
@@ -89,7 +88,7 @@ where `Track`.`Name` like ?")
                    ("Diver Down" . "Big Bad Bill (Is Sweet William Now)")))
     
     (test-equal? "album ids < 4 found?"
-                 (map (λ (a) (get-column album-id a)) 
+                 (map (λ (a) (get-column album-id a))
                       (select-data-objects *con* album% (where (< albumid 4))))
                  '(1 2 3))
     
