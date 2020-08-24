@@ -81,7 +81,7 @@ field @racket[owner] which defines a one-to-one join to a @racket[customer%] obj
   ...)
 ([data-class-clause
   (table-name table-name external-name)
-  (init-column column-decl ...)
+  (init-column init-column-decl ...)
   (column column-decl ...)
   (join join-table-id join-decl ...)
   (primary-key primary-key-decl auto-increment-kw)
@@ -106,6 +106,9 @@ field @racket[owner] which defines a one-to-one join to a @racket[customer%] obj
  (join-name joined-table-id cardinality-kw where-clause)]
 
 [cardinality-kw (code:line) (code:line #:cardinality cardinality-expr)]
+
+[cardinality-expr 'one-to-one
+                  'one-to-many]
 
 [primary-key-decl
   column-id
