@@ -107,15 +107,18 @@ field @racket[owner] which defines a one-to-one join to a @racket[customer%] obj
 
 [cardinality-kw (code:line) (code:line #:cardinality cardinality-expr)]
 
-[cardinality-expr 'one-to-one
-                  'one-to-many]
 
 [primary-key-decl
   column-id
   (column-ids ...)]
 
 [auto-increment-kw (code:line) (code:line #:autoincrement auto-increment-expr)]
-)]{
+
+)
+#:contracts ([cardinality-expr (or/c 'one-to-one
+                                     'one-to-many)])
+
+ ]{
 
 Produces a data class value used for persisting data objects from a database.
    
@@ -203,38 +206,32 @@ database without the tedious effort of manually coding the mappings.
 #:literals (table-name init-column column field join primary-key)
 (gen-data-class db-connection
                 table-name
-                #:db-system-type db-system-type-kw
-                #:generate-joins? generate-joins-kw
-                #:generate-reverse-joins? generate-reverse-joins-kw
-                #:schema-name schema-name
-                #:inherits base-class
-                #:table-name-normalizer proc
-                #:column-name-normalizer proc
-                #:join-name-normalizer proc
-                #:table-name-externalizer proc
-                #:print? print-kw
-                #:prepare? prepare-kw
+                options
+                ...
                 data-class-clause ...)
-([db-system-type-kw (code:line) (code:line #:db-system-type db-system-type)]
-
-[generate-joins-kw (code:line) (code:line #:generate-joins? (or/c #t #f))]
-
-[generate-reverse-joins-kw (code:line) (code:line #:generate-reverse-joins? (or/c #t #f))]
-
-[schema-name-kw (code:line) (code:line #:schema-name (string?))]
-
-[inherits-kw (code:line) (code:line #:inherits (string?))]
-
-[table-name-normalizer-kw (code:line) (code:line #:table-name-normalizer )]
-
-[column-name-normalizer-kw (code:line) (code:line #:column-name-normalizer )]
-
-[join-name-normalizer-kw (code:line) (code:line #:join-name-normalizer )]
-
-[table-name-externalizer-kw (code:line) (code:line #:table-name-externalizer )]
-
-[print-kw (code:line) (code:line #:print? (or/c #t #f))]
-)]{
+([options (code:line)
+          (code:line #:db-system-type db-system-type)
+          (code:line #:generate-joins? generate-joins?)
+          (code:line #:generate-reverse-joins? generate-reverse-joins?)
+          (code:line #:schema-name schema-name)
+          (code:line #:inherits base-class)
+          (code:line #:table-name-normalizer table-name-normalizer)
+          (code:line #:column-name-normalizer column-name-normalizer)
+          (code:line #:join-name-normalizer join-name-normalizer)
+          (code:line #:table-name-externalizer table-name-externalizer)
+          (code:line #:print? print?)
+  ])
+#:contracts ([db-system-type? (or/c 'sqlserver 'oracle 'db2)]
+             [generate-joins? (or/c #t #f)]
+             [generate-reverse-joins? (or/c #t #f)]
+             [schema-name string?]
+             [base-class string?]
+             [table-name-normalizer (-> string? string?)]
+             [column-name-normalizer (-> string? string?)]
+             [join-name-normalizer (-> string? (or/c 'one-to-one 'one-to-many) string?)]
+             [table-name-externalizer (-> string? string?)]
+             [print? (or/c #t #f)])
+ ]{
 Generates a data class from the specified @racket[table-name] using the @racket[db-connection]. If 
 the database system type is an ODBC connection, then the particular system type can be specified 
 using the @racket[#:db-system-type] keyword. (This is not necessary if the database system type has 
