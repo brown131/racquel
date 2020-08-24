@@ -484,7 +484,7 @@
           [get-class-metadata-object (data-class? . -> . object?)]
           [table-name-normalizer (string? . -> . string?)]
           [column-name-normalizer (string? . -> . string?)]
-          [join-name-normalizer (string? (or/c symbol?) . -> . string?)]
+          [join-name-normalizer ((string?) (symbol?) . ->* . string?)]
           [data-object->jsexpr (data-object? . -> . jsexpr?)]
           [jsexpr->data-object (jsexpr? . -> . data-object?)]
           [data-object->xexpr (data-object? . -> . xexpr?)]
