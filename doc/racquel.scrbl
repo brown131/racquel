@@ -234,7 +234,7 @@ database without the tedious effort of manually coding the mappings.
              [base-class string?]
              [table-name-normalizer (-> string? string?)]
              [column-name-normalizer (-> string? string?)]
-             [join-name-normalizer (-> string? (or/c 'one-to-one 'one-to-many) string?)]
+             [join-name-normalizer (->* (string?) ((or/c 'one-to-one 'one-to-many)) string?)]
              [table-name-externalizer (-> string? string?)]
              [print? (or/c #t #f)])
  ]{
@@ -265,7 +265,7 @@ would want to override the default normalizers is if table names in a database s
 Below are the default normalizers and externalizers.
 }
   
-@defproc[(table-name-normalizer [table-name string?]) (string?)]{
+@defproc[(table-name-normalizer [table-name string?]) string?]{
 This normalizer converts database table names into Racket class names, using a set of rules. First,
 the normalizer will convert mixed-case names, e.g. "MixedCase", and make the all lower-case with 
 hyphens between the names, e.g. "mixed-case". It will then convert any underscores to hyphens. 
@@ -278,7 +278,7 @@ This is default normalizer for table names if the @racket[#:table-name-externali
 specified.
 }
   
-@defproc[(column-name-normalizer [table-name string?]) (string?)]{
+@defproc[(column-name-normalizer [table-name string?]) string?]{
 This converts column names of a table into Racket symbols, following a set of rules. The 
 rules are similar to those for the @racket[table-name-normalizer]. First mixed-case names are 
 converted to lower-case with hyphens, then underscores are converted to hyphens.
@@ -289,7 +289,7 @@ This is default normalizer for table names if the @racket[#:column-name-external
 specified.
 }
   
-@defproc[(join-name-normalizer [table-name string?]) (string?)]{
+@defproc[(join-name-normalizer [table-name string?] [cardinality (or/c 'one-to-one 'one-to-many) 'one-to-many]) string?]{
 This converts joined table names into Racket symbols, following a set of rules. The 
 rules are similar to those for the @racket[column-name-normalizer]. First mixed-case names are 
 converted to lower-case with hyphens, then underscores are converted to hyphens. Also, if the 
