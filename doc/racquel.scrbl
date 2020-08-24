@@ -22,8 +22,14 @@
 
 @(require racquel 
           scribble/manual scribble/eval scribble/bnf
-          (for-label racket/base racket/class racket/serialize)
+          (prefix-in eg: scribble/example)
+          racket/sandbox
+          (for-label racket/base racket/class racket/serialize racket/contract)
           (for-syntax racket/base racket/class racket/serialize))
+
+@(define EVAL (parameterize ([sandbox-output 'string]
+                             [sandbox-error-output 'string])
+                (make-evaluator 'racket #:requires '(racquel))))
 
 @title{Racquel: An Object/Relational Mapper for Racket}
  
@@ -81,7 +87,7 @@ field @racket[owner] which defines a one-to-one join to a @racket[customer%] obj
   ...)
 ([data-class-clause
   (table-name table-name external-name)
-  (init-column column-decl ...)
+  (init-column init-column-decl ...)
   (column column-decl ...)
   (join join-table-id join-decl ...)
   (primary-key primary-key-decl auto-increment-kw)
@@ -107,12 +113,18 @@ field @racket[owner] which defines a one-to-one join to a @racket[customer%] obj
 
 [cardinality-kw (code:line) (code:line #:cardinality cardinality-expr)]
 
+
 [primary-key-decl
   column-id
   (column-ids ...)]
 
 [auto-increment-kw (code:line) (code:line #:autoincrement auto-increment-expr)]
-)]{
+
+)
+#:contracts ([cardinality-expr (or/c 'one-to-one
+                                     'one-to-many)])
+
+ ]{
 
 Produces a data class value used for persisting data objects from a database.
    
@@ -200,38 +212,32 @@ database without the tedious effort of manually coding the mappings.
 #:literals (table-name init-column column field join primary-key)
 (gen-data-class db-connection
                 table-name
-                #:db-system-type db-system-type-kw
-                #:generate-joins? generate-joins-kw
-                #:generate-reverse-joins? generate-reverse-joins-kw
-                #:schema-name schema-name
-                #:inherits base-class
-                #:table-name-normalizer proc
-                #:column-name-normalizer proc
-                #:join-name-normalizer proc
-                #:table-name-externalizer proc
-                #:print? print-kw
-                #:prepare? prepare-kw
+                options
+                ...
                 data-class-clause ...)
-([db-system-type-kw (code:line) (code:line #:db-system-type db-system-type)]
-
-[generate-joins-kw (code:line) (code:line #:generate-joins? (or/c #t #f))]
-
-[generate-reverse-joins-kw (code:line) (code:line #:generate-reverse-joins? (or/c #t #f))]
-
-[schema-name-kw (code:line) (code:line #:schema-name (string?))]
-
-[inherits-kw (code:line) (code:line #:inherits (string?))]
-
-[table-name-normalizer-kw (code:line) (code:line #:table-name-normalizer )]
-
-[column-name-normalizer-kw (code:line) (code:line #:column-name-normalizer )]
-
-[join-name-normalizer-kw (code:line) (code:line #:join-name-normalizer )]
-
-[table-name-externalizer-kw (code:line) (code:line #:table-name-externalizer )]
-
-[print-kw (code:line) (code:line #:print? (or/c #t #f))]
-)]{
+([options (code:line)
+          (code:line #:db-system-type db-system-type)
+          (code:line #:generate-joins? generate-joins?)
+          (code:line #:generate-reverse-joins? generate-reverse-joins?)
+          (code:line #:schema-name schema-name)
+          (code:line #:inherits base-class)
+          (code:line #:table-name-normalizer table-name-normalizer)
+          (code:line #:column-name-normalizer column-name-normalizer)
+          (code:line #:join-name-normalizer join-name-normalizer)
+          (code:line #:table-name-externalizer table-name-externalizer)
+          (code:line #:print? print?)
+  ])
+#:contracts ([db-system-type? (or/c 'sqlserver 'oracle 'db2)]
+             [generate-joins? (or/c #t #f)]
+             [generate-reverse-joins? (or/c #t #f)]
+             [schema-name string?]
+             [base-class string?]
+             [table-name-normalizer (-> string? string?)]
+             [column-name-normalizer (-> string? string?)]
+             [join-name-normalizer (->* (string?) ((or/c 'one-to-one 'one-to-many)) string?)]
+             [table-name-externalizer (-> string? string?)]
+             [print? (or/c #t #f)])
+ ]{
 Generates a data class from the specified @racket[table-name] using the @racket[db-connection]. If 
 the database system type is an ODBC connection, then the particular system type can be specified 
 using the @racket[#:db-system-type] keyword. (This is not necessary if the database system type has 
@@ -259,44 +265,38 @@ would want to override the default normalizers is if table names in a database s
 Below are the default normalizers and externalizers.
 }
   
-@defproc[(table-name-normalizer [table-name string?]) (string?)]{
+@defproc[(table-name-normalizer [table-name string?]) string?]{
 This normalizer converts database table names into Racket class names, using a set of rules. First,
 the normalizer will convert mixed-case names, e.g. "MixedCase", and make the all lower-case with 
 hyphens between the names, e.g. "mixed-case". It will then convert any underscores to hyphens. 
 Finally, it will append a percent sign to the end of the name, since that is the Racket standard for 
 naming classes.
 
-@racketblock[
-> (table-name-normalizer "ExampleTable_Name")
-  example-table-name%]
+@eg:examples[#:eval EVAL (table-name-normalizer "ExampleTable_Name")]
 
 This is default normalizer for table names if the @racket[#:table-name-externalizer] keyword is not 
 specified.
 }
   
-@defproc[(column-name-normalizer [table-name string?]) (string?)]{
+@defproc[(column-name-normalizer [table-name string?]) string?]{
 This converts column names of a table into Racket symbols, following a set of rules. The 
 rules are similar to those for the @racket[table-name-normalizer]. First mixed-case names are 
 converted to lower-case with hyphens, then underscores are converted to hyphens.
 
-@racketblock[
-> (column-name-normalizer "ExampleColumn_Name")
-  example-column-name]
+@eg:examples[#:eval EVAL (column-name-normalizer "ExampleColumn_Name")]
 
 This is default normalizer for table names if the @racket[#:column-name-externalizer] keyword is not 
 specified.
 }
   
-@defproc[(join-name-normalizer [table-name string?]) (string?)]{
+@defproc[(join-name-normalizer [table-name string?] [cardinality (or/c 'one-to-one 'one-to-many) 'one-to-many]) string?]{
 This converts joined table names into Racket symbols, following a set of rules. The 
 rules are similar to those for the @racket[column-name-normalizer]. First mixed-case names are 
 converted to lower-case with hyphens, then underscores are converted to hyphens. Also, if the 
 cardinality of the join is @racket['one-to-many], an "s" is appended to the end of the name (or "es" 
 if the name ends with an "s".)
 
-@racketblock[
-> (join-name-normalizer "JoinExample_Address")
-  join-example-addresses]
+@eg:examples[#:eval EVAL (join-name-normalizer "JoinExample_Address")]
 
 This is default normalizer for table names if the @racket[#:join-name-externalizer] keyword is not 
 specified.
