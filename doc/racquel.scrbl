@@ -24,7 +24,7 @@
           scribble/manual scribble/eval scribble/bnf
           (prefix-in eg: scribble/example)
           racket/sandbox
-          (for-label racket/base racket/class racket/serialize)
+          (for-label racket/base racket/class racket/serialize racket/contract)
           (for-syntax racket/base racket/class racket/serialize))
 
 @(define EVAL (parameterize ([sandbox-output 'string]
