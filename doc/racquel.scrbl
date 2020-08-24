@@ -22,8 +22,14 @@
 
 @(require racquel 
           scribble/manual scribble/eval scribble/bnf
+          (prefix-in eg: scribble/example)
+          racket/sandbox
           (for-label racket/base racket/class racket/serialize)
           (for-syntax racket/base racket/class racket/serialize))
+
+@(define EVAL (parameterize ([sandbox-output 'string]
+                             [sandbox-error-output 'string])
+                (make-evaluator 'racket #:requires '(racquel))))
 
 @title{Racquel: An Object/Relational Mapper for Racket}
  
@@ -266,9 +272,7 @@ hyphens between the names, e.g. "mixed-case". It will then convert any underscor
 Finally, it will append a percent sign to the end of the name, since that is the Racket standard for 
 naming classes.
 
-@racketblock[
-> (table-name-normalizer "ExampleTable_Name")
-  example-table-name%]
+@eg:examples[#:eval EVAL (table-name-normalizer "ExampleTable_Name")]
 
 This is default normalizer for table names if the @racket[#:table-name-externalizer] keyword is not 
 specified.
@@ -279,9 +283,7 @@ This converts column names of a table into Racket symbols, following a set of ru
 rules are similar to those for the @racket[table-name-normalizer]. First mixed-case names are 
 converted to lower-case with hyphens, then underscores are converted to hyphens.
 
-@racketblock[
-> (column-name-normalizer "ExampleColumn_Name")
-  example-column-name]
+@eg:examples[#:eval EVAL (column-name-normalizer "ExampleColumn_Name")]
 
 This is default normalizer for table names if the @racket[#:column-name-externalizer] keyword is not 
 specified.
@@ -294,9 +296,7 @@ converted to lower-case with hyphens, then underscores are converted to hyphens.
 cardinality of the join is @racket['one-to-many], an "s" is appended to the end of the name (or "es" 
 if the name ends with an "s".)
 
-@racketblock[
-> (join-name-normalizer "JoinExample_Address")
-  join-example-addresses]
+@eg:examples[#:eval EVAL (join-name-normalizer "JoinExample_Address")]
 
 This is default normalizer for table names if the @racket[#:join-name-externalizer] keyword is not 
 specified.
